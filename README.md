@@ -15,8 +15,8 @@ The design lives in the [Cagebreakers design doc](https://claude.ai/artifact/NJV
 | M1 · The Page | Generated pages, numbers placed by drag or tap, the Latin rule, cages that seal in gold | Built |
 | M2 · First Blood | 12 units, the combat simulator, clash playback and a result that explains the fight | Built |
 | M3 · The Run | Shop, gold, claims, merges, 15 clashes, opponents, three Keepers, save and resume | Built |
-| M4 · The Roster | 30 species, Kins, Callings, Misprints, items, bot balancing | Next |
-| M5 · Flight-Ready | Final art, onboarding, sound, Daily Page, Codex | |
+| M4 · The Roster | 30 species, Kins, Callings, the Misprints (Blank, Smudge, Domino), tools and relics, bot balancing | Built |
+| M5 · Flight-Ready | Final art, onboarding, sound, Daily Page, Codex | Next |
 
 ## Working on it
 
@@ -27,7 +27,8 @@ npm test            # core unit and property tests
 npm run e2e         # phone-sized end-to-end tests against the production build (run npm run build first)
 npm run lab -- 2000 # page generator statistics
 npx tsx lab/encounter.ts  # how a fixed fight plays for random and thoughtful layouts
-npx tsx lab/runs.ts 200   # bots play full runs: the balance report
+npx tsx lab/runs.ts 400   # bots play full runs: the balance report, checked against the design targets
+npx tsx lab/ablate.ts 200 2  # each species removed from the Oracle's shop in turn: how far its win rate shifts
 npm run assets      # re-copy fonts and regenerate the icon module
 node scripts/app-icons.mjs  # re-render home-screen icons
 ```
@@ -37,7 +38,7 @@ Every push to `main` runs the tests and deploys to GitHub Pages.
 ## Layout
 
 - `src/core` — the rules: seeded randomness, page generation, legality and sealing, the combat simulator, opponents, and the run as a pure state machine. Pure TypeScript; no screen, no clock, no randomness except from the seed.
-- `src/content` — game data as typed data: species, Kins, Callings, seal rewards, balance constants, encounters.
+- `src/content` — game data as typed data: species, Kins, Callings, items, seal rewards, balance constants, encounters.
 - `src/app` — the interface: Preact, SVG board, pointer input, storage behind one adapter.
 - `lab` — headless tools that run on a developer machine and never ship.
 - `e2e` — Playwright tests at iPhone and Android sizes, including an offline reload.

@@ -1,4 +1,5 @@
 import { effect, signal } from '@preact/signals';
+import type { RelicId } from '../content/types';
 import { readJson, writeJson } from './storage';
 
 export type Screen = 'title' | 'toy' | 'fight' | 'run';
@@ -11,12 +12,15 @@ export type Sheet =
   | { kind: 'enemy' }
   | { kind: 'trait'; id: string; side: 'player' | 'enemy' }
   | { kind: 'result' }
-  | { kind: 'card'; species: string; n: number; stars: number }
+  | { kind: 'card'; species: string; n: number; stars: number; n2?: number; relic?: RelicId }
   | { kind: 'scout' }
   | { kind: 'traits' }
   | { kind: 'merge' }
   | { kind: 'run-result' }
   | { kind: 'confirm-new-run' }
+  | { kind: 'pick' }
+  | { kind: 'satchel' }
+  | { kind: 'tool'; slot: number; uid: string }
   | null;
 
 const NAV_KEY = 'cagebreakers.nav';

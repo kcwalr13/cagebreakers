@@ -1,18 +1,20 @@
 import { useEffect } from 'preact/hooks';
 import { RUN } from '../../content/balance';
+import { ITEMS } from '../../content/items';
 import { speciesById } from '../../content/species';
 import { tallyTraits } from '../../core/clash';
-import { onBench, onBoard, sellValue, toSpecs } from '../../core/run';
+import { numberLabel, pieceKind } from '../../core/pieces';
+import { isClaimed, onBench, onBoard, sellValue, toSpecs, values } from '../../core/run';
 import { traitName } from '../cards';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
 import { type PressHandlers, drag, pressBoard, pressItem, setBoardElement, setHandlers } from '../input';
 import { screen, sheet } from '../nav';
-import { PageView, type PieceView } from '../PageView';
+import { PageView, piecesOf } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
-  armyCount, armyLimit, benchUnits, dispatch, hints, isLegal, justPlaced, justSealed, message, page, placeOnCell, refused,
-  run, scouted, sealed, selection, undo, undoStack, unitAt,
+  armyCount, armyLimit, benchUnits, blankShown, dispatch, dominoLanding, hints, holding, isLegal, itemMode, justPlaced, justSealed,
+  message, page, placeOnCell, refused, revealed, run, scouted, sealed, selection, toolTargets, undo, undoStack, unitAt, useOn,
 } from './state';
 
 const SHOP_ID = 'run-shop';
@@ -24,14 +26,17 @@ function overShop(x: number, y: number) {
   return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 }
 
+const look = (u: { n: number; n2?: number; species: string; stars?: number; relic?: import('../../content/types').RelicId }) =>
+  ({ n: u.n, n2: u.n2, species: u.species, stars: u.stars ?? 1, relic: u.relic });
+
 const handlers: PressHandlers = {
-  lookAt(cell) { const u = unitAt.value[cell]; return u ? { n: u.n, species: u.species, stars: u.stars } : null; },
+  lookAt(cell) { if (itemMode.value) return null; const u = unitAt.value[cell]; return u ? look(u) : null; },
   lookOf(key) {
     const s = run.value;
-    if (!s) return null;
-    if (key.startsWith('offer:')) { const o = s.offers[Number(key.slice(6))]; return o && !o.sold ? { n: o.n, species: o.species, stars: 1 } : null; }
+    if (!s || itemMode.value) return null;
+    if (key.startsWith('offer:')) { const o = s.offers[Number(key.slice(6))]; return o && !o.sold ? look(o) : null; }
     const u = s.units.find((x) => x.uid === key);
-    return u ? { n: u.n, species: u.species, stars: u.stars } : null;
+    return u ? look(u) : null;
   },
   drop(from, cell) {
     if (from.kind === 'item') {
@@ -55,6 +60,7 @@ const handlers: PressHandlers = {
     selection.value = null;
   },
   tapItem(key) {
+    if (itemMode.value) { if (!key.startsWith('offer:')) useOn({ uid: key }); return; }
     const sel = selection.value;
     if (key.startsWith('offer:')) {
       const index = Number(key.slice(6));
@@ -68,8 +74,9 @@ const handlers: PressHandlers = {
     const s = run.value, p = page.value;
     if (!s || !p) return;
     if (s.phase === 'first-claim') { sheet.value = { kind: 'cage', cage: p.cageOf[cell]! }; return; }
-    const sel = selection.value;
     const here = unitAt.value[cell];
+    if (itemMode.value) { useOn({ uid: here?.uid, cell }); return; }
+    const sel = selection.value;
     if (sel) {
       if (sel.kind !== 'offer' && here?.uid === sel.uid) { selection.value = null; return; }
       if (placeOnCell(sel, cell)) selection.value = null;
@@ -80,7 +87,7 @@ const handlers: PressHandlers = {
   },
   longPress(from) {
     const look = from.kind === 'cell' ? handlers.lookAt(from.cell) : handlers.lookOf(from.key);
-    if (look) { selection.value = null; sheet.value = { kind: 'card', species: look.species!, n: look.n, stars: look.stars ?? 1 }; }
+    if (look) { selection.value = null; sheet.value = { kind: 'card', species: look.species!, n: look.n, stars: look.stars ?? 1, n2: look.n2, relic: look.relic }; }
   },
 };
 
@@ -106,8 +113,7 @@ function Scout() {
   const o = scouted.value;
   const s = run.value!;
   if (!o) return <div class="scout placeholder"><span class="scout-text"><span class="scout-name">Claim your first cage</span><span class="scout-sub">Any gold-outlined cage is yours for free.</span></span></div>;
-  const pieces: (PieceView | null)[] = o.page.stones.map(() => null);
-  for (const u of o.units) pieces[u.cell] = { key: u.uid, n: u.n, species: u.species, stars: u.stars };
+  const pieces = piecesOf(o.units);
   return (
     <button class={`scout${o.keeper ? ' keeper' : ''}`} onClick={() => (sheet.value = { kind: 'scout' })} aria-label={`Scout ${o.name}`}>
       <span class="scout-mini"><PageView id="run-scout" page={o.page} pieces={pieces} sealed={new Set()} mirrored label="" pieceRadius={22} /></span>
@@ -124,25 +130,36 @@ function Board() {
   const s = run.value!, p = page.value!;
   const d = drag.value;
   const sel = selection.value;
-  const pieces: (PieceView | null)[] = unitAt.value.map((u, c) => u ? {
-    key: u.uid, n: u.n, species: u.species, stars: u.stars,
-    cls: [justPlaced.value === u.uid ? 'stamp' : '', sel && sel.kind !== 'offer' && sel.uid === u.uid ? 'lifted' : '', d?.from.kind === 'cell' && d.from.cell === c ? 'ghosted' : ''].join(' '),
-  } : null);
+  const pieces = piecesOf(onBoard(s), (uid, c) => [
+    justPlaced.value === uid ? 'stamp' : '', sel && sel.kind !== 'offer' && sel.uid === uid ? 'lifted' : '',
+    d?.from.kind === 'cell' && unitAt.value[d.from.cell]?.uid === uid ? 'ghosted' : '', itemMode.value && !toolTargets.value?.has(c) ? 'muted' : '',
+  ].join(' ').trim(), blankShown.value);
   const dim = new Set(p.cages.filter((c) => !s.claimed.includes(c.id)).map((c) => c.id));
   const outline = s.phase === 'first-claim' ? new Set(p.cages.filter((c) => c.cells.length === 2).map((c) => c.id)) : undefined;
-  let hover = null;
-  if (d && d.over >= 0) {
-    const from = d.from;
-    const origin = from.kind === 'cell' ? from.cell : (from.key.startsWith('offer:') ? -1 : s.units.find((u) => u.uid === from.key)?.cell ?? -1);
-    const vals = p.stones.map((v, c) => v || (unitAt.value[c]?.n ?? 0));
-    if (unitAt.value[d.over] && d.over !== origin) vals[d.over] = 0;
-    hover = { cell: d.over, ok: d.over === origin || (!p.stones[d.over] && s.claimed.includes(p.cageOf[d.over]!) && isLegal(p, vals, d.over, d.look.n, origin)) };
+  let hover = null, hover2: number | undefined;
+  const h = holding.value;
+  if (d && d.over >= 0 && h) {
+    const kind = pieceKind(h.species);
+    const occupant = unitAt.value[d.over];
+    let ok: boolean;
+    if (h.origin.includes(d.over) && kind !== 'domino') ok = true;
+    else if (occupant && occupant.uid !== h.uid) {
+      const vals = values(s); vals[d.over] = 0;
+      ok = kind !== 'domino' && pieceKind(occupant.species) !== 'domino' && isClaimed(s, d.over)
+        && (kind !== 'number' || isLegal(p, vals, d.over, h.n, h.origin[0] ?? -1));
+    } else {
+      const hint = kind === 'domino' ? (dominoLanding.value[d.over]! >= 0 ? 'open' : null) : hints.value[d.over];
+      ok = !!hint && hint !== 'blocked';
+    }
+    hover = { cell: d.over, ok };
+    if (kind === 'domino') hover2 = dominoLanding.value[d.over];
   }
   return (
     <div class="board-wrap" onPointerDown={(e) => pressBoard(e as unknown as PointerEvent)}>
       <PageView
         id="run" svgRef={setBoardElement} page={p} pieces={pieces} sealed={sealed.value} flashing={justSealed.value}
-        hints={hints.value} hover={hover} refused={refused.value} dimCages={dim} outlineCages={outline}
+        hints={itemMode.value ? undefined : hints.value} hover={hover} hover2={hover2} refused={refused.value} dimCages={dim} outlineCages={outline}
+        revealed={revealed.value} targets={toolTargets.value}
         label={`Your page: ${s.claimed.length} cages claimed, ${sealed.value.size} sealed`}
       />
     </div>
@@ -171,6 +188,23 @@ function Status() {
   const m = message.value;
   const sel = selection.value;
   if (m) return <div class={`status${m.warn ? ' warn' : ''}`} role="status" key={m.id}>{m.text}</div>;
+  const im = itemMode.value;
+  if (im) {
+    const name = ITEMS[im.item].name;
+    const ask = ITEMS[im.item].family === 'relic' ? `Tap a unit to carry the ${name}.`
+      : im.item === 'chisel' || im.item === 'flip' ? `Tap a unit to ${im.item === 'chisel' ? 'chisel' : 'flip'}.`
+        : im.item === 'eraser' ? 'Tap a stone to erase it.'
+          : im.item === 'inkpot' ? 'Tap a ringed cage to switch it between + and ×.'
+            : 'Tap a ringed cell to see its hidden number.';
+    return (
+      <div class="status">
+        <span><Icon name={im.item as IconName} class="ico inline-ico" /> {ask}</span>
+        <button class="pill-btn" onClick={() => (itemMode.value = null)}>Cancel</button>
+      </div>
+    );
+  }
+  if (s.phase === 'pick') return <div class="status"><span>Choose an item to begin the chapter.</span><button class="pill-btn" onClick={() => (sheet.value = { kind: 'pick' })}>Choose</button></div>;
+  if (s.phase === 'merge') return <div class="status"><span>Three copies are ready to combine.</span><button class="pill-btn" onClick={() => (sheet.value = { kind: 'merge' })}>Combine</button></div>;
   if (s.phase === 'first-claim') return <div class="status">Tap a gold-outlined cage to claim it free. Your army can grow as large as the open cells you hold.</div>;
   if (sel?.kind === 'offer') {
     const o = s.offers[sel.index];
@@ -178,8 +212,8 @@ function Status() {
     const sp = speciesById(o.species);
     return (
       <div class="status">
-        <span>{sp.name} ({o.n}), {sp.tier} gold. Tap a cell to buy it there.</span>
-        <button class="pill-btn" onClick={() => (sheet.value = { kind: 'card', species: o.species, n: o.n, stars: 1 })}><Icon name="info" />Card</button>
+        <span>{sp.name} ({numberLabel(o)}), {sp.tier} gold. Tap a cell to buy it there.</span>
+        <button class="pill-btn" onClick={() => (sheet.value = { kind: 'card', species: o.species, n: o.n, n2: o.n2, stars: 1 })}><Icon name="info" />Card</button>
         <button class="pill-btn" onClick={() => { if (dispatch({ type: 'buy', offer: sel.index })) selection.value = null; }}>Buy</button>
       </div>
     );
@@ -189,8 +223,9 @@ function Status() {
     if (!u) return <div class="status" />;
     return (
       <div class="status">
-        <span>{speciesById(u.species).name} ({u.n}).</span>
-        <button class="pill-btn" onClick={() => (sheet.value = { kind: 'card', species: u.species, n: u.n, stars: u.stars })}><Icon name="info" />Card</button>
+        <span>{speciesById(u.species).name} ({numberLabel(u)}){u.relic ? `, ${ITEMS[u.relic].name}` : ''}.</span>
+        <button class="pill-btn" onClick={() => (sheet.value = { kind: 'card', species: u.species, n: u.n, n2: u.n2, stars: u.stars, relic: u.relic })}><Icon name="info" />Card</button>
+        {u.cell >= 0 && pieceKind(u.species) === 'domino' ? <button class="pill-btn" onClick={() => dispatch({ type: 'turn', uid: u.uid })}><Icon name="turn" />Turn</button> : null}
         {u.cell >= 0 ? <button class="pill-btn" onClick={() => { dispatch({ type: 'place', uid: u.uid, cell: -1 }); selection.value = null; }}>Bench</button> : null}
         <button class="pill-btn" onClick={() => { dispatch({ type: 'sell', uid: u.uid }); selection.value = null; }}>Sell {sellValue(u)}</button>
       </div>
@@ -208,10 +243,10 @@ function Bench() {
         <button
           key={u.uid}
           class={`bench-slot${sel && sel.kind !== 'offer' && sel.uid === u.uid ? ' selected' : ''}`}
-          aria-label={`${speciesById(u.species).name}, number ${u.n}${u.stars > 1 ? `, ${u.stars} stars` : ''}`}
+          aria-label={`${speciesById(u.species).name}, ${pieceKind(u.species) === 'number' ? 'number ' : ''}${numberLabel(u)}${u.stars > 1 ? `, ${u.stars} stars` : ''}`}
           onPointerDown={(e) => pressItem(e as unknown as PointerEvent, u.uid)}
         >
-          <TokenSvg n={u.n} species={u.species} stars={u.stars} size={44} />
+          <TokenSvg n={u.n} n2={u.n2} species={u.species} stars={u.stars} relic={u.relic} size={44} />
         </button>
       ))}
       {Array.from({ length: Math.max(0, RUN.benchSize - units.length) }, (_, i) => <span key={`e${i}`} class="bench-slot empty" />)}
@@ -235,10 +270,10 @@ function Shop() {
           <button
             key={i}
             class={`offer${sel?.kind === 'offer' && sel.index === i ? ' selected' : ''}${afford ? '' : ' poor'}`}
-            aria-label={`Buy ${sp.name}, number ${o.n}, ${sp.tier} gold`}
+            aria-label={`Buy ${sp.name}, ${pieceKind(o.species) === 'number' ? 'number ' : ''}${numberLabel(o)}, ${sp.tier} gold`}
             onPointerDown={(e) => pressItem(e as unknown as PointerEvent, `offer:${i}`)}
           >
-            <TokenSvg n={o.n} species={o.species} size={38} />
+            <TokenSvg n={o.n} n2={o.n2} species={o.species} size={38} />
             <span class="offer-name">{sp.name}</span>
             <span class="offer-cost"><Icon name="gold" class="ico gold sm" />{sp.tier}</span>
           </button>
@@ -259,6 +294,9 @@ function Controls() {
       <button class={`btn${s.locked ? ' toggled' : ''}`} disabled={!ready} aria-pressed={s.locked} onClick={() => dispatch({ type: 'lock' })} aria-label={s.locked ? 'Unlock the shop' : 'Lock the shop for next clash'}>
         <Icon name="lock" />
       </button>
+      <button class="btn" disabled={!ready} onClick={() => { itemMode.value = null; sheet.value = { kind: 'satchel' }; }} aria-label={`Satchel, ${s.satchel.length} ${s.satchel.length === 1 ? 'item' : 'items'}`}>
+        <Icon name="satchel" />{s.satchel.length}
+      </button>
       <button class="btn primary grow" disabled={!ready || !armyCount.value} onClick={() => { selection.value = null; dispatch({ type: 'clash' }); }}>
         <Icon name="clash" />Clash
       </button>
@@ -269,7 +307,10 @@ function Controls() {
 export function RunPlan() {
   useEffect(() => { setHandlers(handlers); return () => setHandlers(null); }, []);
   const s = run.value;
-  useEffect(() => { if (s?.phase === 'merge') sheet.value = { kind: 'merge' }; }, [s?.phase]);
+  useEffect(() => {
+    if (s?.phase === 'merge') sheet.value = { kind: 'merge' };
+    if (s?.phase === 'pick') sheet.value = { kind: 'pick' };
+  }, [s?.phase, s?.pickCount]);
   if (!s) return null;
   return (
     <div class="column run">

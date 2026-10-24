@@ -1,35 +1,38 @@
 import type { Calling, CallingId, Kin, KinId } from './types';
 
-/** Each Kin keys off a different feature of the page, so traits pull layout as hard as cages do. */
+/**
+ * Each Kin keys off a different feature of the page, so traits pull layout as hard as cages do.
+ * Kins count different species, and each has four or five in the roster, so 2 / 3 / 4.
+ */
 export const KINS: Record<KinId, Kin> = {
   snail: {
     id: 'snail', name: 'Snails', feature: 'Stones',
-    thresholds: [2, 4, 6], values: [0.15, 0.3, 0.5],
+    thresholds: [2, 3, 4], values: [0.15, 0.3, 0.5],
     text: 'Snails next to a stone take {v}% less damage.',
   },
   hare: {
     id: 'hare', name: 'Hares', feature: 'Rows',
-    thresholds: [2, 4, 6], values: [0.08, 0.14, 0.22],
+    thresholds: [2, 3, 4], values: [0.08, 0.14, 0.22],
     text: 'Hares attack {v}% faster for each other Hare in their row.',
   },
   boar: {
     id: 'boar', name: 'Boars', feature: 'Columns',
-    thresholds: [2, 4, 6], values: [0.15, 0.25, 0.4],
+    thresholds: [2, 3, 4], values: [0.15, 0.25, 0.4],
     text: 'Boars hit {v}% harder for each Boar behind them in their column.',
   },
   owl: {
     id: 'owl', name: 'Owls', feature: 'Seals',
-    thresholds: [2, 4, 6], values: [1.5, 2, 3],
+    thresholds: [2, 3, 4], values: [1.5, 2, 3],
     text: "Owls' seal bonuses are multiplied by {v}.",
   },
   serpent: {
     id: 'serpent', name: 'Serpents', feature: 'Empty space',
-    thresholds: [2, 4, 6], values: [3, 3, 2],
-    text: 'Serpents with no ally beside them evade every {v}th hit; from 4 Serpents they also hit 25% harder.',
+    thresholds: [2, 3, 4], values: [3, 3, 2],
+    text: 'Serpents with no ally beside them evade every {v}th hit; from 3 Serpents they also hit 25% harder.',
   },
   stag: {
     id: 'stag', name: 'Stags', feature: 'Full lines',
-    thresholds: [2, 4, 6], values: [0.2, 0.4, 0.7],
+    thresholds: [2, 3, 4], values: [0.2, 0.4, 0.7],
     text: 'Stags in a completely filled row or column hit {v}% harder.',
   },
 };

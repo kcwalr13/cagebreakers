@@ -35,9 +35,14 @@ const used = {
   // Interface
   undo: 'anticlockwise-rotation', newPage: 'scroll-unfurled', menu: 'hamburger-menu', close: 'cancel',
   sun: 'sun', moon: 'moon', life: 'hearts', gold: 'two-coins', lock: 'padlock', reroll: 'cycle', clash: 'crossed-swords',
-  remove: 'trash-can', help: 'help', quill: 'quill-ink',
+  remove: 'trash-can', help: 'help',
   back: 'return-arrow', play: 'play-button', pause: 'pause-button', fast: 'fast-forward-button', skip: 'next-button',
   info: 'info', trophy: 'laurels-trophy', skull: 'death-skull', cracked: 'cracked-glass', page: 'scroll-unfurled',
+  // Misprints
+  smudge: 'ink-swirl', domino: 'domino-tiles', blank: 'uncertainty', turn: 'clockwise-rotation',
+  // Tools and relics
+  satchel: 'hand-bag', chisel: 'chisel', flip: 'perspective-dice-six', eraser: 'broom', inkpot: 'drop', lens: 'magnifying-glass',
+  blade: 'broadsword', bulwark: 'round-shield', quill: 'quill', hourglass: 'hourglass', thorn: 'thorny-vine',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

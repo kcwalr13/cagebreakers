@@ -5,11 +5,12 @@
  * Mirror Scribe, which copies the player's page).
  */
 import { ENEMY_CURVE, SHOP_ODDS, unitValue } from '../content/balance';
+import { RELICS } from '../content/items';
 import { ARCHETYPES, type Archetype, KEEPER_RULES, KEEPERS, type Keeper } from '../content/opponents';
-import { SPECIES } from '../content/species';
+import { SPECIES, speciesById } from '../content/species';
 import type { CallingId, Species } from '../content/types';
 import type { TeamRules, UnitSpec } from './clash';
-import { rowOf } from './grid';
+import { neighbors, rowOf } from './grid';
 import { type Page, generatePage } from './page';
 import { type Rng, stream } from './rng';
 
@@ -41,12 +42,12 @@ export function rollTier(rng: Rng, reach: number): number {
 }
 
 /** A species of the given tier (or the nearest lower tier that has any), leaning toward a plan. */
-export function pickSpecies(rng: Rng, tier: number, plan?: Archetype): Species {
+export function pickSpecies(rng: Rng, tier: number, plan?: Archetype, banned?: readonly string[]): Species {
   for (let t = tier; t >= 1; t--) {
-    const pool = SPECIES.filter((s) => s.tier === t);
+    const pool = SPECIES.filter((s) => s.tier === t && !banned?.includes(s.id));
     if (!pool.length) continue;
     if (!plan) return rng.pick(pool);
-    return rng.weighted(pool.map((s) => [s, 1 + (plan.kins.includes(s.kin) ? 3 : 0) + (plan.callings.includes(s.calling) ? 2 : 0)] as const));
+    return rng.weighted(pool.map((s) => [s, 1 + (s.kin && plan.kins.includes(s.kin) ? 3 : 0) + (plan.callings.includes(s.calling) ? 2 : 0)] as const));
   }
   return SPECIES[0]!;
 }
@@ -70,7 +71,7 @@ function buildArmy(rng: Rng, clash: number, plan: Archetype): { species: Species
       .map((u, i) => ({ i, cost: unitValue(u.species.tier, u.stars + 1) - unitValue(u.species.tier, u.stars), u }))
       .filter((o) => o.u.stars < 3 && o.cost <= gold);
     if (!options.length) break;
-    const pick = rng.weighted(options.map((o) => [o, 1 + (plan.kins.includes(o.u.species.kin) ? 2 : 0) + o.u.species.tier] as const));
+    const pick = rng.weighted(options.map((o) => [o, 1 + (o.u.species.kin && plan.kins.includes(o.u.species.kin) ? 2 : 0) + o.u.species.tier] as const));
     army[pick.i]!.stars = (army[pick.i]!.stars + 1) as 2 | 3;
     gold -= pick.cost;
   }
@@ -114,14 +115,29 @@ export function generateOpponent(seed: string, clash: number, player?: { page: P
 
   const page = generatePage(`${seed}:enemy:${clash}`);
   const army = buildArmy(rng, clash, plan);
-  const cells = chooseCells(page, army.length, rng);
+  const dominoes = army.filter((u) => u.species.misprint === 'domino').length;
+  const cells = chooseCells(page, army.length + dominoes, rng);
   // Front cells go to front-liners; ties keep the roll order.
-  const sortedCells = cells.slice().sort((a, b) => rowOf(a) - rowOf(b) || a - b);
+  const pool = cells.slice().sort((a, b) => rowOf(a) - rowOf(b) || a - b);
   const sortedArmy = army.slice().sort((a, b) => ROLE_ORDER[a.species.calling] - ROLE_ORDER[b.species.calling]);
   const units: UnitSpec[] = sortedArmy.map((u, i) => {
-    const cell = sortedCells[i]!;
-    return { uid: `e${clash}-${i}`, species: u.species.id, n: page.solution[cell]!, stars: u.stars, cell };
+    const cell = pool.shift()!;
+    const base = { uid: `e${clash}-${i}`, stars: u.stars, cell };
+    if (u.species.misprint === 'domino') {
+      // A Domino needs a free neighbor; without one, the enemy fields the Blank instead.
+      const j = pool.findIndex((c) => neighbors(cell).includes(c));
+      if (j >= 0) {
+        const cell2 = pool.splice(j, 1)[0]!;
+        return { ...base, species: u.species.id, n: page.solution[cell]!, n2: page.solution[cell2]!, cell2 };
+      }
+      return { ...base, species: 'blank', n: 0 };
+    }
+    return { ...base, species: u.species.id, n: u.species.misprint === 'blank' ? 0 : page.solution[cell]! };
   });
+  // Relics go to the strongest units, as a player would hand them out.
+  const relicCount = Math.min(units.length, ENEMY_CURVE.relics[clash - 1] ?? 0);
+  const strongest = units.map((u, i) => ({ i, v: unitValue(speciesById(u.species).tier, u.stars) })).sort((a, b) => b.v - a.v || a.i - b.i);
+  for (const { i } of strongest.slice(0, relicCount)) units[i]!.relic = rng.pick(RELICS);
 
   const op: Opponent = { clash, keeper, page, units, archetype: plan.id, name: keeper?.name ?? plan.name, plan: keeper?.twist ?? plan.plan };
   if (keeper?.id === 'proofreader') op.playerRules = { unsealedPenalty: KEEPER_RULES.proofreaderPenalty };

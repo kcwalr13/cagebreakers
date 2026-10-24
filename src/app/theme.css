@@ -360,3 +360,38 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .center { text-align: center; }
 .btn.wide { width: 100%; justify-content: center; min-height: 54px; }
 .summary-verdict .big-ico { margin: 0 auto; display: block; }
+
+/* ---- M4: Misprints, relics and items ------------------------------------------------- */
+:root, .theme-light { --misprint: #1F1A17; --blank: #F7F0DE; }
+.theme-dark { --misprint: #0E0B09; --blank: #E9DEC6; }
+/* Misprints are printed wrong: the Smudge's ring is misregistered in red, the Blank is unprinted vellum. */
+.token.kin-misprint .tok-bg { fill: var(--misprint); }
+.token.mis-blank .tok-bg { fill: var(--blank); stroke: var(--ink); stroke-width: 1.4; }
+.token.mis-blank .tok-ring { stroke: var(--ink-soft); stroke-dasharray: 3 3; }
+.token.mis-blank .tok-num.ghost { fill: var(--ink-soft); font-style: italic; opacity: .75; }
+.tok-blank { stroke: var(--ink-soft); stroke-width: 2.2; stroke-linecap: round; }
+.tok-misreg { fill: none; stroke: var(--rubric); stroke-width: 1.4; opacity: .85; }
+.token.mis-smudge .tok-num.run { fill: var(--rubric); opacity: .55; }
+.token.domino .tok-ring { fill: none; stroke: rgba(246, 238, 220, .45); stroke-width: 1.2; }
+.tok-divider { stroke: rgba(246, 238, 220, .5); stroke-width: 1.4; }
+.relic { fill: var(--g2); stroke: var(--g3); stroke-width: 1; }
+.relic-icon { fill: var(--on-gold); }
+.token.muted { opacity: .4; }
+.revealed { font-family: 'Alegreya', serif; font-style: italic; font-weight: 700; font-size: 14px; fill: var(--owl); text-anchor: end; opacity: .85; }
+.tool-target { fill: none; stroke: var(--owl); stroke-width: 2.5; stroke-dasharray: 5 4; }
+.hover-ok.second { stroke-dasharray: 5 3; }
+.float.dmg.thorn { fill: var(--snail); }
+
+/* Item picks and the satchel */
+.pick-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 4px; }
+.pick-card { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; min-height: 64px; border-radius: 12px; border: 1px solid var(--rule); background: var(--paper-hi); }
+.pick-card:not(.static):active { border-color: var(--gold-edge); }
+.pick-card.static .pill-btn { height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--rule); background: var(--paper); font-weight: 600; flex: none; }
+.pick-card .pill-btn[disabled] { opacity: .4; }
+.pick-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.pick-name { font-family: 'Alegreya', serif; font-weight: 800; font-size: 18px; }
+.pick-family { font-family: 'Alegreya Sans', sans-serif; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); margin-left: 4px; }
+.item-icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.item-icon .ico { width: 26px; height: 26px; }
+.item-icon.tool { background: var(--paper); border: 1.5px solid var(--ink); color: var(--ink); }
+.item-icon.relic { background: linear-gradient(135deg, var(--g0), var(--g1) 45%, var(--g2) 55%, var(--g3)); color: var(--on-gold); }

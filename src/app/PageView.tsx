@@ -2,14 +2,44 @@ import type { ComponentChildren, Ref } from 'preact';
 import { useMemo } from 'preact/hooks';
 import { CELLS, SIZE, colOf, rowOf } from '../core/grid';
 import type { Page } from '../core/page';
+import type { RelicId } from '../content/types';
 import type { Hint } from '../core/rules';
 import { BOARD_PX, CELL_PX, INSET_PX } from './input';
-import { TokenShape } from './Token';
+import { DominoShape, TokenShape } from './Token';
 
 export const cellX = (cell: number) => INSET_PX + colOf(cell) * CELL_PX;
 export const cellY = (cell: number) => INSET_PX + rowOf(cell) * CELL_PX;
 
-export interface PieceView { key: string; n: number; species?: string; stars?: number; cls?: string }
+export interface PieceView {
+  key: string; n: number; species?: string; stars?: number; cls?: string;
+  /** A Domino's second number and the cell it lies on. */
+  n2?: number; span?: number;
+  relic?: RelicId;
+  /** For a Blank in a sealed cage: the number it stands for. */
+  shown?: number;
+}
+
+/** Pieces for a page, one entry per cell; a Domino sits on its first cell and spans to its second. */
+export function piecesOf(
+  units: readonly { uid: string; species: string; n: number; n2?: number; stars: number; cell: number; cell2?: number; relic?: RelicId }[],
+  cls?: (uid: string, cell: number) => string,
+  shown?: ReadonlyMap<number, number>,
+): (PieceView | null)[] {
+  const out = new Array<PieceView | null>(CELLS).fill(null);
+  for (const u of units) {
+    if (u.cell < 0) continue;
+    const v: PieceView = { key: u.uid, n: u.n, species: u.species, stars: u.stars };
+    if (u.n2 !== undefined) v.n2 = u.n2;
+    if (u.cell2 !== undefined && u.cell2 >= 0) v.span = u.cell2;
+    if (u.relic) v.relic = u.relic;
+    const sh = shown?.get(u.cell);
+    if (sh) v.shown = sh;
+    const c = cls?.(u.uid, u.cell);
+    if (c) v.cls = c;
+    out[u.cell] = v;
+  }
+  return out;
+}
 
 /** Ruled lines: dashed within a cage, heavy between cages. */
 function useRules(p: Page) {
@@ -51,6 +81,12 @@ export interface PageViewProps {
   dimCages?: ReadonlySet<number>;
   /** Cages to call out with a gold dashed outline (the free first claim). */
   outlineCages?: ReadonlySet<number>;
+  /** Hidden numbers the Lens has shown, by cell. */
+  revealed?: ReadonlyMap<number, number>;
+  /** Cells to ring for a tool that targets them. */
+  targets?: ReadonlySet<number>;
+  /** A second hover cell: where a Domino's other half would land. */
+  hover2?: number;
 }
 
 /** Maps a cell to the row it is drawn on (enemy pages are mirrored). */
@@ -136,17 +172,37 @@ export function PageView(props: PageViewProps) {
         </g>
       )) : null}
 
+      {props.revealed ? [...props.revealed].map(([c, v]) => (props.pieces[c] || p.stones[c] ? null : (
+        <text key={`lens${c}`} class="revealed" x={cellX(c) + CELL_PX - 8} y={y(c) + CELL_PX - 7}>{v}</text>
+      ))) : null}
+
+      {props.targets ? [...props.targets].map((c) => (
+        <rect key={`tg${c}`} class="tool-target" x={cellX(c) + 4} y={y(c) + 4} width={CELL_PX - 8} height={CELL_PX - 8} rx="8" />
+      )) : null}
+
       {props.pieces.map((piece, c) => piece ? (
         <g key={piece.key}>
-          <TokenShape
-            n={piece.n} species={piece.species} stars={piece.stars}
-            x={cellX(c) + CELL_PX / 2 + 2} y={y(c) + CELL_PX / 2 + 4} r={pieceRadius} class={piece.cls ?? ''}
-          />
+          {piece.span !== undefined && piece.n2 !== undefined && piece.species ? (
+            <DominoShape
+              n={piece.n} n2={piece.n2} species={piece.species} stars={piece.stars} relic={piece.relic}
+              x1={cellX(c) + CELL_PX / 2 + 2} y1={y(c) + CELL_PX / 2 + 4}
+              x2={cellX(piece.span) + CELL_PX / 2 + 2} y2={y(piece.span) + CELL_PX / 2 + 4}
+              r={pieceRadius} class={piece.cls ?? ''}
+            />
+          ) : (
+            <TokenShape
+              n={piece.n} species={piece.species} stars={piece.stars} relic={piece.relic} shown={piece.shown}
+              x={cellX(c) + CELL_PX / 2 + 2} y={y(c) + CELL_PX / 2 + 4} r={pieceRadius} class={piece.cls ?? ''}
+            />
+          )}
         </g>
       ) : null)}
 
       {hover ? (
         <rect class={hover.ok ? 'hover-ok' : 'hover-no'} x={cellX(hover.cell) + 1.5} y={y(hover.cell) + 1.5} width={CELL_PX - 3} height={CELL_PX - 3} rx="5" />
+      ) : null}
+      {hover?.ok && props.hover2 !== undefined && props.hover2 >= 0 ? (
+        <rect class="hover-ok second" x={cellX(props.hover2) + 1.5} y={y(props.hover2) + 1.5} width={CELL_PX - 3} height={CELL_PX - 3} rx="5" />
       ) : null}
 
       {refused ? (

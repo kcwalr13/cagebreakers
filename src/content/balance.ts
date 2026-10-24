@@ -87,4 +87,6 @@ export const unitValue = (tier: number, stars: number) => tier * 3 ** (stars - 1
 export const ENEMY_CURVE = {
   units: [2, 2, 3, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10],
   gold: [2, 3, 5, 7, 10, 14, 17, 20, 24, 28, 32, 36, 40, 44, 54],
+  /** Relics the enemy's strongest units carry, matching the picks a player has had by then. */
+  relics: [0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3],
 } as const;

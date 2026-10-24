@@ -6,7 +6,7 @@ import { Icon } from '../Icon';
 import { BOARD_PX, CELL_PX } from '../input';
 import { sheet } from '../nav';
 import type { Page } from '../../core/page';
-import { PageView, type PieceView, cellX, drawnY } from '../PageView';
+import { PageView, type PieceView, cellX, drawnY, piecesOf } from '../PageView';
 import { backToPlan, enemyPage as fightEnemyPage, playerPage as fightPlayerPage, result } from './state';
 
 const GAP = 34;
@@ -63,7 +63,7 @@ function apply(m: Model, e: ClashEvent, now: number, teamOf: (uid: string) => Te
       break;
     case 'damage': {
       const f = m.fs.get(e.dst)!; f.hp = e.hp; f.shield = e.shield;
-      if (e.amount >= 1 && e.kind !== 'overtime' && e.kind !== 'poison') float(e.dst, `${e.amount}`, e.kind === 'ability' ? 'dmg big' : 'dmg', e.amount);
+      if (e.amount >= 1 && e.kind !== 'overtime' && e.kind !== 'poison') float(e.dst, `${e.amount}`, e.kind === 'ability' ? 'dmg big' : e.kind === 'thorn' ? 'dmg thorn' : 'dmg', e.amount);
       else if (e.kind === 'poison' && e.amount >= 1 && e.t % 10 === 0) float(e.dst, `${e.amount}`, 'dmg poison');
       break;
     }
@@ -73,6 +73,7 @@ function apply(m: Model, e: ClashEvent, now: number, teamOf: (uid: string) => Te
     case 'evade': float(e.dst, 'evade', 'evade'); break;
     case 'fortify': m.fs.get(e.dst)!.fortUntil = e.until; break;
     case 'stun': m.fs.get(e.dst)!.stunUntil = e.until; float(e.dst, 'stunned', 'evade'); break;
+    case 'buff': float(e.dst, e.kind === 'mark' ? 'marked' : e.kind === 'rally' ? 'rallied' : e.kind === 'frenzy' ? 'frenzy' : 'bristling', e.kind === 'mark' ? 'evade' : 'shield'); break;
     case 'death': { const f = m.fs.get(e.uid)!; f.alive = false; f.hp = 0; f.shield = 0; f.diedAt = now; break; }
     case 'shatter':
       m.sealed[e.team].delete(e.cage);
@@ -151,7 +152,11 @@ export function ClashView({ r, playerPage, enemyPage, onBack, backLabel, onResul
   const byUid = new Map(r.fighters.map((f) => [f.uid, f]));
   const pos = (uid: string) => {
     const f = byUid.get(uid)!;
-    return { x: cellX(f.cell) + CELL_PX / 2 + 2, y: drawnY(f.cell, f.team === ENEMY) + CELL_PX / 2 + 4 + yOffset(f.team) };
+    const at = (c: number) => ({ x: cellX(c) + CELL_PX / 2 + 2, y: drawnY(c, f.team === ENEMY) + CELL_PX / 2 + 4 + yOffset(f.team) });
+    const a = at(f.cell);
+    if (f.cell2 === undefined) return a;
+    const b = at(f.cell2);
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   };
   const [shownResult, setShownResult] = useState(false);
   useEffect(() => {
@@ -162,14 +167,10 @@ export function ClashView({ r, playerPage, enemyPage, onBack, backLabel, onResul
     return undefined;
   }, [m.done, shownResult]);
 
-  const pieces = (team: Team): (PieceView | null)[] => {
-    const out = new Array<PieceView | null>(CELLS).fill(null);
-    for (const f of r.fighters) if (f.team === team) {
-      const s = m.fs.get(f.uid)!;
-      out[f.cell] = { key: f.uid, n: f.n, species: f.species, stars: f.stars, cls: s.alive ? (s.stunUntil >= m.beat ? 'stunned' : '') : 'fallen' };
-    }
-    return out;
-  };
+  const pieces = (team: Team): (PieceView | null)[] => piecesOf(r.fighters.filter((f) => f.team === team), (uid) => {
+    const s = m.fs.get(uid)!;
+    return s.alive ? (s.stunUntil >= m.beat ? 'stunned' : '') : 'fallen';
+  });
   const seconds = (Math.min(m.beat, r.beats) / BEATS_PER_SECOND).toFixed(1);
   const alive = (team: Team) => r.fighters.filter((f) => f.team === team && m.fs.get(f.uid)!.alive).length;
 

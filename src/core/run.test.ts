@@ -16,7 +16,10 @@ function started(seed: string): RunState {
   const cage = pageOf(seed).cages.find((c) => c.cells.length === 2)!;
   const r = act(s, { type: 'first-claim', cage: cage.id });
   expect(r.ok).toBe(true);
-  return r.state;
+  expect(r.state.phase).toBe('pick');
+  const p = act(r.state, { type: 'pick', choice: 0 });
+  expect(p.ok).toBe(true);
+  return p.state;
 }
 
 describe('a run', () => {
@@ -124,6 +127,7 @@ describe('a run', () => {
       let life = s.life;
       for (const a of actions) {
         if (s.phase === 'merge') s = act(s, { type: 'merge', keep: s.merge!.uids[0]! }).state;
+        if (s.phase === 'pick') s = act(s, { type: 'pick', choice: 0 }).state;
         const r = act(s, a);
         if (!r.ok) expect(r.state).toBe(s);
         s = r.state;

@@ -16,5 +16,9 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
 - The app never decides a rule; it asks `src/core`.
 - Nothing is fetched at runtime. Fonts and icons are bundled (`npm run assets`).
 - Every interactive control is at least 44 points; the e2e suite checks it.
+- Misprints change how a unit stands: go through `src/core/pieces.ts` (cells, board markers, heft) rather
+  than reading `unit.n` and `unit.cell` directly.
+- After a balance change: `npx tsx lab/runs.ts 400` and `npx tsx lab/ablate.ts 200 2` must meet the design
+  doc's Verification targets.
 - Before shipping: `npm run typecheck && npm test && npm run build && npm run e2e`, then look at the
   screenshots in `test-results/`.

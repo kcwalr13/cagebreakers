@@ -21,7 +21,7 @@ const LONG_PRESS_MS = 450;
 export type Source = { kind: 'item'; key: string } | { kind: 'cell'; cell: number };
 
 /** What the floating ghost shows while dragging. */
-export interface DragLook { n: number; species?: string; stars?: number }
+export interface DragLook { n: number; n2?: number; species?: string; stars?: number; relic?: import('../content/types').RelicId }
 
 export interface DragState { from: Source; look: DragLook; x: number; y: number; over: number }
 

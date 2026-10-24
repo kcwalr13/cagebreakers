@@ -20,10 +20,10 @@ async function cellPoint(p: PWPage, cell: number) {
 /** Plays the current planning phase like a simple player, then clashes and returns to planning. */
 const AUTOPLAY_ROUND = `(r) => {
   let s = r.state();
-  if (s.phase === 'merge') { r.dispatch({ type: 'merge', keep: s.merge.uids[0] }); s = r.state(); }
   for (let guard = 0; guard < 40; guard++) {
     s = r.state();
     if (s.phase === 'merge') { r.dispatch({ type: 'merge', keep: s.merge.uids[0] }); continue; }
+    if (s.phase === 'pick') { r.dispatch({ type: 'pick', choice: 0 }); continue; }
     const bench = s.units.filter((u) => u.cell < 0);
     const onBoard = s.units.filter((u) => u.cell >= 0).length;
     let did = false;
@@ -59,12 +59,19 @@ test('a run begins with a free claim, then shopping, placing and a clash', async
   const pt = await cellPoint(p, cage.cells[0]!);
   await p.mouse.click(pt.x, pt.y);
   await p.getByRole('button', { name: 'Claim it free' }).click();
+  // The first chapter opens with a pick of three items.
+  await expect(p.getByRole('dialog')).toContainText('Choose an item');
+  await expect(p.locator('.pick-card')).toHaveCount(3);
+  await p.screenshot({ path: info.outputPath('m3-01b-pick.png') });
+  await p.locator('.pick-card').first().click();
+  await expect(p.getByRole('dialog')).toHaveCount(0);
   await expect(p.locator('.offer:not(.sold)')).toHaveCount(4);
 
   // Buy an offer that fits, straight onto a legal cell: tap the offer, tap the cell.
   const plan = await R(p, `(r) => { const s = r.state(); const page = r.page();
     for (let i = 0; i < s.offers.length; i++) { const o = s.offers[i];
       for (const c of s.claimed.flatMap((id) => page.cages[id].cells)) { if (page.stones[c]) continue;
+        if (o.n2 !== undefined || o.n === 0) continue;
         const vals = page.stones.map((v, k) => v || (s.units.find((u) => u.cell === k)?.n ?? 0));
         const clash = [0,1,2,3,4,5].some((k) => (vals[Math.floor(c / 6) * 6 + k] === o.n) || (vals[k * 6 + (c % 6)] === o.n));
         if (!clash) return { i, c }; } } return null; }`) as { i: number; c: number } | null;

@@ -4,9 +4,9 @@ import { combinationSets } from '../core/rules';
 import { normalizeSeed } from '../core/seed';
 import { UnitCardBody } from './cards';
 import { EnemySheet, ResultSheet, SEAL_LINES, TraitSheet, UnitCard } from './fight/Sheets';
-import { MergeSheet, RunResultSheet, RunTraitsSheet, ScoutSheet } from './run/Screens';
+import { MergeSheet, PickSheet, RunResultSheet, RunTraitsSheet, SatchelSheet, ScoutSheet, ToolSheet } from './run/Screens';
 import * as runState from './run/state';
-import { claimCost, isClaimed as _isClaimed, openCells } from '../core/run';
+import { claimCost, openCells, values } from '../core/run';
 import { abandonRun, startRun } from './run/state';
 import * as fight from './fight/state';
 import { Icon } from './Icon';
@@ -32,7 +32,7 @@ function CageSheet({ cageId }: { cageId: number }) {
   const rs = runState.run.value;
   const inRun = where === 'run' && !!rs;
   const p: Page = inRun ? runState.page.value! : where === 'fight' ? fight.playerPage : toy.page.value;
-  const vals = inRun ? runState.page.value!.stones.map((v, c) => v || (runState.unitAt.value[c]?.n ?? 0)) : where === 'fight' ? fight.values.value : toy.values.value;
+  const vals = inRun ? values(rs!) : where === 'fight' ? fight.values.value : toy.values.value;
   const sealedSet = inRun ? runState.sealed.value : where === 'fight' ? fight.sealed.value : toy.sealed.value;
   const cage = p.cages[cageId];
   if (!cage) return null;
@@ -171,6 +171,7 @@ function MenuSheet() {
       <div class="section-label">How to play</div>
       <p>No number may repeat in a row or column. Each outlined cage shows a target in red; fill it so its numbers make that target and it seals in gold, empowering what stands inside. The operation is the reward: + makes units sturdier, × makes them hit harder, − makes them faster, and ÷ starts their ability half charged.</p>
       <p>In a fight, the two pages face each other and units never move. Each hits the front-most enemy in its own column unless its Calling says otherwise. A sealed cage holds until one of its members falls.</p>
+      <p>The three Misprints at the top of the shop bend the rules: the Blank has no number and counts as whatever completes its cage, the Smudge ignores the Latin rule but stops its cage sealing, and the Domino fills two cells at once. Each chapter opens with a pick of items: tools that change the page once, and relics that strengthen one unit.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.
@@ -186,7 +187,7 @@ export function Sheets() {
   if (!s) return null;
   return (
     <>
-      <div class="scrim" onClick={() => { if (s.kind !== 'merge') sheet.value = null; }} />
+      <div class="scrim" onClick={() => { if (s.kind !== 'merge' && s.kind !== 'pick') sheet.value = null; }} />
       <div class="sheet" role="dialog" aria-modal="true">
         {s.kind === 'cage' ? <CageSheet cageId={s.cage} />
           : s.kind === 'menu' ? <MenuSheet />
@@ -194,7 +195,10 @@ export function Sheets() {
           : s.kind === 'trait' ? <TraitSheet id={s.id} side={s.side} />
           : s.kind === 'enemy' ? <EnemySheet />
           : s.kind === 'result' ? <ResultSheet />
-          : s.kind === 'card' ? <UnitCardBody species={s.species} n={s.n} stars={s.stars} />
+          : s.kind === 'card' ? <UnitCardBody species={s.species} n={s.n} n2={s.n2} stars={s.stars} relic={s.relic} />
+          : s.kind === 'pick' ? <PickSheet />
+          : s.kind === 'satchel' ? <SatchelSheet />
+          : s.kind === 'tool' ? <ToolSheet slot={s.slot} uid={s.uid} />
           : s.kind === 'scout' ? <ScoutSheet />
           : s.kind === 'traits' ? <RunTraitsSheet />
           : s.kind === 'merge' ? <MergeSheet />

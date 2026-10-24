@@ -201,7 +201,7 @@ export function exposeTestHooks() {
     place,
     newPage,
   };
-  void Promise.all([import('./run/state'), import('../core/run'), import('../core/rules')]).then(([r, core, rules]) => {
+  void Promise.all([import('./run/state'), import('../core/run')]).then(([r, core]) => {
     (window as unknown as { __run: unknown }).__run = {
       state: () => r.run.value,
       dispatch: r.dispatch,
@@ -209,13 +209,20 @@ export function exposeTestHooks() {
       startRun: r.startRun,
       /** Legal claimed cells for a unit, for test autopilots. */
       legalCells(uid: string) {
-        const st = r.run.value!; const page = core.pageOf(st.seed); const vals = core.values(st);
-        const u = st.units.find((x) => x.uid === uid)!;
-        return Array.from({ length: 36 }, (_, c) => c).filter((c) => !vals[c] && !page.stones[c] && core.isClaimed(st, c) && rules.isLegal(page, vals, c, u.n, u.cell));
+        const st = r.run.value!; const vals = core.values(st);
+        return Array.from({ length: 36 }, (_, c) => c).filter((c) => {
+          if (vals[c] || !core.isClaimed(st, c)) return false;
+          const res = core.act(st, { type: 'place', uid, cell: c });
+          return res.ok && res.state !== st;
+        });
       },
       claimCost: (cage: number) => core.claimCost(r.run.value!, cage),
       reach: () => core.reach(r.run.value!),
-      page: () => core.pageOf(r.run.value!.seed),
+      page: () => core.runPage(r.run.value!),
+      useOn: r.useOn,
+      itemMode: r.itemMode,
+      /** Replaces the run outright, for tests that need a particular board. */
+      load(st: unknown) { r.run.value = st as never; r.undoStack.value = []; },
     };
   });
   void import('./fight/state').then((f) => {

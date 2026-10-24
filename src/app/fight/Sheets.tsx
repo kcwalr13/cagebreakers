@@ -8,6 +8,7 @@ import type { IconName } from '../icons';
 import { sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
+import { UnitCardBody } from '../cards';
 import { explainClash } from './explain';
 import { backToPlan, encounter, enemyPage, enemySealed, playerPage, result, rosterById, units } from './state';
 
@@ -21,30 +22,7 @@ function Close() {
 export function UnitCard({ uid, side }: { uid: string; side: 'player' | 'enemy' }) {
   const spec = side === 'player' ? rosterById.get(uid) : encounter.enemy.find((u) => u.uid === uid);
   if (!spec) return null;
-  const sp = speciesById(spec.species);
-  const h = heft(spec.n), star = STAR_MULT[spec.stars - 1]!;
-  const hp = Math.round(sp.hp * h * star), dmg = Math.round(sp.attack * h * star);
-  const perSecond = (BEATS_PER_SECOND / (sp.interval * h)).toFixed(2);
-  const kin = KINS[sp.kin], calling = CALLINGS[sp.calling];
-  return (
-    <>
-      <div class="sheet-head card-head">
-        <TokenSvg n={spec.n} species={spec.species} stars={spec.stars} size={64} />
-        <h2>{sp.name}<span class="card-sub">{kin.name.replace(/s$/, '')} {calling.name}, cost {sp.tier}{spec.stars > 1 ? `, ${spec.stars} stars` : ''}</span></h2>
-        <Close />
-      </div>
-      <div class="stats">
-        <div><b>{hp}</b><span>HP</span></div>
-        <div><b>{dmg}</b><span>per hit</span></div>
-        <div><b>{perSecond}</b><span>hits a second</span></div>
-        <div><b>{sp.mana}</b><span>mana to cast</span></div>
-      </div>
-      <p class="muted-sm">As a {spec.n}: {spec.n >= 4 ? 'big numbers hit hard and swing slower.' : 'small numbers act fast and cast more often.'}</p>
-      <p><strong>Ability.</strong> {sp.text}</p>
-      <p><strong>{calling.name}.</strong> {calling.behavior}</p>
-      <p class="muted-sm"><Icon name={sp.kin as IconName} class="ico inline-ico" /> {kin.name} care about {kin.feature.toLowerCase()}. <Icon name={sp.calling as IconName} class="ico inline-ico" /> Tap the trait chips to see their bonuses.</p>
-    </>
-  );
+  return <UnitCardBody species={spec.species} n={spec.n} stars={spec.stars} footer={<p class="muted-sm">Tap the trait chips to see their bonuses.</p>} />;
 }
 
 export function TraitSheet({ id, side }: { id: string; side: 'player' | 'enemy' }) {

@@ -1,13 +1,15 @@
-import { BEATS_PER_SECOND, STAR_MULT, heft } from '../content/balance';
+import { BEATS_PER_SECOND, STAR_MULT } from '../content/balance';
+import { ITEMS } from '../content/items';
 import { speciesById } from '../content/species';
 import { CALLINGS, KINS } from '../content/traits';
-import type { CallingId, KinId } from '../content/types';
+import type { CallingId, KinId, RelicId } from '../content/types';
+import { heftOf } from '../core/pieces';
 import { type TraitTally, type UnitSpec, tallyTraits } from '../core/clash';
 import type { Page } from '../core/page';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { sheet } from './nav';
-import { PageView, type PieceView } from './PageView';
+import { PageView, piecesOf } from './PageView';
 import { TokenSvg } from './Token';
 
 export function Close() {
@@ -16,18 +18,24 @@ export function Close() {
 
 export const traitName = (id: string) => (id in KINS ? KINS[id as KinId].name : CALLINGS[id as CallingId].plural);
 
-/** A unit's card: stats for its number and stars, its ability, its Calling's behaviour. */
-export function UnitCardBody({ species, n, stars, footer }: { species: string; n: number; stars: number; footer?: preact.ComponentChildren }) {
+/** A unit's card: stats for its numbers and stars, its ability, its Calling's behaviour, any relic. */
+export function UnitCardBody({ species, n, n2, stars, relic, footer }: {
+  species: string; n: number; n2?: number; stars: number; relic?: RelicId; footer?: preact.ComponentChildren;
+}) {
   const sp = speciesById(species);
-  const h = heft(n), star = STAR_MULT[stars - 1]!;
+  const h = heftOf({ species, n, n2 }), star = STAR_MULT[stars - 1]!;
   const hp = Math.round(sp.hp * h * star), dmg = Math.round(sp.attack * h * star);
   const perSecond = (BEATS_PER_SECOND / (sp.interval * h)).toFixed(2);
-  const kin = KINS[sp.kin], calling = CALLINGS[sp.calling];
+  const calling = CALLINGS[sp.calling];
+  const kin = sp.kin ? KINS[sp.kin] : null;
+  const kindLine = sp.misprint === 'blank' ? 'It fights as a middling number.'
+    : sp.misprint === 'domino' ? `As a ${n} and a ${n2}: it fights as their average.`
+      : `As a ${n}: ${n >= 4 ? 'big numbers hit hard and swing slower.' : 'small numbers act fast and cast more often.'}`;
   return (
     <>
       <div class="sheet-head card-head">
-        <TokenSvg n={n} species={species} stars={stars} size={64} />
-        <h2>{sp.name}<span class="card-sub">{kin.name.replace(/s$/, '')} {calling.name}, cost {sp.tier}{stars > 1 ? `, ${stars} stars` : ''}</span></h2>
+        <TokenSvg n={n} n2={n2} species={species} stars={stars} relic={relic} size={64} />
+        <h2>{sp.name}<span class="card-sub">{kin ? kin.name.replace(/s$/, '') : 'Misprint'} {calling.name}, cost {sp.tier}{stars > 1 ? `, ${stars} stars` : ''}</span></h2>
         <Close />
       </div>
       <div class="stats">
@@ -36,10 +44,12 @@ export function UnitCardBody({ species, n, stars, footer }: { species: string; n
         <div><b>{perSecond}</b><span>hits a second</span></div>
         <div><b>{sp.mana}</b><span>mana to cast</span></div>
       </div>
-      <p class="muted-sm">As a {n}: {n >= 4 ? 'big numbers hit hard and swing slower.' : 'small numbers act fast and cast more often.'}</p>
-      <p><strong>Ability.</strong> {sp.text}</p>
+      <p class="muted-sm">{kindLine}</p>
+      <p><strong>{sp.misprint ? 'Misprint.' : 'Ability.'}</strong> {sp.text}</p>
       <p><strong>{calling.name}.</strong> {calling.behavior}</p>
-      <p class="muted-sm"><Icon name={sp.kin as IconName} class="ico inline-ico" /> {kin.name} care about {kin.feature.toLowerCase()}.</p>
+      {relic ? <p><Icon name={relic} class="ico inline-ico" /> <strong>{ITEMS[relic].name}.</strong> {ITEMS[relic].text} Selling this unit returns it to your satchel.</p> : null}
+      {kin ? <p class="muted-sm"><Icon name={kin.id as IconName} class="ico inline-ico" /> {kin.name} care about {kin.feature.toLowerCase()}.</p>
+        : <p class="muted-sm">Misprints have a Calling but no Kin.</p>}
       {footer}
     </>
   );
@@ -107,8 +117,7 @@ export function TraitsBody({ units, title }: { units: UnitSpec[]; title: string 
 export function EnemyBody({ name, plan, page, units, sealed, note }: {
   name: string; plan: string; page: Page; units: UnitSpec[]; sealed: ReadonlySet<number>; note?: string;
 }) {
-  const pieces: (PieceView | null)[] = page.stones.map(() => null);
-  for (const u of units) pieces[u.cell] = { key: u.uid, n: u.n, species: u.species, stars: u.stars };
+  const pieces = piecesOf(units);
   const tallies = tallyTraits(units);
   return (
     <>
@@ -126,9 +135,9 @@ export function EnemyBody({ name, plan, page, units, sealed, note }: {
       </div>
       <div class="unit-list">
         {units.map((u) => (
-          <button key={u.uid} class="unit-row" onClick={() => (sheet.value = { kind: 'card', species: u.species, n: u.n, stars: u.stars })}>
-            <TokenSvg n={u.n} species={u.species} stars={u.stars} size={40} />
-            <span>{speciesById(u.species).name}{u.stars > 1 ? ` (${u.stars} stars)` : ''}</span>
+          <button key={u.uid} class="unit-row" onClick={() => (sheet.value = { kind: 'card', species: u.species, n: u.n, n2: u.n2, stars: u.stars, relic: u.relic })}>
+            <TokenSvg n={u.n} n2={u.n2} species={u.species} stars={u.stars} relic={u.relic} size={40} />
+            <span>{speciesById(u.species).name}{u.stars > 1 ? ` (${u.stars} stars)` : ''}{u.relic ? `, ${ITEMS[u.relic].name}` : ''}</span>
             <span class="muted-sm">{speciesById(u.species).text}</span>
           </button>
         ))}

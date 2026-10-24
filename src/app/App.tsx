@@ -18,7 +18,7 @@ function Ghost() {
   if (!d) return null;
   return (
     <div class="ghost" style={{ transform: `translate(${d.x - 28}px, ${d.y - LIFT_PX - 28}px)` }}>
-      <TokenSvg n={d.look.n} species={d.look.species} stars={d.look.stars} size={56} />
+      <TokenSvg n={d.look.n} n2={d.look.n2} species={d.look.species} stars={d.look.stars} relic={d.look.relic} size={56} />
     </div>
   );
 }
@@ -75,7 +75,7 @@ function Title() {
           <span class="mc-sub">The puzzle on its own: fill a generated page until every cage is gold.</span>
         </button>
       </nav>
-      <p class="build-note">Milestone 3 of 5. The full roster, items and final polish come next.</p>
+      <p class="build-note">Milestone 4 of 5. Final art, a first chapter that teaches by playing, and sound come next.</p>
       <div class="bottom-pad" />
     </div>
   );
