@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" class="theme-light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>Cagebreakers</title>
+    <meta name="description" content="An offline auto-battler played on a KenKen page." />
+    <meta name="theme-color" content="#E2D3B4" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Cagebreakers" />
+    <link rel="icon" href="./icons/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <script>
+      // Paint the right background before the app loads, so a dark cabin never sees a white flash.
+      try {
+        var t = JSON.parse(localStorage.getItem('cagebreakers.prefs') || '{}').theme || 'system';
+        var d = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.className = d ? 'theme-dark' : 'theme-light';
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/app/main.tsx"></script>
+  </body>
+</html>
