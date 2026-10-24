@@ -1,19 +1,15 @@
 import { useState } from 'preact/hooks';
-import type { Op } from '../core/page';
+import type { Op, Page } from '../core/page';
 import { combinationSets } from '../core/rules';
 import { normalizeSeed } from '../core/seed';
+import { EnemySheet, ResultSheet, SEAL_LINES, TraitSheet, UnitCard } from './fight/Sheets';
+import * as fight from './fight/state';
 import { Icon } from './Icon';
-import {
-  type ThemeChoice, clearPage, newPage, page, placedCount, sealed, sheet, theme, values,
-} from './state';
+import { screen, sheet } from './nav';
+import * as toy from './state';
+import { type ThemeChoice, theme } from './state';
 
-/** What sealing each kind of cage will grant once units arrive. The operation is the reward. */
-export const SEAL_REWARD: Record<Op, string> = {
-  '+': 'Units inside gain extra max HP.',
-  '×': 'Units inside hit harder.',
-  '−': 'Units inside attack faster.',
-  '÷': 'Units inside start with their ability half charged.',
-};
+const SIZE_NOTE: Record<number, string> = { 2: '', 3: ' Three-cell cages give each member a quarter more.', 4: ' Four-cell cages give each member half again as much.' };
 
 const join = (op: Op, nums: number[]) => nums.join(op === '+' ? ' + ' : op === '×' ? ' × ' : op === '−' ? ' − ' : ' ÷ ');
 const orderFor = (op: Op, nums: number[]) => (op === '−' || op === '÷' ? nums.slice().sort((a, b) => b - a) : nums);
@@ -27,12 +23,16 @@ function Close() {
 }
 
 function CageSheet({ cageId }: { cageId: number }) {
-  const p = page.value;
+  const inFight = screen.value === 'fight';
+  const p: Page = inFight ? fight.playerPage : toy.page.value;
+  const vals = inFight ? fight.values.value : toy.values.value;
+  const sealedSet = inFight ? fight.sealed.value : toy.sealed.value;
   const cage = p.cages[cageId];
   if (!cage) return null;
-  const isSealed = sealed.value.has(cageId);
-  const sets = isSealed ? [] : combinationSets(p, values.value, cage);
+  const isSealed = sealedSet.has(cageId);
+  const sets = isSealed ? [] : combinationSets(p, vals, cage);
   const size = cage.cells.length;
+  const reward = SEAL_LINES[cage.op] + (SIZE_NOTE[size] ?? '');
   return (
     <>
       <div class="sheet-head">
@@ -40,14 +40,14 @@ function CageSheet({ cageId }: { cageId: number }) {
         <Close />
       </div>
       {isSealed ? (
-        <p><strong>Sealed.</strong> {SEAL_REWARD[cage.op]}</p>
+        <p><strong>Sealed.</strong> {reward}</p>
       ) : sets.length ? (
         <>
           <p class="muted">Numbers that still fit, given the rows and columns around this cage:</p>
           <div class="combos">
             {sets.map((s) => <span class="combo" key={s.join()}>{join(cage.op, orderFor(cage.op, s))}</span>)}
           </div>
-          <p class="muted">When it seals: {SEAL_REWARD[cage.op].toLowerCase()}</p>
+          <p class="muted">When it seals: {reward.charAt(0).toLowerCase() + reward.slice(1)}</p>
         </>
       ) : (
         <p>Nothing fits here with the numbers around it. Move or remove one of them.</p>
@@ -61,36 +61,47 @@ const THEMES: [ThemeChoice, string][] = [['system', 'Match phone'], ['light', 'V
 function MenuSheet() {
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState(false);
-  const p = page.value;
+  const s = screen.value;
   const playCode = () => {
     const seed = normalizeSeed(code);
     if (!seed) { setCodeError(true); return; }
-    newPage(seed);
+    toy.newPage(seed);
+    screen.value = 'toy';
   };
   return (
     <>
       <div class="sheet-head"><h2>Cagebreakers</h2><Close /></div>
 
-      <div class="section-label">This page</div>
-      <p>Code <strong style="font-family: Alegreya, serif; letter-spacing: .06em">{p.seed}</strong>. Type it on another phone to play the same page.</p>
-      <div class="row-btns">
-        <button class="btn" onClick={() => { clearPage(); sheet.value = null; }} disabled={!placedCount.value}>
-          <Icon name="remove" />Clear this page
-        </button>
-        <button class="btn" onClick={() => newPage()}><Icon name="newPage" />New page</button>
-      </div>
+      {s === 'toy' ? (
+        <>
+          <div class="section-label">This page</div>
+          <p>Code <strong class="code">{toy.page.value.seed}</strong>. Type it on another phone to play the same page.</p>
+          <div class="row-btns">
+            <button class="btn" onClick={() => { toy.clearPage(); sheet.value = null; }} disabled={!toy.placedCount.value}><Icon name="remove" />Clear this page</button>
+            <button class="btn" onClick={() => toy.newPage()}><Icon name="newPage" />New page</button>
+          </div>
+          <div class="section-label">Play a page by code</div>
+          <div class="row-btns">
+            <input
+              class="code-input" value={code} maxLength={12} autocapitalize="characters" autocomplete="off" spellcheck={false}
+              aria-label="Page code" placeholder="7KQ2X4"
+              onInput={(e) => { setCode((e.target as HTMLInputElement).value); setCodeError(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') playCode(); }}
+            />
+            <button class="btn" onClick={playCode}>Play</button>
+          </div>
+          {codeError ? <p class="warn-text">Codes are 4–12 letters and digits, without 0, 1, I, L or O.</p> : null}
+        </>
+      ) : null}
 
-      <div class="section-label">Play a page by code</div>
-      <div class="row-btns">
-        <input
-          class="code-input" value={code} maxLength={12} autocapitalize="characters" autocomplete="off" spellcheck={false}
-          aria-label="Page code" placeholder="7KQ2X4"
-          onInput={(e) => { setCode((e.target as HTMLInputElement).value); setCodeError(false); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') playCode(); }}
-        />
-        <button class="btn" onClick={playCode}>Play</button>
-      </div>
-      {codeError ? <p style="color: var(--rubric); margin-top: -6px">Codes are 4–12 letters and digits, without 0, 1, I, L or O.</p> : null}
+      {s === 'fight' ? (
+        <>
+          <div class="section-label">This fight</div>
+          <div class="row-btns">
+            <button class="btn" onClick={() => { fight.clearLayout(); fight.backToPlan(); sheet.value = null; }}><Icon name="remove" />Bench every unit</button>
+          </div>
+        </>
+      ) : null}
 
       <div class="section-label">Theme</div>
       <div class="seg" role="group" aria-label="Theme">
@@ -99,10 +110,9 @@ function MenuSheet() {
         ))}
       </div>
 
-      <div class="section-label">How to play this build</div>
-      <p>Drag a number from the tray onto the page, or tap a number and then tap a cell. No number may repeat in a row or column.</p>
-      <p>Each outlined cage shows a target in red. Fill a cage so its numbers make that target with the operation shown, and it seals in gold. Tap any empty cell to see which numbers still fit its cage.</p>
-      <p>Drag a number off the page to remove it. This is the first milestone: units, combat and the shop come next.</p>
+      <div class="section-label">How to play</div>
+      <p>No number may repeat in a row or column. Each outlined cage shows a target in red; fill it so its numbers make that target and it seals in gold, empowering what stands inside. The operation is the reward: + makes units sturdier, × makes them hit harder, − makes them faster, and ÷ starts their ability half charged.</p>
+      <p>In a fight, the two pages face each other and units never move. Each hits the front-most enemy in its own column unless its Calling says otherwise. A sealed cage holds until one of its members falls.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.
@@ -120,7 +130,12 @@ export function Sheets() {
     <>
       <div class="scrim" onClick={() => (sheet.value = null)} />
       <div class="sheet" role="dialog" aria-modal="true">
-        {s.kind === 'cage' ? <CageSheet cageId={s.cage} /> : <MenuSheet />}
+        {s.kind === 'cage' ? <CageSheet cageId={s.cage} />
+          : s.kind === 'menu' ? <MenuSheet />
+          : s.kind === 'unit' ? <UnitCard uid={s.uid} side={s.side} />
+          : s.kind === 'trait' ? <TraitSheet id={s.id} side={s.side} />
+          : s.kind === 'enemy' ? <EnemySheet />
+          : s.kind === 'result' ? <ResultSheet /> : null}
       </div>
     </>
   );

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 // The core promise: open the game once with a connection, then it works in airplane mode.
 test('loads and plays with the network off after one visit', async ({ page, context }) => {
-  await page.goto('./?seed=7KQ2X4');
+  await page.goto('./?seed=7KQ2X4&screen=toy');
   await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.ready;
     return reg.active?.state;

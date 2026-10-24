@@ -3,12 +3,13 @@ import { CELLS, colOf, rowOf } from '../core/grid';
 import { type Page, generatePage } from '../core/page';
 import { type Hint, boardValues, hintFor, isLegal, sealedCages } from '../core/rules';
 import { normalizeSeed, seedFromInts } from '../core/seed';
+import { drag } from './input';
+import { sheet } from './nav';
+export { sheet };
 import { readJson, storage, writeJson } from './storage';
 
 /** What the player is holding: a number from the tray, or a number already on the page. */
 export type Selection = { kind: 'tray'; n: number } | { kind: 'cell'; cell: number };
-export interface DragState { n: number; from: Selection; x: number; y: number; over: number }
-export type Sheet = { kind: 'cage'; cage: number } | { kind: 'menu' } | null;
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
 const SAVE_KEY = 'cagebreakers.m1.page';
@@ -41,8 +42,6 @@ export const page = signal<Page>(init.page);
 export const placed = signal<number[]>(init.placed);
 export const history = signal<number[][]>(init.history);
 export const selection = signal<Selection | null>(null);
-export const drag = signal<DragState | null>(null);
-export const sheet = signal<Sheet>(null);
 export const message = signal<{ text: string; warn: boolean; id: number } | null>(null);
 /** Cages that sealed on the last move, for the gold sheen; cleared after it plays. */
 export const justSealed = signal<Set<number>>(new Set());
@@ -60,7 +59,13 @@ export const placedCount = computed(() => placed.value.filter((v) => v > 0).leng
 
 /** The number in hand, and the cell it is leaving (when moving a placed number). */
 export const holding = computed<{ n: number; origin: number } | null>(() => {
-  const sel = drag.value?.from ?? selection.value;
+  const d = drag.value;
+  if (d) {
+    if (d.from.kind === 'item') return { n: Number(d.from.key), origin: -1 };
+    const n = placed.value[d.from.cell] ?? 0;
+    return n ? { n, origin: d.from.cell } : null;
+  }
+  const sel = selection.value;
   if (!sel) return null;
   if (sel.kind === 'tray') return { n: sel.n, origin: -1 };
   const n = placed.value[sel.cell] ?? 0;
@@ -196,6 +201,12 @@ export function exposeTestHooks() {
     place,
     newPage,
   };
+  void import('./fight/state').then((f) => {
+    (window as unknown as { __fight: unknown }).__fight = {
+      roster: f.roster, playerPage: f.playerPage, place: f.placeUnit, layout: () => ({ ...f.layout.value }),
+      sealed: () => [...f.sealed.value], clash: f.startClash, result: () => f.result.value, clear: f.clearLayout,
+    };
+  });
 }
 
 export function resetStorageForTests() {

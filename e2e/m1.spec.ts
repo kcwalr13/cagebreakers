@@ -14,9 +14,9 @@ const hooks = (p: PWPage) => ({
 });
 
 async function open(p: PWPage, extra = '') {
-  await p.goto(`./?seed=${SEED}&test&nosw${extra}`);
+  await p.goto(`./?seed=${SEED}&test&nosw&screen=toy${extra}`);
   await p.evaluate(() => localStorage.clear());
-  await p.goto(`./?seed=${SEED}&test&nosw${extra}`);
+  await p.goto(`./?seed=${SEED}&test&nosw&screen=toy${extra}`);
   await expect(p.locator('svg.board')).toBeVisible();
 }
 
