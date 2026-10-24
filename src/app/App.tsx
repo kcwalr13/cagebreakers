@@ -10,7 +10,8 @@ import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
 import { ToyScreen } from './Toy';
 import { RunScreen } from './run/Screens';
-import { run, startRun } from './run/state';
+import { dailyBest, loadSlot, openSlot, run, slot, startDaily, startRun, today } from './run/state';
+import { CodexScreen } from './Codex';
 import { RUN } from '../content/balance';
 
 function Ghost() {
@@ -35,7 +36,22 @@ function UpdateNote() {
   );
 }
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function dailyLine(): string {
+  const day = today();
+  const best = dailyBest.value[day];
+  const saved = loadSlot('daily');
+  if (best) return best.won ? `Today's page is beaten, with ${best.life} Life left. Play it again?` : `Your best today: clash ${best.reached}. Try again?`;
+  if (saved?.daily === day && saved.phase !== 'won' && saved.phase !== 'lost') return `In progress: clash ${saved.clash}, ${saved.life} Life.`;
+  return 'The same page and shops for everyone today.';
+}
+
 function Title() {
+  const d = new Date();
+  const main = slot.value === 'main' ? run.value : loadSlot('main');
+  const live = main && main.phase !== 'won' && main.phase !== 'lost' ? main : null;
   return (
     <div class="column title-screen">
       <header class="header">
@@ -46,36 +62,37 @@ function Title() {
         <span class="initial" aria-hidden="true">C</span>
         <span class="rest" aria-hidden="true">agebreakers</span>
       </div>
+      <svg class="flourish" viewBox="0 0 240 24" aria-hidden="true">
+        <path class="fl-line" d="M14 12H98M142 12H226" />
+        <path class="fl-curl" d="M98 12c5-7 11-7 13 0M142 12c-5 7-11 7-13 0" />
+        <path class="fl-diamond" d="M120 3l9 9-9 9-9-9z" />
+        <circle class="fl-dot" cx="10" cy="12" r="2.5" /><circle class="fl-dot" cx="230" cy="12" r="2.5" />
+      </svg>
       <p class="tagline">An auto-battler played on a KenKen page.</p>
       <div class="spacer" />
       <nav class="title-menu">
-        {run.value && run.value.phase !== 'won' && run.value.phase !== 'lost' ? (
-          <>
-            <button class="menu-card primary" onClick={() => (screen.value = 'run')}>
-              <span class="mc-title">Continue run</span>
-              <span class="mc-sub">Clash {run.value.clash} of {RUN.clashes}, {run.value.life} Life, {run.value.gold} gold.</span>
-            </button>
-            <button class="menu-card" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>
-              <span class="mc-title">New run</span>
-              <span class="mc-sub">Abandon this run and start a fresh page.</span>
-            </button>
-          </>
+        {live ? (
+          <button class="menu-card primary" onClick={() => { openSlot('main'); screen.value = 'run'; }}>
+            <span class="mc-title">Continue run</span>
+            <span class="mc-sub">Clash {live.clash} of {RUN.clashes}, {live.life} Life, {live.gold} gold.</span>
+          </button>
         ) : (
           <button class="menu-card primary" onClick={() => { startRun(); screen.value = 'run'; }}>
             <span class="mc-title">New run</span>
             <span class="mc-sub">Fifteen clashes on one page. Draft units, claim cages, seal them in gold.</span>
           </button>
         )}
-        <button class="menu-card" onClick={() => (screen.value = 'fight')}>
-          <span class="mc-title">First Blood</span>
-          <span class="mc-sub">A practice fight: place eight units and watch them fight The Iron Warren.</span>
+        <button class="menu-card" onClick={() => { startDaily(); screen.value = 'run'; }}>
+          <span class="mc-title">Daily Page <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span></span>
+          <span class="mc-sub">{dailyLine()}</span>
         </button>
-        <button class="menu-card" onClick={() => (screen.value = 'toy')}>
-          <span class="mc-title">Page toy</span>
-          <span class="mc-sub">The puzzle on its own: fill a generated page until every cage is gold.</span>
-        </button>
+        <div class="title-minor">
+          {live ? <button class="minor-card" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>New run</button> : null}
+          <button class="minor-card" onClick={() => (screen.value = 'fight')}>First Blood</button>
+          <button class="minor-card" onClick={() => (screen.value = 'toy')}>Page toy</button>
+          <button class="minor-card" onClick={() => (screen.value = 'codex')}>Codex</button>
+        </div>
       </nav>
-      <p class="build-note">Milestone 4 of 5. Final art, a first chapter that teaches by playing, and sound come next.</p>
       <div class="bottom-pad" />
     </div>
   );
@@ -92,7 +109,8 @@ export function App() {
   const s = screen.value;
   return (
     <div class="app">
-      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'run' ? <RunScreen /> : phase.value === 'plan' ? <PlanScreen /> : <ClashScreen />}
+      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'run' ? <RunScreen /> : s === 'codex' ? <CodexScreen />
+        : phase.value === 'plan' ? <PlanScreen /> : <ClashScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

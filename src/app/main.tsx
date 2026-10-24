@@ -3,6 +3,9 @@ import { render } from 'preact';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
 import { updateReady } from './nav';
+import { watchRunForCodex } from './codex';
+import { applySettingsToDocument } from './settings';
+import { unlockAudio } from './sound';
 import { exposeTestHooks, theme } from './state';
 import './theme.css';
 
@@ -15,6 +18,11 @@ const applyTheme = () => {
 };
 effect(applyTheme);
 dark.addEventListener?.('change', applyTheme);
+
+applySettingsToDocument();
+watchRunForCodex();
+// Phones only let a page make sound after a touch.
+window.addEventListener('pointerdown', unlockAudio, { capture: true, passive: true });
 
 exposeTestHooks();
 render(<App />, document.getElementById('app')!);

@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.kcwalr13.cagebreakers",
+  "appName": "Cagebreakers",
+  "webDir": "dist",
+  "backgroundColor": "#E2D3B4",
+  "ios": { "contentInset": "never" },
+  "android": { "allowMixedContent": false }
+}

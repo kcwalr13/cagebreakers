@@ -97,9 +97,8 @@ export function say(text: string, warn = false, ms = 2600) {
   messageTimer = setTimeout(() => (message.value = null), ms);
 }
 
-function buzz(pattern: number | number[]) {
-  try { navigator.vibrate?.(pattern); } catch { /* not supported */ }
-}
+import { buzz } from './settings';
+import { play } from './sound';
 
 /** Explains why a number can't go somewhere, in the player's terms. */
 function refusal(cell: number, n: number, origin: number): string {
@@ -124,11 +123,11 @@ function commit(next: number[], cell: number) {
   const newly = new Set([...after].filter((id) => !before.has(id)));
   if (newly.size) {
     justSealed.value = newly;
-    buzz([12, 40, 18]);
+    buzz([12, 40, 18]); play('seal');
     if (!seenIntro.value) seenIntro.value = true;
     setTimeout(() => { if (justSealed.value === newly) justSealed.value = new Set(); }, 1200);
   } else {
-    buzz(8);
+    buzz(8); play('place');
   }
 }
 
@@ -138,7 +137,7 @@ export function place(cell: number, n: number, origin = -1): boolean {
   if (!isLegal(page.value, values.value, cell, n, origin) || page.value.stones[cell]) {
     refused.value = { cell, id: Date.now() };
     say(refusal(cell, n, origin), true);
-    buzz([30, 30, 30]);
+    buzz([30, 30, 30]); play('refuse');
     return false;
   }
   const next = placed.value.slice();
@@ -201,7 +200,7 @@ export function exposeTestHooks() {
     place,
     newPage,
   };
-  void Promise.all([import('./run/state'), import('../core/run')]).then(([r, core]) => {
+  void Promise.all([import('./run/state'), import('../core/run'), import('../core/opponent'), import('../core/clash')]).then(([r, core, opp, clash]) => {
     (window as unknown as { __run: unknown }).__run = {
       state: () => r.run.value,
       dispatch: r.dispatch,
@@ -221,6 +220,12 @@ export function exposeTestHooks() {
       page: () => core.runPage(r.run.value!),
       useOn: r.useOn,
       itemMode: r.itemMode,
+      /** A heavy late-run fight between two generated armies, for timing on the phone. */
+      benchFight() {
+        const seed = r.run.value?.seed ?? 'BENCHS';
+        const a = opp.generateOpponent(seed, 15), b = opp.generateOpponent(seed, 14);
+        return clash.simulateClash({ page: a.page, units: a.units }, { page: b.page, units: b.units }).beats;
+      },
       /** Replaces the run outright, for tests that need a particular board. */
       load(st: unknown) { r.run.value = st as never; r.undoStack.value = []; },
     };

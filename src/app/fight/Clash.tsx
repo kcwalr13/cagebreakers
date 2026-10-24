@@ -3,6 +3,8 @@ import { BEATS_PER_SECOND } from '../../content/balance';
 import { type ClashEvent, type ClashResult, ENEMY, PLAYER, type Team } from '../../core/clash';
 import { CELLS } from '../../core/grid';
 import { Icon } from '../Icon';
+import { reducedMotion } from '../settings';
+import { play } from '../sound';
 import { BOARD_PX, CELL_PX } from '../input';
 import { sheet } from '../nav';
 import type { Page } from '../../core/page';
@@ -10,6 +12,8 @@ import { PageView, type PieceView, cellX, drawnY, piecesOf } from '../PageView';
 import { backToPlan, enemyPage as fightEnemyPage, playerPage as fightPlayerPage, result } from './state';
 
 const GAP = 34;
+/** Where gold flakes start in a shattered cell, how far they drift and spin. Fixed, so every crack looks alike. */
+const FLAKES: readonly (readonly [number, number, number, number])[] = [[14, 18, -1, 1], [38, 14, 1, -1], [24, 36, 0.4, 0.6], [46, 40, -0.6, -0.8]];
 const VIEW_H = BOARD_PX * 2 + GAP;
 const yOffset = (team: Team) => (team === ENEMY ? 0 : BOARD_PX + GAP);
 
@@ -20,6 +24,16 @@ type Effect =
   | { kind: 'pulse'; uid: string; start: number; dur: number }
   | { kind: 'crack'; team: Team; cage: number; start: number; dur: number }
   | { kind: 'banner'; text: string; start: number; dur: number };
+
+/** The sound a clash event makes, if any. Hits are thinned so a busy fight stays a murmur. */
+function cueFor(e: ClashEvent) {
+  if (e.type === 'damage' && e.kind === 'hit') play('hit');
+  else if (e.type === 'cast') play('cast');
+  else if (e.type === 'shatter') play('shatter');
+  else if (e.type === 'reseal') play('seal');
+  else if (e.type === 'death') play('fall');
+  else if (e.type === 'end') play(e.winner === PLAYER ? 'win' : 'lose');
+}
 
 interface Model {
   beat: number;
@@ -43,7 +57,8 @@ function freshModel(r: ClashResult): Model {
 }
 
 /** Applies one event to the playback model, spawning the effects that show it. */
-function apply(m: Model, e: ClashEvent, now: number, teamOf: (uid: string) => Team) {
+function apply(m: Model, e: ClashEvent, now: number, teamOf: (uid: string) => Team, quiet = false) {
+  if (!quiet) cueFor(e);
   const slow = (ms: number) => ms / Math.min(m.speed, 2);
   const float = (uid: string, text: string, cls: string, amount?: number) => {
     // Hits on the same unit within a quarter second read as one number, not a pile.
@@ -56,10 +71,10 @@ function apply(m: Model, e: ClashEvent, now: number, teamOf: (uid: string) => Te
     m.effects.push({ kind: 'float', uid, text, cls, start: now, dur: slow(900), slot, amount });
   };
   switch (e.type) {
-    case 'attack': m.effects.push({ kind: 'shot', from: e.src, to: e.dst, start: now, dur: slow(200), ability: false, team: teamOf(e.src) }); break;
+    case 'attack': if (!reducedMotion.value) m.effects.push({ kind: 'shot', from: e.src, to: e.dst, start: now, dur: slow(200), ability: false, team: teamOf(e.src) }); break;
     case 'cast':
       m.effects.push({ kind: 'pulse', uid: e.src, start: now, dur: slow(600) });
-      for (const t of e.targets) if (t !== e.src) m.effects.push({ kind: 'shot', from: e.src, to: t, start: now, dur: slow(260), ability: true, team: teamOf(e.src) });
+      if (!reducedMotion.value) for (const t of e.targets) if (t !== e.src) m.effects.push({ kind: 'shot', from: e.src, to: t, start: now, dur: slow(260), ability: true, team: teamOf(e.src) });
       break;
     case 'damage': {
       const f = m.fs.get(e.dst)!; f.hp = e.hp; f.shield = e.shield;
@@ -116,7 +131,7 @@ function usePlayback(r: ClashResult) {
     faster: () => { const m = model.current; m.speed = m.speed >= 4 ? 1 : m.speed * 2; setTick((x) => x + 1); },
     skip: () => {
       const m = model.current, now = performance.now();
-      while (m.idx < r.events.length) apply(m, r.events[m.idx++]!, now, teamOf);
+      while (m.idx < r.events.length) { const e = r.events[m.idx++]!; apply(m, e, now, teamOf, e.type !== 'end'); }
       m.beat = r.beats; m.effects = m.effects.filter((e) => e.kind === 'crack');
       setTick((x) => x + 1);
     },
@@ -225,20 +240,31 @@ export function ClashView({ r, playerPage, enemyPage, onBack, backLabel, onResul
             }
             if (e.kind === 'float') {
               const p = pos(e.uid);
-              return <text key={i} class={`float ${e.cls}`} x={p.x + (e.slot - 1) * 10} y={p.y - 26 - e.slot * 10 - 18 * k} opacity={1 - k * k}>{e.text}</text>;
+              return <text key={i} class={`float ${e.cls}`} x={p.x + (e.slot - 1) * 10} y={p.y - 26 - e.slot * 10 - (reducedMotion.value ? 0 : 18 * k)} opacity={1 - k * k}>{e.text}</text>;
             }
             if (e.kind === 'pulse') {
               const p = pos(e.uid);
-              return <circle key={i} class="pulse" cx={p.x} cy={p.y} r={22 + 18 * k} opacity={1 - k} />;
+              return <circle key={i} class="pulse" cx={p.x} cy={p.y} r={reducedMotion.value ? 26 : 22 + 18 * k} opacity={1 - k} />;
             }
             if (e.kind === 'crack') {
               const page = e.team === PLAYER ? playerPage : enemyPage;
               const cage = page.cages[e.cage]!;
+              // The gold cracks, and flakes of leaf fall away.
+              const fall = reducedMotion.value ? 0 : k;
               return (
                 <g key={i} class="crack" opacity={1 - k}>
                   {cage.cells.map((c) => {
                     const x = cellX(c), y = drawnY(c, e.team === ENEMY) + yOffset(e.team);
-                    return <g key={c}><rect x={x} y={y} width={CELL_PX} height={CELL_PX} class="crack-flash" /><path class="crack-line" d={`M${x + 8} ${y + 10}L${x + 28} ${y + 30}L${x + 22} ${y + 44}M${x + 28} ${y + 30}L${x + 50} ${y + 26}`} /></g>;
+                    return (
+                      <g key={c}>
+                        <rect x={x} y={y} width={CELL_PX} height={CELL_PX} class="crack-flash" />
+                        <path class="crack-line" d={`M${x + 8} ${y + 10}L${x + 28} ${y + 30}L${x + 22} ${y + 44}M${x + 28} ${y + 30}L${x + 50} ${y + 26}`} />
+                        {FLAKES.map(([fx, fy, drift, spin], j) => (
+                          <path key={j} class="flake" d="M0 -4L3 0L0 4L-3 0Z"
+                            transform={`translate(${x + fx} ${y + fy + fall * 26}) rotate(${spin * fall * 180}) translate(${drift * fall * 14} 0)`} />
+                        ))}
+                      </g>
+                    );
                   })}
                 </g>
               );

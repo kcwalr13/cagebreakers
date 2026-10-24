@@ -305,3 +305,12 @@ describe('a run with every M4 action', () => {
     expect(r.winner === PLAYER || r.winner === 1 || r.winner === 'draw').toBe(true);
   });
 });
+
+describe('the Daily Page', () => {
+  it('derives one readable seed per day, the same on every phone', async () => {
+    const { dailySeed, normalizeSeed } = await import('./seed');
+    expect(dailySeed('2026-10-24')).toBe(dailySeed('2026-10-24'));
+    expect(dailySeed('2026-10-24')).not.toBe(dailySeed('2026-10-25'));
+    expect(normalizeSeed(dailySeed('2026-10-24'))).toBe(dailySeed('2026-10-24'));
+  });
+});

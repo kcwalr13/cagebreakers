@@ -16,7 +16,7 @@ The design lives in the [Cagebreakers design doc](https://claude.ai/artifact/NJV
 | M2 · First Blood | 12 units, the combat simulator, clash playback and a result that explains the fight | Built |
 | M3 · The Run | Shop, gold, claims, merges, 15 clashes, opponents, three Keepers, save and resume | Built |
 | M4 · The Roster | 30 species, Kins, Callings, the Misprints (Blank, Smudge, Domino), tools and relics, bot balancing | Built |
-| M5 · Flight-Ready | Final art, onboarding, sound, Daily Page, Codex | Next |
+| M5 · Flight-Ready | Settings and quiet sound, the Daily Page, the Codex, save codes, a first chapter that teaches by playing, an art pass | Built |
 
 ## Working on it
 
@@ -43,7 +43,7 @@ Every push to `main` runs the tests and deploys to GitHub Pages.
 - `lab` — headless tools that run on a developer machine and never ship.
 - `e2e` — Playwright tests at iPhone and Android sizes, including an offline reload.
 
-The build uses a relative base path and keeps storage behind `src/app/storage.ts`, so it can be wrapped as an App Store or Play Store app later without changing game code.
+The build uses a relative base path and keeps storage behind `src/app/storage.ts`, so it can be wrapped as an App Store or Play Store app later without changing game code. The steps are in [docs/app-stores.md](docs/app-stores.md).
 
 ## Credits
 

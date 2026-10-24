@@ -11,21 +11,28 @@ import {
   type ClashRecord, type OwnedUnit, type RunAction, type RunState, act, dominoSpots, isClaimed, migrateRun, newRun, onBench, onBoard,
   reach, runPage, scout, sealedNow, toSpecs, values,
 } from '../../core/run';
-import { normalizeSeed } from '../../core/seed';
+import { dailySeed, normalizeSeed } from '../../core/seed';
 import { drag } from '../input';
+import { buzz } from '../settings';
+import { play } from '../sound';
 import { sheet } from '../nav';
 import { freshSeed } from '../state';
 import { readJson, storage, writeJson } from '../storage';
 
-const SAVE_KEY = 'cagebreakers.run';
+/** Two runs can be in progress at once: your own, and today's Daily Page. */
+export type Slot = 'main' | 'daily';
+export const SAVE_KEYS: Record<Slot, string> = { main: 'cagebreakers.run', daily: 'cagebreakers.daily' };
+const SLOT_KEY = 'cagebreakers.slot';
+const BEST_KEY = 'cagebreakers.daily.best';
 
-function load(): RunState | null {
-  const s = migrateRun(readJson<unknown>(SAVE_KEY));
+export function loadSlot(sl: Slot): RunState | null {
+  const s = migrateRun(readJson<unknown>(SAVE_KEYS[sl]));
   if (!s || !normalizeSeed(s.seed)) return null;
   return { ...s, lastArmy: s.lastArmy ?? [] };
 }
 
-export const run = signal<RunState | null>(load());
+export const slot = signal<Slot>(readJson<{ slot?: Slot }>(SLOT_KEY)?.slot === 'daily' ? 'daily' : 'main');
+export const run = signal<RunState | null>(loadSlot(slot.value));
 /** Earlier layouts this planning phase, for undoing placements (never purchases). */
 export const undoStack = signal<RunState[]>([]);
 export const view = signal<'plan' | 'clash'>('plan');
@@ -40,9 +47,50 @@ export const justSealed = signal<Set<number>>(new Set());
 export const refused = signal<{ cell: number; id: number } | null>(null);
 
 effect(() => {
-  const s = run.value;
-  if (s) writeJson(SAVE_KEY, s); else storage.remove(SAVE_KEY);
+  const s = run.value, key = SAVE_KEYS[slot.value];
+  if (s) writeJson(key, s); else storage.remove(key);
+  writeJson(SLOT_KEY, { slot: slot.value });
 });
+
+/** Your best result on each day's page. */
+export interface DailyBest { won: boolean; reached: number; life: number }
+export const dailyBest = signal<Record<string, DailyBest>>(readJson<Record<string, DailyBest>>(BEST_KEY) ?? {});
+effect(() => {
+  const s = run.value;
+  if (!s?.daily || (s.phase !== 'won' && s.phase !== 'lost')) return;
+  const now: DailyBest = { won: s.phase === 'won', reached: s.records.length, life: s.life };
+  const prev = dailyBest.peek()[s.daily];
+  // A win beats a loss, then reaching further, then more Life left.
+  const diff = prev ? Number(now.won) - Number(prev.won) || now.reached - prev.reached || now.life - prev.life : 1;
+  if (diff > 0) {
+    dailyBest.value = { ...dailyBest.peek(), [s.daily]: now };
+    writeJson(BEST_KEY, dailyBest.value);
+  }
+});
+
+/** Today's date on this phone, as the Daily Page names it. */
+export function today(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Switches to a slot, resuming whatever run it holds. */
+export function openSlot(sl: Slot) {
+  batch(() => {
+    slot.value = sl;
+    run.value = loadSlot(sl);
+    undoStack.value = []; selection.value = null; itemMode.value = null; lastFight.value = null; view.value = 'plan';
+  });
+}
+
+/** Opens today's Daily Page, continuing it if already begun (or starting it over when asked). */
+export function startDaily(day = today(), fresh = false) {
+  const saved = loadSlot('daily');
+  batch(() => {
+    slot.value = 'daily';
+    run.value = saved?.daily === day && !fresh ? saved : { ...newRun(dailySeed(day)), daily: day };
+    undoStack.value = []; selection.value = null; itemMode.value = null; lastFight.value = null; view.value = 'plan';
+  });
+}
 
 export const page = computed(() => (run.value ? runPage(run.value) : null));
 export const sealed = computed(() => (run.value ? sealedNow(run.value) : new Set<number>()));
@@ -123,7 +171,7 @@ export function say(text: string, warn = false, ms = 2800) {
   clearTimeout(timer);
   timer = setTimeout(() => (message.value = null), ms);
 }
-const buzz = (p: number | number[]) => { try { navigator.vibrate?.(p); } catch { /* unsupported */ } };
+
 
 /** Applies an action. Refusals explain themselves; seals that form are celebrated. */
 export function dispatch(a: RunAction, cell = -1): boolean {
@@ -133,7 +181,7 @@ export function dispatch(a: RunAction, cell = -1): boolean {
   if (!r.ok) {
     if (cell >= 0) refused.value = { cell, id: Date.now() };
     say(r.reason ?? "That can't be done.", true);
-    buzz([30, 30, 30]);
+    buzz([30, 30, 30]); play('refuse');
     return false;
   }
   const before = sealed.value;
@@ -147,9 +195,11 @@ export function dispatch(a: RunAction, cell = -1): boolean {
   const newly = new Set([...sealed.value].filter((id) => !before.has(id)));
   if (newly.size) {
     justSealed.value = newly;
-    buzz([12, 40, 18]);
+    buzz([12, 40, 18]); play('seal');
     setTimeout(() => { if (justSealed.value === newly) justSealed.value = new Set(); }, 1200);
-  } else if (a.type === 'place' || a.type === 'buy') buzz(8);
+  } else if (a.type === 'place' || a.type === 'turn') { buzz(8); play('place'); }
+  else if (a.type === 'buy') { buzz(8); play('buy'); }
+  else if (a.type === 'pick' || a.type === 'use') play('pick');
   if (r.fought) {
     lastFight.value = { ...r.fought, before: s };
     view.value = 'clash';
@@ -165,6 +215,7 @@ export function undo() {
 
 export function startRun(seed = freshSeed()) {
   batch(() => {
+    slot.value = 'main';
     run.value = newRun(seed);
     undoStack.value = [];
     selection.value = null;

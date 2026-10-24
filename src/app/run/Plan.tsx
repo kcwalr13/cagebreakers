@@ -9,6 +9,7 @@ import { traitName } from '../cards';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
 import { type PressHandlers, drag, pressBoard, pressItem, setBoardElement, setHandlers } from '../input';
+import { dismissTip, tip } from '../coach';
 import { screen, sheet } from '../nav';
 import { PageView, piecesOf } from '../PageView';
 import { TokenSvg } from '../Token';
@@ -156,12 +157,25 @@ function Board() {
   }
   return (
     <div class="board-wrap" onPointerDown={(e) => pressBoard(e as unknown as PointerEvent)}>
+      <Coach />
       <PageView
         id="run" svgRef={setBoardElement} page={p} pieces={pieces} sealed={sealed.value} flashing={justSealed.value}
         hints={itemMode.value ? undefined : hints.value} hover={hover} hover2={hover2} refused={refused.value} dimCages={dim} outlineCages={outline}
         revealed={revealed.value} targets={toolTargets.value}
         label={`Your page: ${s.claimed.length} cages claimed, ${sealed.value.size} sealed`}
       />
+    </div>
+  );
+}
+
+/** A tip from the teaching chapter, laid over the back of the page until dismissed. */
+function Coach() {
+  const t = tip.value;
+  if (!t) return null;
+  return (
+    <div class="coach" role="note" key={t.id} onPointerDown={(e) => e.stopPropagation()}>
+      <p>{t.text}</p>
+      <button class="pill-btn" onClick={() => dismissTip(t.id)}>Got it</button>
     </div>
   );
 }

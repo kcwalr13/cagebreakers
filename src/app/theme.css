@@ -395,3 +395,50 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .item-icon .ico { width: 26px; height: 26px; }
 .item-icon.tool { background: var(--paper); border: 1.5px solid var(--ink); color: var(--ink); }
 .item-icon.relic { background: linear-gradient(135deg, var(--g0), var(--g1) 45%, var(--g2) 55%, var(--g3)); color: var(--on-gold); }
+
+/* ---- M5: settings ------------------------------------------------------------------- */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+/* Less motion: no sheens, stamps or slides; state changes still show, instantly. */
+[data-motion='reduced'] *, [data-motion='reduced'] *::before, [data-motion='reduced'] *::after {
+  animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important;
+}
+[data-motion='reduced'] .gilt.flash .sheen { animation: none !important; }
+/* Left thumb: the main button moves to the left edge of every control row. */
+[data-hand='left'] .run-controls, [data-hand='left'] .clash-controls, [data-hand='left'] .status { flex-direction: row-reverse; }
+
+/* Title: two cards, then the smaller doors */
+.mc-date { font-family: 'Alegreya Sans', sans-serif; font-weight: 500; font-size: 14px; color: var(--ink-soft); margin-left: 6px; }
+.title-minor { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+.minor-card { min-height: 52px; border-radius: 12px; border: 1px solid var(--rule); background: var(--paper); font-family: 'Alegreya', serif; font-weight: 700; font-size: 17px; }
+.minor-card:active, .menu-card:active { border-color: var(--gold-edge); }
+
+/* Codex */
+.codex { min-height: 0; }
+.codex-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; margin: 6px 0 4px; }
+.codex-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border-radius: 12px; border: 1px solid var(--rule); background: var(--paper-hi); min-height: 92px; font-size: 13px; text-align: center; line-height: 1.15; }
+.codex-cell.unmet { background: transparent; border-style: dashed; color: var(--ink-soft); }
+.unmet-token { width: 48px; height: 48px; border-radius: 50%; border: 1.5px dashed var(--rule); display: grid; place-items: center; font-family: 'Alegreya', serif; font-weight: 800; font-size: 22px; color: var(--rule); }
+.codex-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--rule); }
+.codex-row.unmet { color: var(--ink-soft); }
+.codex-row.unmet .item-icon { background: transparent; border: 1.5px dashed var(--rule); color: var(--rule); font-weight: 800; }
+.codex-op { width: 44px; height: 44px; flex: none; display: grid; place-items: center; font-family: 'Alegreya', serif; font-weight: 800; font-size: 24px; color: var(--rubric); border: 1.5px solid var(--rule); border-radius: 10px; }
+
+/* Save codes */
+.code-box { width: 100%; min-height: 72px; margin: 6px 0 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--rule); background: var(--paper-hi); color: var(--ink); font: 13px/1.3 ui-monospace, Menlo, monospace; word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
+
+/* Teaching tips: a slip of vellum over the back rows of the page */
+.coach {
+  position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); z-index: 3; width: min(100cqw - 8px, 100cqh - 8px, 460px);
+  background: var(--paper-hi); border: 1.5px solid var(--gold-edge); border-radius: 12px; box-shadow: var(--lift);
+  padding: 10px 12px; display: flex; align-items: center; gap: 10px; animation: coach-in 260ms ease-out;
+}
+.coach p { margin: 0; font-size: 15px; line-height: 1.3; flex: 1; }
+.coach .pill-btn { height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--rule); background: var(--paper); font-weight: 600; flex: none; }
+@keyframes coach-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+[data-hand='left'] .coach { flex-direction: row-reverse; }
+.flake { fill: var(--g2); stroke: var(--g3); stroke-width: .6; }
+.flourish { display: block; width: min(240px, 70%); height: auto; margin: 10px auto 0; overflow: visible; }
+.fl-line, .fl-curl { fill: none; stroke: var(--rubric); stroke-width: 1.6; stroke-linecap: round; }
+.fl-diamond { fill: var(--g2); stroke: var(--g3); stroke-width: 1; }
+.fl-dot { fill: var(--rubric); }

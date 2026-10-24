@@ -12,6 +12,10 @@ import * as fight from './fight/state';
 import { Icon } from './Icon';
 import { screen, sheet } from './nav';
 import * as toy from './state';
+import { type HandChoice, type MotionChoice, buzz, setSetting, settings } from './settings';
+import { coachOff, resetTips } from './coach';
+import { exportCode, importCode } from './savecode';
+import { play, unlockAudio } from './sound';
 import { type ThemeChoice, theme } from './state';
 
 const SIZE_NOTE: Record<number, string> = { 2: '', 3: ' Three-cell cages give each member a quarter more.', 4: ' Four-cell cages give each member half again as much.' };
@@ -91,13 +95,13 @@ function ClaimRow({ cageId }: { cageId: number }) {
 }
 
 function ConfirmNewRun() {
-  const s = runState.run.value;
+  const s = runState.slot.value === 'main' ? runState.run.value : runState.loadSlot('main');
   return (
     <>
       <div class="sheet-head"><h2>Start a new run?</h2><Close /></div>
       <p>Your run at clash {s?.clash ?? 1} with {s?.life ?? 0} Life will be abandoned.</p>
       <div class="row-btns">
-        <button class="btn primary" onClick={() => { abandonRun(); startRun(); sheet.value = null; screen.value = 'run'; }}>Start fresh</button>
+        <button class="btn primary" onClick={() => { runState.openSlot('main'); abandonRun(); startRun(); sheet.value = null; screen.value = 'run'; }}>Start fresh</button>
         <button class="btn" onClick={() => (sheet.value = null)}>Keep playing</button>
       </div>
     </>
@@ -105,6 +109,17 @@ function ConfirmNewRun() {
 }
 
 const THEMES: [ThemeChoice, string][] = [['system', 'Match phone'], ['light', 'Vellum'], ['dark', 'Night Vellum']];
+const MOTIONS: [MotionChoice, string][] = [['system', 'Match phone'], ['reduced', 'Less'], ['full', 'Full']];
+const HANDS: [HandChoice, string][] = [['right', 'Right thumb'], ['left', 'Left thumb']];
+
+function Toggle({ label, on, set }: { label: string; on: boolean; set: (v: boolean) => void }) {
+  return (
+    <div class="seg" role="group" aria-label={label}>
+      <button aria-pressed={on} onClick={() => set(true)}>On</button>
+      <button aria-pressed={!on} onClick={() => set(false)}>Off</button>
+    </div>
+  );
+}
 
 function MenuSheet() {
   const [code, setCode] = useState('');
@@ -167,6 +182,40 @@ function MenuSheet() {
           <button key={value} aria-pressed={theme.value === value} onClick={() => (theme.value = value)}>{label}</button>
         ))}
       </div>
+      <div class="settings-grid">
+        <div>
+          <div class="section-label">Sound</div>
+          <Toggle label="Sound" on={settings.value.sound} set={(v) => { setSetting('sound', v); if (v) { unlockAudio(); play('seal'); } }} />
+        </div>
+        {'vibrate' in navigator ? (
+          <div>
+            <div class="section-label">Vibration</div>
+            <Toggle label="Vibration" on={settings.value.haptics} set={(v) => { setSetting('haptics', v); if (v) buzz(12); }} />
+          </div>
+        ) : null}
+      </div>
+      <div class="section-label">Tips while you play</div>
+      <div class="row-btns">
+        <button class="btn" aria-pressed={!coachOff.value} onClick={() => (coachOff.value = !coachOff.value)}>{coachOff.value ? 'Turn tips on' : 'Turn tips off'}</button>
+        <button class="btn" onClick={() => { resetTips(); sheet.value = null; }}>Show every tip again</button>
+      </div>
+      <div class="section-label">Motion</div>
+      <div class="seg" role="group" aria-label="Motion">
+        {MOTIONS.map(([value, label]) => (
+          <button key={value} aria-pressed={settings.value.motion === value} onClick={() => setSetting('motion', value)}>{label}</button>
+        ))}
+      </div>
+      <div class="section-label">Controls</div>
+      <div class="seg" role="group" aria-label="Controls">
+        {HANDS.map(([value, label]) => (
+          <button key={value} aria-pressed={settings.value.hand === value} onClick={() => setSetting('hand', value)}>{label}</button>
+        ))}
+      </div>
+
+      <div class="section-label">Your progress</div>
+      <div class="row-btns">
+        <button class="btn" onClick={() => (sheet.value = { kind: 'transfer' })}>Move to another phone</button>
+      </div>
 
       <div class="section-label">How to play</div>
       <p>No number may repeat in a row or column. Each outlined cage shows a target in red; fill it so its numbers make that target and it seals in gold, empowering what stands inside. The operation is the reward: + makes units sturdier, × makes them hit harder, − makes them faster, and ÷ starts their ability half charged.</p>
@@ -178,6 +227,35 @@ function MenuSheet() {
         Typefaces Alegreya and Alegreya Sans by Huerta Tipográfica, SIL Open Font License.
         <br />Build {__BUILD__.commit}, {__BUILD__.date}.
       </p>
+    </>
+  );
+}
+
+function TransferSheet() {
+  const [code, setCode] = useState('');
+  const [mine, setMine] = useState<string | null>(null);
+  const [note, setNote] = useState<{ text: string; warn?: boolean } | null>(null);
+  const copy = async () => {
+    const c = await exportCode();
+    setMine(c);
+    try { await navigator.clipboard.writeText(c); setNote({ text: 'Copied. Paste it into this screen on the other phone.' }); }
+    catch { setNote({ text: 'Select the code below and copy it.' }); }
+  };
+  const load = async () => {
+    const err = await importCode(code);
+    if (err) setNote({ text: err, warn: true }); else location.reload();
+  };
+  return (
+    <>
+      <div class="sheet-head"><h2>Move to another phone</h2><Close /></div>
+      <p class="muted-sm">A save code carries your run, today's Daily Page, the Codex and your settings. No account, no connection needed.</p>
+      <div class="section-label">From this phone</div>
+      <div class="row-btns"><button class="btn" onClick={() => void copy()}>Copy my save code</button></div>
+      {mine ? <textarea class="code-box" readOnly value={mine} aria-label="Your save code" onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()} /> : null}
+      <div class="section-label">Onto this phone</div>
+      <textarea class="code-box" placeholder="Paste a save code here" value={code} aria-label="Save code to load" onInput={(e) => { setCode((e.target as HTMLTextAreaElement).value); setNote(null); }} />
+      <div class="row-btns"><button class="btn primary" disabled={!code.trim()} onClick={() => void load()}>Load it, replacing this phone's progress</button></div>
+      {note ? <p class={note.warn ? 'warn-text' : 'muted-sm'} role="status">{note.text}</p> : null}
     </>
   );
 }
@@ -199,6 +277,7 @@ export function Sheets() {
           : s.kind === 'pick' ? <PickSheet />
           : s.kind === 'satchel' ? <SatchelSheet />
           : s.kind === 'tool' ? <ToolSheet slot={s.slot} uid={s.uid} />
+          : s.kind === 'transfer' ? <TransferSheet />
           : s.kind === 'scout' ? <ScoutSheet />
           : s.kind === 'traits' ? <RunTraitsSheet />
           : s.kind === 'merge' ? <MergeSheet />

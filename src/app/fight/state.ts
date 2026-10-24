@@ -96,7 +96,8 @@ export function say(text: string, warn = false, ms = 2600) {
   clearTimeout(messageTimer);
   messageTimer = setTimeout(() => (message.value = null), ms);
 }
-const buzz = (p: number | number[]) => { try { navigator.vibrate?.(p); } catch { /* unsupported */ } };
+import { buzz } from '../settings';
+import { play } from '../sound';
 
 function why(cell: number, n: number, origin: number): string {
   if (playerPage.stones[cell]) return 'That number is printed on the page.';
@@ -118,9 +119,9 @@ function commit(next: Layout, placedUid: string) {
   const newly = new Set([...sealed.value].filter((id) => !before.has(id)));
   if (newly.size) {
     justSealed.value = newly;
-    buzz([12, 40, 18]);
+    buzz([12, 40, 18]); play('seal');
     setTimeout(() => { if (justSealed.value === newly) justSealed.value = new Set(); }, 1200);
-  } else buzz(8);
+  } else { buzz(8); play('place'); }
 }
 
 /** Moves a unit onto a cell. A unit already there goes back to the bench. */
@@ -136,7 +137,7 @@ export function placeUnit(uid: string, cell: number): boolean {
   if (playerPage.stones[cell] || !isLegal(playerPage, vals, cell, u.n, origin)) {
     refused.value = { cell, id: Date.now() };
     say(why(cell, u.n, origin), true);
-    buzz([30, 30, 30]);
+    buzz([30, 30, 30]); play('refuse');
     return false;
   }
   const next = { ...layout.value };

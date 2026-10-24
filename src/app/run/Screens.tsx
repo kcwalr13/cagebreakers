@@ -13,7 +13,7 @@ import { Icon } from '../Icon';
 import { screen, sheet } from '../nav';
 import { TokenSvg } from '../Token';
 import { RunPlan } from './Plan';
-import { dispatch, finishClash, itemMode, lastFight, run, say, scouted, startRun, view } from './state';
+import { dispatch, finishClash, itemMode, lastFight, run, scouted, startDaily, startRun, view } from './state';
 
 export function MergeSheet() {
   const s = run.value;
@@ -196,9 +196,14 @@ function RunSummary() {
           </div>
         ))}
       </div>
-      <p class="muted-sm center">Run code {s.seed}. Seals made: {s.records.reduce((n, r) => n + r.sealed, 0)} across the run.</p>
+      <p class="muted-sm center">{s.daily ? `Daily Page for ${s.daily}. ` : ''}Run code {s.seed}. Seals made: {s.records.reduce((n, r) => n + r.sealed, 0)} across the run.</p>
       <div class="spacer" />
-      <button class="btn primary wide" onClick={() => startRun()}>New run</button>
+      {s.daily ? (
+        <div class="row-btns">
+          <button class="btn primary grow" onClick={() => startDaily(s.daily, true)}>Play today's page again</button>
+          <button class="btn" onClick={() => (screen.value = 'title')}>Title</button>
+        </div>
+      ) : <button class="btn primary wide" onClick={() => startRun()}>New run</button>}
       <div class="bottom-pad" />
     </div>
   );

@@ -82,6 +82,8 @@ export interface RunState {
   revealed: number[];
   /** Run modifiers. `banned` species never appear in your shop (the bot lab uses this to measure each species). */
   mods?: { banned?: readonly string[] };
+  /** Set on a Daily Page run: the calendar day it belongs to. */
+  daily?: string;
 }
 
 export type UseTarget = { uid?: string; half?: 0 | 1; dir?: 1 | -1; cell?: number; cage?: number };
