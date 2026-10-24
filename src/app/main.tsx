@@ -2,6 +2,7 @@ import { effect } from '@preact/signals';
 import { render } from 'preact';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
+import { updateReady } from './nav';
 import { exposeTestHooks, theme } from './state';
 import './theme.css';
 
@@ -18,7 +19,15 @@ dark.addEventListener?.('change', applyTheme);
 exposeTestHooks();
 render(<App />, document.getElementById('app')!);
 
-// Cache the whole game for offline play. Updates install quietly and apply on the next launch.
+// Cache the whole game for offline play. A new version downloads quietly in the background;
+// the player sees a small "new version ready" note and reloads when it suits them.
 if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('nosw')) {
-  registerSW({ immediate: true });
+  const update = registerSW({
+    immediate: true,
+    onNeedRefresh() { updateReady.value = () => void update(true); },
+    onRegisteredSW(_url, reg) {
+      // Look for updates hourly while the game is open and online.
+      if (reg) setInterval(() => { if (navigator.onLine) void reg.update(); }, 60 * 60 * 1000);
+    },
+  });
 }

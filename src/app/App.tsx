@@ -4,7 +4,7 @@ import { PlanScreen } from './fight/Plan';
 import { phase } from './fight/state';
 import { Icon } from './Icon';
 import { LIFT_PX, drag } from './input';
-import { screen, sheet } from './nav';
+import { screen, sheet, updateReady } from './nav';
 import { Sheets } from './Sheets';
 import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
@@ -16,6 +16,18 @@ function Ghost() {
   return (
     <div class="ghost" style={{ transform: `translate(${d.x - 28}px, ${d.y - LIFT_PX - 28}px)` }}>
       <TokenSvg n={d.look.n} species={d.look.species} stars={d.look.stars} size={56} />
+    </div>
+  );
+}
+
+function UpdateNote() {
+  const apply = updateReady.value;
+  if (!apply) return null;
+  return (
+    <div class="update-note" role="status">
+      <span>A new version is ready.</span>
+      <button class="pill-btn" onClick={apply}>Reload</button>
+      <button class="icon-btn" aria-label="Later" onClick={() => (updateReady.value = null)}><Icon name="close" /></button>
     </div>
   );
 }
@@ -62,6 +74,7 @@ export function App() {
     <div class="app">
       {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : phase.value === 'plan' ? <PlanScreen /> : <ClashScreen />}
       <Ghost />
+      <UpdateNote />
       <Sheets />
     </div>
   );

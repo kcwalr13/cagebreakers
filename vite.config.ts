@@ -17,7 +17,8 @@ export default defineConfig({
   plugins: [
     preact(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // The player decides when to reload, so an update never interrupts a fight.
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {

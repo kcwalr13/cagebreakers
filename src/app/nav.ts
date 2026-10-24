@@ -20,6 +20,8 @@ const valid = (s: unknown): s is Screen => s === 'title' || s === 'toy' || s ===
 
 export const screen = signal<Screen>(valid(fromUrl) ? fromUrl : valid(saved?.screen) ? saved!.screen! : 'title');
 export const sheet = signal<Sheet>(null);
+/** Set when a new version has downloaded and is waiting to take over. */
+export const updateReady = signal<null | (() => void)>(null);
 
 effect(() => { writeJson(NAV_KEY, { screen: screen.value }); });
 effect(() => { void screen.value; sheet.value = null; });
