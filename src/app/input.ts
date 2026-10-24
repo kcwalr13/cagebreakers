@@ -30,7 +30,8 @@ export interface PressHandlers {
   lookAt(cell: number): DragLook | null;
   lookOf(key: string): DragLook | null;
   drop(from: Source, cell: number): void;
-  dropOff(from: Source): void;
+  /** Released away from the page; x and y are where the finger lifted. */
+  dropOff(from: Source, x: number, y: number): void;
   tapCell(cell: number): void;
   tapItem(key: string): void;
   longPress?(from: Source): void;
@@ -87,7 +88,7 @@ function onUp(e: PointerEvent) {
   if (p.dragging) {
     const over = cellFromPoint(e.clientX, e.clientY - LIFT_PX);
     drag.value = null;
-    if (over >= 0) handlers.drop(p.from, over); else handlers.dropOff(p.from);
+    if (over >= 0) handlers.drop(p.from, over); else handlers.dropOff(p.from, e.clientX, e.clientY);
   } else if (p.from.kind === 'item') {
     handlers.tapItem(p.from.key);
   } else {

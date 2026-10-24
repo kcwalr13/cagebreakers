@@ -191,7 +191,6 @@ export function PlanScreen() {
       <div class="front"><span>front line</span></div>
       <Board />
       <Status />
-      <div class="spacer" />
       <Bench />
       <button class="btn primary clash-btn" onClick={startClash} disabled={!units.value.length}>
         <Icon name="clash" />Clash

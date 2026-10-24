@@ -9,6 +9,9 @@ import { Sheets } from './Sheets';
 import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
 import { ToyScreen } from './Toy';
+import { RunScreen } from './run/Screens';
+import { run, startRun } from './run/state';
+import { RUN } from '../content/balance';
 
 function Ghost() {
   const d = drag.value;
@@ -46,16 +49,33 @@ function Title() {
       <p class="tagline">An auto-battler played on a KenKen page.</p>
       <div class="spacer" />
       <nav class="title-menu">
-        <button class="menu-card primary" onClick={() => (screen.value = 'fight')}>
+        {run.value && run.value.phase !== 'won' && run.value.phase !== 'lost' ? (
+          <>
+            <button class="menu-card primary" onClick={() => (screen.value = 'run')}>
+              <span class="mc-title">Continue run</span>
+              <span class="mc-sub">Clash {run.value.clash} of {RUN.clashes}, {run.value.life} Life, {run.value.gold} gold.</span>
+            </button>
+            <button class="menu-card" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>
+              <span class="mc-title">New run</span>
+              <span class="mc-sub">Abandon this run and start a fresh page.</span>
+            </button>
+          </>
+        ) : (
+          <button class="menu-card primary" onClick={() => { startRun(); screen.value = 'run'; }}>
+            <span class="mc-title">New run</span>
+            <span class="mc-sub">Fifteen clashes on one page. Draft units, claim cages, seal them in gold.</span>
+          </button>
+        )}
+        <button class="menu-card" onClick={() => (screen.value = 'fight')}>
           <span class="mc-title">First Blood</span>
-          <span class="mc-sub">Place your eight units, seal cages, and watch them fight The Iron Warren.</span>
+          <span class="mc-sub">A practice fight: place eight units and watch them fight The Iron Warren.</span>
         </button>
         <button class="menu-card" onClick={() => (screen.value = 'toy')}>
           <span class="mc-title">Page toy</span>
           <span class="mc-sub">The puzzle on its own: fill a generated page until every cage is gold.</span>
         </button>
       </nav>
-      <p class="build-note">Milestone 2 of 5. Runs, the shop and the full roster come next.</p>
+      <p class="build-note">Milestone 3 of 5. The full roster, items and final polish come next.</p>
       <div class="bottom-pad" />
     </div>
   );
@@ -72,7 +92,7 @@ export function App() {
   const s = screen.value;
   return (
     <div class="app">
-      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : phase.value === 'plan' ? <PlanScreen /> : <ClashScreen />}
+      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'run' ? <RunScreen /> : phase.value === 'plan' ? <PlanScreen /> : <ClashScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

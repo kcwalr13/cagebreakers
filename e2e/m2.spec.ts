@@ -82,7 +82,7 @@ test('planning: bench, placement by tap and drag, cards, scouting, controls of 4
   expect(small).toEqual([]);
   const { scroll, client } = await p.evaluate(() => ({ scroll: document.documentElement.scrollHeight, client: innerHeight }));
   expect(scroll).toBeLessThanOrEqual(client);
-  await expect(p.getByRole('button', { name: /Clash/ })).toBeInViewport();
+  await expect(p.getByRole('button', { name: /Clash/ })).toBeInViewport({ ratio: 1 });
 });
 
 test('a thoughtful layout seals four cages, fights, and the result explains why', async ({ page: p }, info) => {

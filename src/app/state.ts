@@ -201,6 +201,23 @@ export function exposeTestHooks() {
     place,
     newPage,
   };
+  void Promise.all([import('./run/state'), import('../core/run'), import('../core/rules')]).then(([r, core, rules]) => {
+    (window as unknown as { __run: unknown }).__run = {
+      state: () => r.run.value,
+      dispatch: r.dispatch,
+      finishClash: r.finishClash,
+      startRun: r.startRun,
+      /** Legal claimed cells for a unit, for test autopilots. */
+      legalCells(uid: string) {
+        const st = r.run.value!; const page = core.pageOf(st.seed); const vals = core.values(st);
+        const u = st.units.find((x) => x.uid === uid)!;
+        return Array.from({ length: 36 }, (_, c) => c).filter((c) => !vals[c] && !page.stones[c] && core.isClaimed(st, c) && rules.isLegal(page, vals, c, u.n, u.cell));
+      },
+      claimCost: (cage: number) => core.claimCost(r.run.value!, cage),
+      reach: () => core.reach(r.run.value!),
+      page: () => core.pageOf(r.run.value!.seed),
+    };
+  });
   void import('./fight/state').then((f) => {
     (window as unknown as { __fight: unknown }).__fight = {
       roster: f.roster, playerPage: f.playerPage, place: f.placeUnit, layout: () => ({ ...f.layout.value }),

@@ -5,8 +5,9 @@ import { CELLS } from '../../core/grid';
 import { Icon } from '../Icon';
 import { BOARD_PX, CELL_PX } from '../input';
 import { sheet } from '../nav';
+import type { Page } from '../../core/page';
 import { PageView, type PieceView, cellX, drawnY } from '../PageView';
-import { backToPlan, enemyPage, playerPage, result } from './state';
+import { backToPlan, enemyPage as fightEnemyPage, playerPage as fightPlayerPage, result } from './state';
 
 const GAP = 34;
 const VIEW_H = BOARD_PX * 2 + GAP;
@@ -126,10 +127,25 @@ function usePlayback(r: ClashResult) {
 export function ClashScreen() {
   const r = result.value;
   if (!r) return null;
-  return <ClashView r={r} key={r.events.length + r.beats} />;
+  return (
+    <ClashView
+      r={r} key={r.events.length + r.beats} playerPage={fightPlayerPage} enemyPage={fightEnemyPage}
+      onBack={backToPlan} backLabel="Rearrange" onResult={() => (sheet.value = { kind: 'result' })}
+    />
+  );
 }
 
-function ClashView({ r }: { r: ClashResult }) {
+export interface ClashViewProps {
+  r: ClashResult;
+  playerPage: Page;
+  enemyPage: Page;
+  onBack: () => void;
+  backLabel: string;
+  onResult: () => void;
+  subtitle?: string;
+}
+
+export function ClashView({ r, playerPage, enemyPage, onBack, backLabel, onResult, subtitle }: ClashViewProps) {
   const { m, controls } = usePlayback(r);
   const now = performance.now();
   const byUid = new Map(r.fighters.map((f) => [f.uid, f]));
@@ -140,7 +156,7 @@ function ClashView({ r }: { r: ClashResult }) {
   const [shownResult, setShownResult] = useState(false);
   useEffect(() => {
     if (m.done && !shownResult) {
-      const id = setTimeout(() => { setShownResult(true); sheet.value = { kind: 'result' }; }, 700);
+      const id = setTimeout(() => { setShownResult(true); onResult(); }, 700);
       return () => clearTimeout(id);
     }
     return undefined;
@@ -160,9 +176,9 @@ function ClashView({ r }: { r: ClashResult }) {
   return (
     <div class="column clash">
       <header class="header">
-        <button class="icon-btn" aria-label="Rearrange" onClick={backToPlan}><Icon name="back" /></button>
+        <button class="icon-btn" aria-label={backLabel} onClick={onBack}><Icon name="back" /></button>
         <div class="title">
-          <div class="title-page">Clash</div>
+          <div class="title-page">{subtitle ?? 'Clash'}</div>
           <div class="title-sub">{seconds} s, {alive(PLAYER)} against {alive(ENEMY)} standing</div>
         </div>
         <button class="icon-btn" aria-label="Menu" onClick={() => (sheet.value = { kind: 'menu' })}><Icon name="menu" /></button>
@@ -237,7 +253,7 @@ function ClashView({ r }: { r: ClashResult }) {
         {m.done ? (
           <>
             <button class="btn" onClick={() => { controls.restart(); setShownResult(false); }}><Icon name="undo" />Watch again</button>
-            <button class="btn primary" onClick={() => (sheet.value = { kind: 'result' })}>See why</button>
+            <button class="btn primary" onClick={onResult}>See why</button>
           </>
         ) : (
           <>

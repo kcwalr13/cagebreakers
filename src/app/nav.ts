@@ -1,7 +1,7 @@
 import { effect, signal } from '@preact/signals';
 import { readJson, writeJson } from './storage';
 
-export type Screen = 'title' | 'toy' | 'fight';
+export type Screen = 'title' | 'toy' | 'fight' | 'run';
 
 /** Every bottom sheet in the game. Only one is open at a time. */
 export type Sheet =
@@ -11,12 +11,18 @@ export type Sheet =
   | { kind: 'enemy' }
   | { kind: 'trait'; id: string; side: 'player' | 'enemy' }
   | { kind: 'result' }
+  | { kind: 'card'; species: string; n: number; stars: number }
+  | { kind: 'scout' }
+  | { kind: 'traits' }
+  | { kind: 'merge' }
+  | { kind: 'run-result' }
+  | { kind: 'confirm-new-run' }
   | null;
 
 const NAV_KEY = 'cagebreakers.nav';
 const fromUrl = new URLSearchParams(location.search).get('screen') as Screen | null;
 const saved = readJson<{ screen?: Screen }>(NAV_KEY);
-const valid = (s: unknown): s is Screen => s === 'title' || s === 'toy' || s === 'fight';
+const valid = (s: unknown): s is Screen => s === 'title' || s === 'toy' || s === 'fight' || s === 'run';
 
 export const screen = signal<Screen>(valid(fromUrl) ? fromUrl : valid(saved?.screen) ? saved!.screen! : 'title');
 export const sheet = signal<Sheet>(null);

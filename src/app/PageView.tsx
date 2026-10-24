@@ -47,6 +47,10 @@ export interface PageViewProps {
   /** Extra SVG drawn over the page in page coordinates (clash effects). */
   children?: ComponentChildren;
   pieceRadius?: number;
+  /** Cages not yet claimed: hatched and faded. */
+  dimCages?: ReadonlySet<number>;
+  /** Cages to call out with a gold dashed outline (the free first claim). */
+  outlineCages?: ReadonlySet<number>;
 }
 
 /** Maps a cell to the row it is drawn on (enemy pages are mirrored). */
@@ -72,6 +76,7 @@ export function PageView(props: PageViewProps) {
           <stop offset=".62" stop-color="var(--sheen)" stop-opacity="0" />
         </linearGradient>
         <pattern id={`${id}-tool`} width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r=".9" class="tooling" /></pattern>
+        <pattern id={`${id}-hatch`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch" /></pattern>
         {p.cages.map((cage) => (
           <clipPath id={`${id}-cage-${cage.id}`} key={cage.id}>
             {cage.cells.map((c) => <rect key={c} x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} />)}
@@ -82,7 +87,7 @@ export function PageView(props: PageViewProps) {
       <rect class="vellum" x={INSET_PX} y={INSET_PX} width={span} height={span} />
 
       {p.cages.map((cage) => (
-        <g key={cage.id} class={`gold${sealed.has(cage.id) ? ' on' : ''}${flashing?.has(cage.id) ? ' flash' : ''}`} data-cage={cage.id}>
+        <g key={cage.id} class={`gilt${sealed.has(cage.id) ? ' on' : ''}${flashing?.has(cage.id) ? ' flash' : ''}`} data-cage={cage.id}>
           {cage.cells.map((c) => <rect key={c} x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} fill={`url(#${id}-gold)`} />)}
           {cage.cells.map((c) => <rect key={`t${c}`} x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} fill={`url(#${id}-tool)`} />)}
           <g clip-path={`url(#${id}-cage-${cage.id})`}>
@@ -90,6 +95,13 @@ export function PageView(props: PageViewProps) {
           </g>
         </g>
       ))}
+
+      {props.dimCages ? p.cages.filter((cage) => props.dimCages!.has(cage.id)).map((cage) => (
+        <g key={`dim${cage.id}`} class="unclaimed">
+          {cage.cells.map((c) => <rect key={c} x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} class="unclaimed-fill" />)}
+          {cage.cells.map((c) => <rect key={`h${c}`} x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} fill={`url(#${id}-hatch)`} />)}
+        </g>
+      )) : null}
 
       {hints?.map((h, c) => {
         if (!h || h === 'blocked') return null;
@@ -108,15 +120,21 @@ export function PageView(props: PageViewProps) {
         // The target sits in the cage's top-left cell as drawn.
         const first = mirrored ? cage.cells.slice().sort((a, b) => rowOf(b) - rowOf(a) || colOf(a) - colOf(b))[0]! : cage.cells[0]!;
         return (
-          <text key={cage.id} class={`target${sealed.has(cage.id) ? ' on-gold' : ''}`} x={cellX(first) + 5} y={y(first) + 15}>
+          <text key={cage.id} class={`target${sealed.has(cage.id) ? ' on-gold' : ''}${props.dimCages?.has(cage.id) ? ' faded' : ''}`} x={cellX(first) + 5} y={y(first) + 15}>
             {cage.target}{cage.op}
           </text>
         );
       })}
 
       {p.stones.map((v, c) => v ? (
-        <text key={c} class={`stone${sealed.has(p.cageOf[c]!) ? ' on-gold' : ''}`} x={cellX(c) + CELL_PX / 2} y={y(c) + CELL_PX / 2 + 10}>{v}</text>
+        <text key={c} class={`stone${sealed.has(p.cageOf[c]!) ? ' on-gold' : ''}${props.dimCages?.has(p.cageOf[c]!) ? ' faded' : ''}`} x={cellX(c) + CELL_PX / 2} y={y(c) + CELL_PX / 2 + 10}>{v}</text>
       ) : null)}
+
+      {props.outlineCages ? p.cages.filter((cage) => props.outlineCages!.has(cage.id)).map((cage) => (
+        <g key={`out${cage.id}`} class="claimable">
+          {cage.cells.map((c) => <rect key={c} x={cellX(c) + 3} y={y(c) + 3} width={CELL_PX - 6} height={CELL_PX - 6} rx="6" class="hint-seals" />)}
+        </g>
+      )) : null}
 
       {props.pieces.map((piece, c) => piece ? (
         <g key={piece.key}>

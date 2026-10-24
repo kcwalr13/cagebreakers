@@ -26,9 +26,20 @@ export interface UnitSpec {
   cell: number;
 }
 
+/** Rules that bend a clash for one side: Keeper twists and their kin. */
+export interface TeamRules {
+  /** Extra damage and HP as a share (0.15 = 15% more). */
+  buff?: number;
+  /** Units standing in cages that didn't seal lose this share of damage and HP. */
+  unsealedPenalty?: number;
+  /** This side's sealed cages never shatter. */
+  unshatterable?: boolean;
+}
+
 export interface Side {
   page: Page;
   units: UnitSpec[];
+  rules?: TeamRules;
 }
 
 export type DamageKind = 'hit' | 'pierce' | 'splash' | 'ability' | 'poison' | 'overtime';
@@ -206,6 +217,12 @@ export function simulateClash(player: Side, enemy: Side): ClashResult {
         fortifyUntil: -1, fortifyReduction: 0, stunnedUntil: -1, poisons: [],
         evadeEvery: 0, hitsTaken: 0, brokeFirst: new Set(), notes: [],
       };
+      const rules = side.rules ?? {};
+      if (rules.buff) { f.baseMaxHp *= 1 + rules.buff; f.attack *= 1 + rules.buff; }
+      if (rules.unsealedPenalty && !sealedNow[team].has(f.cage)) {
+        f.baseMaxHp *= 1 - rules.unsealedPenalty; f.attack *= 1 - rules.unsealedPenalty;
+        f.notes.push(`Outside a seal: ${pct(rules.unsealedPenalty)} weaker`);
+      }
       f.maxHp = f.baseMaxHp;
 
       // Kins: each keys off a feature of the page, judged as the clash begins.
@@ -294,7 +311,7 @@ export function simulateClash(player: Side, enemy: Side): ClashResult {
 
   // ---- Effects ----------------------------------------------------------------------------
   function shatter(team: Team, cage: number, by: string | null) {
-    if (!sealedNow[team].has(cage)) return;
+    if (!sealedNow[team].has(cage) || sides[team].rules?.unshatterable) return;
     sealedNow[team].delete(cage);
     shatteredOrder[team].push(cage);
     const ms = members(team, cage);

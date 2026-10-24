@@ -117,7 +117,6 @@ export function ToyScreen() {
       <Header />
       <Board />
       <Status />
-      <div class="spacer" />
       {complete.value ? <Complete /> : (
         <>
           {!seenIntro.value ? (
