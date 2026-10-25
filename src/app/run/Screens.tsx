@@ -5,9 +5,12 @@ import { Icon } from '../Icon';
 import { goBack, screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { RoundScreen, TOOL_ICON } from './Round';
-import { aim, dailyBest, dailyParts, dispatch, lastInk, page, run, sealed, startDaily, startStation } from './state';
+import { aim, bestKey, dailyBest, dailyParts, dispatch, lastInk, page, run, sealed, startDaily, startStation, startWeekly } from './state';
 import { lastSettled } from '../meta';
-import { stationById } from '../../content/stations';
+import { regionById, stationById } from '../../content/stations';
+import { SPECIES } from '../../content/home';
+import { GOALS } from '../../content/journal';
+import { PacketArt } from '../HomeArt';
 
 function Close() {
   return <button class="icon-btn" onClick={() => (sheet.value = null)} aria-label="Close"><Icon name="close" /></button>;
@@ -62,8 +65,8 @@ export function RoundSheet() {
   if (!li || !s || !p) return null;
   const r = li.record;
   const over = s.phase !== 'arrange';
-  const title = s.phase === 'done' ? 'Harvest!' : s.phase === 'ruined' ? 'The garden dried out' : `Week ${r.round} watered`;
-  const gained = r.bountyGold + r.sealGold + r.fullHandGold;
+  const title = s.phase === 'done' ? (s.setup.zen ? 'Finished!' : 'Harvest!') : s.phase === 'ruined' ? 'The garden dried out' : `Week ${r.round} watered`;
+  const gained = r.bountyGold + r.sealGold + r.fullHandGold + (r.perfectGold ?? 0);
   const choice = r.round < s.setup.rounds;
   return (
     <>
@@ -85,6 +88,12 @@ export function RoundSheet() {
           <span class="il-mark"><Icon name="seal" class="ico" /></span>
           <span class="il-text"><span>{r.seals} {r.seals === 1 ? 'plot' : 'plots'} in bloom</span><span class="il-out">{r.seals ? `+${r.sealGold} ${r.sealGold === 1 ? 'coin' : 'coins'}` : 'No blooms this week'}</span></span>
         </li>
+        {s.setup.zen ? (
+          <li class={r.perfect ? 'ok' : 'no'}>
+            <span class="il-mark">{r.perfect ? <Icon name="check" class="ico" /> : null}</span>
+            <span class="il-text"><span>Every plot in bloom</span><span class="il-out">{r.perfect ? `+${r.perfectGold} coins` : 'Not this time'}</span></span>
+          </li>
+        ) : null}
         {choice ? (
           <li class={r.fullHand ? 'ok' : 'no'}>
             <span class="il-mark">{r.fullHand ? <Icon name="check" class="ico" /> : null}</span>
@@ -97,7 +106,7 @@ export function RoundSheet() {
       </ul>
       <p class="ink-total">
         {gained ? <>+{gained} {gained === 1 ? 'coin' : 'coins'} this week. </> : null}
-        {s.phase === 'ruined' ? 'No water left.' : `${s.ink} ${s.ink === 1 ? 'drop' : 'drops'} of water left.`}
+        {s.setup.zen ? null : s.phase === 'ruined' ? 'No water left.' : `${s.ink} ${s.ink === 1 ? 'drop' : 'drops'} of water left.`}
         {!over && s.round < s.setup.rounds ? ` ${bagCount(s.bag)} numbers still to come.` : null}
       </p>
       <div class="row-btns">
@@ -106,6 +115,9 @@ export function RoundSheet() {
     </>
   );
 }
+
+/** "A", "A and B", or "A, B and C". */
+const listOf = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 /** What the garden earned in seeds for the Potting Shed, and what it opened. */
 function LeafPanel() {
@@ -116,16 +128,25 @@ function LeafPanel() {
     <div class="leaf-panel" role="status">
       <div class="leaf-earned"><Icon name="leaf" class="ico leaf" /><b>+{r.leaf}</b> {r.leaf === 1 ? 'seed' : 'seeds'}</div>
       <div class="muted-sm">
-        {r.fromScore ? `${r.fromScore} for your ${s.phase === 'done' ? 'score' : 'coins'}` : s.phase === 'ruined' ? 'A dried-out garden saves a few seeds, for the coins you kept' : ''}
-        {r.fromStars ? `, ${r.fromStars} for ${r.newStars === 1 ? 'a new star' : `${r.newStars} new stars`}` : ''}
+        {[
+          r.fromScore ? `${r.fromScore} for your ${s.phase === 'done' ? 'score' : 'coins'}` : s.phase === 'ruined' ? 'A dried-out garden saves a few seeds, for the coins you kept' : '',
+          r.fromStars ? `${r.fromStars} for ${r.newStars === 1 ? 'a new star' : `${r.newStars} new stars`}` : '',
+          r.fromDaily ? `${r.fromDaily} for the Daily Garden${r.allFour ? ', with all four today' : ''}` : '',
+          r.fromWeekly ? `${r.fromWeekly} for this week's Weekly Garden` : '',
+        ].filter(Boolean).join(', ')}
       </div>
+      {r.fromDaily && r.streak ? <div class="leaf-news"><Icon name="flame" class="ico inline-ico flame lit" /> {r.streak}-day streak</div> : null}
       {s.setup.station && r.stars ? (
         <div class="leaf-stars" aria-label={`${r.stars} of 3 stars`}>
           {[1, 2, 3].map((i) => <Icon key={i} name="star" class={`ico star${i <= r.stars ? ' on' : ''}`} />)}
         </div>
       ) : null}
-      {st.opened.length ? <div class="leaf-news">Opened on the map: {st.opened.map((id) => stationById(id)!.name).join(' and ')}.</div> : null}
+      {r.plant ? <div class="leaf-news leaf-plant"><PacketArt species={r.plant} /> A packet of {SPECIES[r.plant].name.toLowerCase()} seeds for your home garden.</div> : null}
+      {st.found?.length ? <div class="leaf-news">You found a hidden garden: {listOf(st.found.map((id) => stationById(id)!.name))}!</div> : null}
+      {st.regions?.length ? <div class="leaf-news">A new region opened: {listOf(st.regions.map((id) => regionById(id).name))}.</div> : null}
+      {st.opened.length ? <div class="leaf-news">New paths to open on the map: {listOf(st.opened.map((id) => stationById(id)!.name))}.</div> : null}
       {st.forSale.length ? <div class="leaf-news">New in the Potting Shed: {st.forSale.length} {st.forSale.length === 1 ? 'thing' : 'things'} to buy.</div> : null}
+      {st.goals?.length ? <div class="leaf-news">{st.goals.length === 1 ? 'A goal' : `${st.goals.length} goals`} done in your journal: {st.goals.map((g) => GOALS.find((x) => x.id === g)!.name).join(', ')}.</div> : null}
     </div>
   );
 }
@@ -136,22 +157,24 @@ function RunSummary() {
   const done = s.phase === 'done';
   const pieces: (PieceView | null)[] = new Array(p.stones.length).fill(null);
   for (const t of s.tokens) if (t.cell >= 0) pieces[t.cell] = { key: `t${t.id}`, n: t.n };
-  const best = s.daily ? dailyBest.value[s.daily] : undefined;
+  const key = bestKey(s);
+  const best = key ? dailyBest.value[key] : undefined;
   const station = s.setup.station ? stationById(s.setup.station) : undefined;
   const daily = s.daily ? dailyParts(s.daily) : null;
   return (
     <div class="column summary">
       <header class="header"><button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button><div class="title">{station ? <span class="title-page">{station.name}</span> : null}</div></header>
       <div class={`summary-verdict ${done ? 'won' : 'lost'}`}>
-        <h1>{done ? 'Harvest!' : `Dried out in week ${s.records.length}`}</h1>
+        <h1>{done ? (s.setup.zen ? 'Finished!' : 'Harvest!') : `Dried out in week ${s.records.length}`}</h1>
         <p class="score"><b>{score.total}</b> points</p>
-        <p class="muted-sm">{done ? `${score.gold} coins kept, plus ${score.ink} ${score.ink === 1 ? 'drop' : 'drops'} of water × ${s.setup.inkBonus}.` : `${score.gold} coins kept. A dried-out garden earns no water bonus.`}</p>
+        <p class="muted-sm">{s.setup.zen ? `${sealed.value.size} of ${p.cages.length} plots in bloom${s.revealed.length ? `, ${s.revealed.length} ${s.revealed.length === 1 ? 'Hint' : 'Hints'} used` : ', no Hints'}.`
+          : done ? `${score.gold} coins kept, plus ${score.ink} ${score.ink === 1 ? 'drop' : 'drops'} of water × ${s.setup.inkBonus}.` : `${score.gold} coins kept. A dried-out garden earns no water bonus.`}</p>
       </div>
       <LeafPanel />
       <div class="summary-page">
         <PageView id="summary" page={p} pieces={pieces} sealed={sealed.value} label={`Your finished garden: ${sealed.value.size} of ${p.cages.length} plots in bloom`} />
       </div>
-      <table class="records">
+      {s.setup.zen ? null : <table class="records">
         <thead><tr><th>Week</th><th>Required</th><th>Bonus</th><th>Coins</th></tr></thead>
         <tbody>
           {s.records.map((r) => (
@@ -163,14 +186,20 @@ function RunSummary() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>}
       <p class="muted-sm center">
-        {daily ? `${daily.size}×${daily.size} Daily Garden for ${daily.day}${best ? `. Your best today: ${best.score}` : ''}. ` : ''}Garden code {s.seed}.
+        {daily ? `${daily.size}×${daily.size} Daily Garden for ${daily.day}${best ? `. Your best today: ${best.score}` : ''}. ` : ''}
+        {s.weekly ? `The Weekly Garden for the week of ${s.weekly}${best ? `. Your best this week: ${best.score}` : ''}. ` : ''}Garden code {s.seed}.
       </p>
       <div class="spacer" />
       {s.daily ? (
         <div class="row-btns">
           <button class="btn primary grow" onClick={() => startDaily(daily!.day, true, daily!.size)}>Grow today's garden again</button>
+          <button class="btn" onClick={() => (screen.value = 'title')}>Title</button>
+        </div>
+      ) : s.weekly ? (
+        <div class="row-btns">
+          <button class="btn primary grow" onClick={() => startWeekly(s.weekly!, true)}>Grow this week's garden again</button>
           <button class="btn" onClick={() => (screen.value = 'title')}>Title</button>
         </div>
       ) : (

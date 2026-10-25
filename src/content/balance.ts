@@ -18,6 +18,9 @@ export const RUN = {
   inkBonus: 10,
 } as const;
 
+/** A Zen garden (no requests, no water): what each plot in bloom pays at harvest, and the bonus when every plot blooms. */
+export const ZEN = { bloomGold: 3, perfectGold: 30 } as const;
+
 /** What each tool costs in gold when you use it during a run. */
 export const TOOLS = {
   lens: 3,

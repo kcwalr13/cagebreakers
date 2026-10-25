@@ -117,14 +117,17 @@ const touches = (page: Page, cage: number, axis: Axis, line: number) => {
   return page.cages[cage]!.cells.some((c) => (axis === 'row' ? g.rowOf(c) : g.colOf(c)) === line);
 };
 
+/** A cage's label as printed: its target and operation, or just the target when the page hides operations. */
+export const cageLabel = (page: Pick<Page, 'hidden'>, cage: Page['cages'][number]): string => (page.hidden ? `${cage.target}` : `${cage.target}${cage.op}`);
+
 /**
  * A cage's label as printed, with its row when another cage shares the label. Player-facing words
  * follow the garden: a cage is a plot, and a sealed cage is a plot in bloom.
  */
 export function cageName(page: Page, id: number): string {
   const cage = page.cages[id]!;
-  const label = `${cage.target}${cage.op}`;
-  const twins = page.cages.filter((c) => `${c.target}${c.op}` === label).length;
+  const label = cageLabel(page, cage);
+  const twins = page.cages.filter((c) => cageLabel(page, c) === label).length;
   return twins > 1 ? `the ${label} plot in row ${gridOf(page.size).rowOf(cage.cells[0]!) + 1}` : `the ${label} plot`;
 }
 
@@ -196,7 +199,7 @@ export function describe(c: Commission, page: Page): string {
     case 'fill-line': return `Fill ${lineName(c.axis, c.line).toLowerCase()}`;
     case 'equal-lines': return `${c.axis === 'row' ? 'Rows' : 'Columns'} ${c.a + 1} and ${c.b + 1} add to the same total, ${c.min} or more`;
     case 'no-seal-line': return `No blooming plot touches ${lineName(c.axis, c.line).toLowerCase()}`;
-    case 'diagonal-min': return `The long diagonal adds to ${c.min} or more`;
+    case 'diagonal-min': return page.diagonal ? `The diagonal from the top-left adds to ${c.min} or more` : `The long diagonal adds to ${c.min} or more`;
     case 'rising': return `Column ${c.line + 1} rises from top to bottom, ${c.count} numbers or more`;
     case 'parity-line': return `Only ${c.even ? 'even' : 'odd'} numbers in ${lineName(c.axis, c.line).toLowerCase()}, ${c.count} or more`;
     case 'fill-page': return 'Fill every square';
@@ -359,7 +362,8 @@ function candidates(page: Page, round: number, enabled: readonly CommissionKind[
   add('diagonal-min', 'min', (t) => ({ kind: 'diagonal-min', min: t }));
   add('corners-min', 'min', (t) => ({ kind: 'corners-min', min: t }));
   for (const quarter of ['tl', 'tr', 'bl', 'br'] as Quarter[]) add('quarter-min', 'min', (t) => ({ kind: 'quarter-min', quarter, min: t }));
-  for (const op of [...new Set(page.cages.map((g) => g.op))]) {
+  // A page that hides its operations can't ask for one.
+  for (const op of page.hidden ? [] : [...new Set(page.cages.map((g) => g.op))]) {
     add('seal-op', 'bool', () => ({ kind: 'seal-op', op }));
     add('seal-op-count', 'min', (t) => ({ kind: 'seal-op-count', op, count: t }));
   }

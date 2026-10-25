@@ -83,8 +83,8 @@ function Hud() {
   return (
     <header class="header hud-row">
       <button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button>
-      <span class={`hud-round${weekTurn.value ? ' turned' : ''}`}>{final ? 'Harvest week' : <>Week <b>{s.round}</b> of {s.setup.rounds}</>}</span>
-      <Ink ink={s.ink} max={s.setup.startInk} />
+      <span class={`hud-round${weekTurn.value ? ' turned' : ''}`}>{s.setup.zen ? <><Icon name="zen" class="ico inline-ico" /> Zen garden</> : final ? 'Harvest week' : <>Week <b>{s.round}</b> of {s.setup.rounds}</>}</span>
+      {s.setup.zen ? null : <Ink ink={s.ink} max={s.setup.startInk} />}
       <span class="hud-stat" aria-label={`${s.gold} ${s.gold === 1 ? 'coin' : 'coins'}`}><Icon name="gold" class="ico gold" /><b>{s.gold}</b></span>
       <button class="icon-btn" aria-label="Menu" onClick={() => (sheet.value = { kind: 'menu' })}><Icon name="menu" /></button>
     </header>
@@ -93,6 +93,14 @@ function Hud() {
 
 function Commissions() {
   const s = run.value!, p = page.value!, v = view.value!;
+  if (s.setup.zen) {
+    return (
+      <div class="zen-note" role="note">
+        <span>Just the puzzle: no requests, no water. Plant every number so every plot blooms.</span>
+        <span class="zen-count">{v.sealed.size} of {p.cages.length} in bloom</span>
+      </div>
+    );
+  }
   return (
     <ol class={`commissions${weekTurn.value ? ' arrive' : ''}`} aria-label="This week's requests">
       {s.posted.map((c, i) => {
@@ -240,6 +248,7 @@ function Status() {
 /** What the round still needs before it can be inked, in plain words. */
 function roundStatus(s: RunState, why: string | null): string {
   const p = placementOf(s);
+  if (s.setup.zen) return why ? `${why} to finish.` : 'Every number is planted. Finish when you\'re ready.';
   if (s.round === s.setup.rounds) return why ? `${why} to fill the garden.` : 'The garden is full. Harvest it.';
   const bonus = `${p.bonus} bonus ${p.bonus === 1 ? 'coin' : 'coins'}`;
   if (why) return `${why}, or all ${p.hand.length} for ${bonus}.`;
@@ -315,7 +324,7 @@ function Controls() {
         </button>
       ))}
       <button class={`btn primary grow${blocker.value ? ' waiting' : ''}`} onClick={ink}>
-        <Icon name="ink" />{final ? 'Harvest' : 'Water it'}
+        <Icon name={s.setup.zen ? 'zen' : 'ink'} />{s.setup.zen ? 'Finish' : final ? 'Harvest' : 'Water it'}
       </button>
     </div>
   );

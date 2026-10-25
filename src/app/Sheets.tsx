@@ -2,12 +2,14 @@ import { useState } from 'preact/hooks';
 import { RUN } from '../content/balance';
 import type { Op, Page } from '../core/page';
 import { combinationSets } from '../core/rules';
+import { cageLabel } from '../core/commission';
 import { normalizeSeed } from '../core/seed';
 import { coachOff, resetTips } from './coach';
 import { Icon } from './Icon';
 import { screen, sheet } from './nav';
 import { RoundSheet, ToolSheet } from './run/Screens';
 import { BookSheet, StationSheet } from './Scriptorium';
+import { HomeTileSheet } from './Home';
 import { profile } from './meta';
 import { stationById } from '../content/stations';
 import * as runState from './run/state';
@@ -40,16 +42,18 @@ function CageSheet({ cageId }: { cageId: number }) {
   return (
     <>
       <div class="sheet-head">
-        <h2><span class="cage-target">{cage.target}{cage.op}</span> <span class="muted">plot of {cage.cells.length} squares</span></h2>
+        <h2><span class="cage-target">{cageLabel(p, cage)}</span> <span class="muted">plot of {cage.cells.length} squares</span></h2>
         <Close />
       </div>
       {isSealed ? (
         <p><strong>In bloom.</strong> {inRun ? `It pays ${RUN.sealGold} coin each week you water it in bloom.` : 'Its numbers make the target.'}</p>
       ) : sets.length ? (
         <>
-          <p class="muted">Numbers that still fit, given the rows and columns around this plot:</p>
+          <p class="muted">{p.hidden
+            ? `This plot's sign is hidden: any of +, −, × and ÷ can make ${cage.target}. Numbers that still fit, given the squares around it:`
+            : 'Numbers that still fit, given the rows and columns around this plot:'}</p>
           <div class="combos">
-            {sets.map((s) => <span class="combo" key={s.join()}>{join(cage.op, orderFor(cage.op, s))}</span>)}
+            {sets.map((s) => <span class="combo" key={s.join()}>{p.hidden ? s.join(' · ') : join(cage.op, orderFor(cage.op, s))}</span>)}
           </div>
           {inRun ? <p class="muted">In bloom, it pays {RUN.sealGold} coin each week you water it.</p> : null}
         </>
@@ -127,7 +131,7 @@ function MenuSheet() {
       {s === 'run' && runState.run.value ? (
         <>
           <div class="section-label">This garden</div>
-          <p>{runState.run.value.setup.station ? `${stationById(runState.run.value.setup.station)?.name}. ` : runState.run.value.daily ? `The ${runState.dailyParts(runState.run.value.daily).size}×${runState.dailyParts(runState.run.value.daily).size} Daily Garden. ` : ''}Code <strong class="code">{runState.run.value.seed}</strong>. Your garden is saved after every move, so you can close the game anytime.</p>
+          <p>{runState.run.value.setup.station ? `${stationById(runState.run.value.setup.station)?.name}. ` : runState.run.value.daily ? `The ${runState.dailyParts(runState.run.value.daily).size}×${runState.dailyParts(runState.run.value.daily).size} Daily Garden. ` : runState.run.value.weekly ? 'This week\'s Weekly Garden. ' : ''}Code <strong class="code">{runState.run.value.seed}</strong>. Your garden is saved after every move, so you can close the game anytime.</p>
           {runState.slot.value === 'main' ? (
             <div class="row-btns">
               <button class="btn" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>Abandon and start over</button>
@@ -188,7 +192,9 @@ function MenuSheet() {
       <p>Your garden is a square bed: 6×6 on most of the map, 5×5 up to 8×8 in some gardens, with numbers from 1 up to its size. No number may repeat in a row or column. Each outlined plot shows a target; when its numbers make that target, it blooms.</p>
       <p>A garden grows over {RUN.rounds} weeks (some gardens on the map differ). Each week deals you a few more numbers and posts three requests. Anything in the garden can move: double-tap a number to pick it up, or use Pick up all to start over. A request never makes you move a number that's in its right square, so once you've worked one out, it can stay. To water the week, plant all your numbers, or all but one; planting every one pays a bonus coin, and a number you keep is dealt again later. While you hold a number, bright squares can take it and shaded ones can't.</p>
       <p>All three requests can always be met at once, with every number planted and every right number left where it is. If a request seems to need a number moved, that number is in the wrong square. Miss the required one and a drop of water dries up; lose all {RUN.startInk} and the garden dries out. The other two pay coins, and so does every blooming plot when you water. Coins buy the tools you carry. The numbers dealt over a season are exactly the ones the garden needs, so in harvest week the last of them go in and the garden is full. Your score is the coins you kept, plus {RUN.inkBonus} for each drop of water left.</p>
-      <p>Between gardens, the Potting Shed keeps what lasts. A finished garden saves seeds: 1 for every 10 points and 5 for each new star. Finishing a garden on the map opens the ones beyond it. Spend seeds on tools to carry, upgrades and new looks.</p>
+      <p>Some gardens twist the puzzle. Fences: a &lt; or &gt; between two squares opens towards the bigger number. Lost labels: plots show only their target, and any of +, −, × and ÷ can make it. Crossed paths: no number repeats on either long diagonal. A Zen garden has no requests and no water: every number comes at once, and it's just the puzzle.</p>
+      <p>Between gardens, the Potting Shed keeps what lasts. A finished garden saves seeds: 1 for every 10 points and 5 for each new star. The map has four regions; stars open each one, and finishing a garden lets you buy the paths beyond it with seeds. A few gardens are hidden until you find them. Spend seeds on tools to carry, upgrades, new looks, and your home garden.</p>
+      <p>Every garden you finish leaves a seed packet for your home garden, and plants there grow with every week you water. The Daily Gardens pay bonus seeds, more with a streak (one missed day a week is forgiven), the Weekly Garden brings a new twist every Monday, and the journal holds goals worth seeds.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.
@@ -242,6 +248,7 @@ export function Sheets() {
           : s.kind === 'station' ? <StationSheet id={s.station} />
           : s.kind === 'book' ? <BookSheet id={s.id} />
           : s.kind === 'transfer' ? <TransferSheet />
+          : s.kind === 'home-tile' ? <HomeTileSheet at={s.at} />
           : s.kind === 'confirm-new-run' ? <ConfirmNewRun /> : null}
       </div>
     </>

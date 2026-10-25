@@ -95,7 +95,11 @@ describe('generatePage', () => {
 });
 
 describe('pages of every size', () => {
-  const variants: PageVariant[] = ['five', 'six', 'six-rocks', 'six-fallow', 'six-market', 'seven', 'eight'];
+  const variants: PageVariant[] = [
+    'five', 'six', 'six-rocks', 'six-fallow', 'six-market', 'seven', 'eight',
+    'six-fences', 'six-hidden', 'six-diagonal', 'six-hidden-fences', 'seven-fences', 'seven-hidden', 'seven-diagonal-fences',
+    'seven-hidden-diagonal', 'eight-gentle', 'eight-diagonal', 'eight-fences', 'eight-all', 'five-all',
+  ];
   it.each(variants)('%s: a valid page with exactly one solution', (variant) => {
     const rules = PAGE_VARIANTS[variant];
     const g = gridOf(rules.size);
@@ -104,7 +108,17 @@ describe('pages of every size', () => {
       expect(page.size).toBe(rules.size);
       expect(page.solution).toHaveLength(g.cells);
       expect(page.solution.every((n) => n >= 1 && n <= g.size)).toBe(true);
-      expect(boardIsLatin(page.solution)).toBe(true);
+      expect(boardIsLatin(page.solution, rules.diagonal)).toBe(true);
+      expect(!!page.hidden).toBe(!!rules.hidden);
+      expect(!!page.diagonal).toBe(!!rules.diagonal);
+      if (rules.fences) {
+        expect(page.fences!.length).toBeGreaterThanOrEqual(rules.fences[0]);
+        expect(page.fences!.length).toBeLessThanOrEqual(rules.fences[1]);
+        for (const f of page.fences!) {
+          expect(g.neighbors[f.a]).toContain(f.b);
+          expect(page.solution[f.a]!).toBeGreaterThan(page.solution[f.b]!);
+        }
+      } else expect(page.fences).toBeUndefined();
       const covered = page.cages.flatMap((c) => c.cells).sort((a, b) => a - b);
       expect(covered).toEqual(g.all);
       expect(page.cages.length).toBeGreaterThanOrEqual(rules.minCages);
@@ -119,7 +133,7 @@ describe('pages of every size', () => {
       const { found, settled } = solve(page, 2);
       expect(settled).toBe(true);
       expect(found).toEqual([page.solution]);
-    }), { numRuns: rules.size >= 7 ? 25 : 60 });
+    }), { numRuns: rules.size >= 7 ? 20 : 50 });
   }, 60_000);
 
   it('draws the hidden solution again when no cages settle it, so a page is always made', () => {

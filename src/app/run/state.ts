@@ -4,7 +4,8 @@ import { hintFor } from '../../core/rules';
 import type { CellHint } from '../PageView';
 import type { StationId } from '../../content/stations';
 import type { Size } from '../../core/grid';
-import { setupFor } from '../../core/meta';
+import { setupFor, weeklyGarden } from '../../core/meta';
+import { dailyKey, mondayOf } from '../../core/calendar';
 import {
   type RoundRecord, type RunAction, type RunState, act, inkBlocker, legalCells, migrateRun, newRun, runPage, scoreOf, standardSetup, valuesOf,
 } from '../../core/run';
@@ -17,24 +18,16 @@ import { play } from '../sound';
 import { freshSeed } from '../state';
 import { readJson, storage, writeJson } from '../storage';
 
-/** Two runs can be in progress at once: your own, and today's Daily Page. */
-/** Your own garden, and one Daily Garden of each size, each saved on its own. */
-export type Slot = 'main' | 'daily' | 'daily5' | 'daily7' | 'daily8';
-export const SLOTS: readonly Slot[] = ['main', 'daily', 'daily5', 'daily7', 'daily8'];
+/** Your own garden, one Daily Garden of each size, and the Weekly Garden, each saved on its own. */
+export type Slot = 'main' | 'daily' | 'daily5' | 'daily7' | 'daily8' | 'weekly';
+export const SLOTS: readonly Slot[] = ['main', 'daily', 'daily5', 'daily7', 'daily8', 'weekly'];
 export const SAVE_KEYS: Record<Slot, string> = {
   main: 'cagebreakers.run', daily: 'cagebreakers.daily', daily5: 'cagebreakers.daily5', daily7: 'cagebreakers.daily7', daily8: 'cagebreakers.daily8',
+  weekly: 'cagebreakers.weekly',
 };
 /** The save slot for a size's Daily Garden: 6×6 keeps the slot it always had. */
 export const dailySlot = (size: Size): Slot => (size === 6 ? 'daily' : `daily${size}` as Slot);
-/**
- * The name a Daily Garden goes by in saves and best scores: the day for 6×6, as it always was,
- * and the day and size for the others.
- */
-export const dailyKey = (day: string, size: Size): string => (size === 6 ? day : `${day}/${size}`);
-export function dailyParts(key: string): { day: string; size: Size } {
-  const [day, size] = key.split('/');
-  return { day: day!, size: (Number(size) || 6) as Size };
-}
+export { dailyKey, dailyParts } from '../../core/calendar';
 const SLOT_KEY = 'cagebreakers.slot';
 const BEST_KEY = 'cagebreakers.daily.best';
 
@@ -107,19 +100,22 @@ effect(() => {
   writeJson(SLOT_KEY, { slot: slot.value });
 });
 
-/** Your best result on each day's page. */
+/** Your best result on each day's page, and on each week's Weekly Garden. */
 export interface DailyBest { score: number; done: boolean; round: number }
+/** The name a run's best score is kept under: its Daily Garden's key, or its week's. */
+export const bestKey = (s: Pick<RunState, 'daily' | 'weekly'>): string | null => s.daily ?? (s.weekly ? `week:${s.weekly}` : null);
 const savedBest = readJson<Record<string, Partial<DailyBest>>>(BEST_KEY) ?? {};
 export const dailyBest = signal<Record<string, DailyBest>>(
   Object.fromEntries(Object.entries(savedBest).filter(([, b]) => typeof b.score === 'number')) as Record<string, DailyBest>,
 );
 effect(() => {
   const s = run.value;
-  if (!s?.daily || s.phase === 'arrange') return;
+  const key = s ? bestKey(s) : null;
+  if (!s || !key || s.phase === 'arrange') return;
   const now: DailyBest = { score: scoreOf(s).total, done: s.phase === 'done', round: s.records.length };
-  const prev = dailyBest.peek()[s.daily];
+  const prev = dailyBest.peek()[key];
   if (!prev || now.score > prev.score) {
-    dailyBest.value = { ...dailyBest.peek(), [s.daily]: now };
+    dailyBest.value = { ...dailyBest.peek(), [key]: now };
     writeJson(BEST_KEY, dailyBest.value);
   }
 });
@@ -145,6 +141,18 @@ export function startDaily(day = today(), fresh = false, size: Size = 6) {
   batch(() => {
     slot.value = sl;
     run.value = saved?.daily === key && !fresh ? saved : newRun(dailySeed(key), { daily: key, id: runId(), setup: standardSetup(size) });
+    resetView();
+  });
+}
+
+/** Opens this week's Weekly Garden, continuing it if already begun (or starting it over when asked). */
+export function startWeekly(day = today(), fresh = false) {
+  const week = mondayOf(day);
+  const w = weeklyGarden(week);
+  const saved = loadSlot('weekly');
+  batch(() => {
+    slot.value = 'weekly';
+    run.value = saved?.weekly === week && !fresh ? saved : newRun(w.seed, { weekly: week, id: runId(), setup: w.setup });
     resetView();
   });
 }

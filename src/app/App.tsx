@@ -5,10 +5,15 @@ import { Icon } from './Icon';
 import { LIFT_PX, drag } from './input';
 import { screen, sheet, updateReady } from './nav';
 import { RunScreen } from './run/Screens';
-import { aim, dailyBest, dailyKey, dailySlot, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, today } from './run/state';
+import { aim, dailyBest, dailyKey, dailySlot, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, startWeekly, today } from './run/state';
+import { DAILY, WEEKLY } from '../content/journal';
+import { mondayOf } from '../core/calendar';
+import { streakNow, weeklyGarden } from '../core/meta';
+import { HomeScreen } from './Home';
+import { JournalScreen } from './Journal';
 import { SIZES, type Size } from '../core/grid';
 import { LibraryScreen, Leaf, MapScreen, ShopScreen } from './Scriptorium';
-import { profile, stars } from './meta';
+import { profile, ready, stars } from './meta';
 import { Sheets } from './Sheets';
 import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
@@ -67,8 +72,27 @@ function dailyNote(size: Size): string {
   return 'New';
 }
 
+/** This week's Weekly Garden on the title: its twist, and where you stand. */
+function WeeklyCard() {
+  const week = mondayOf(today());
+  const w = weeklyGarden(week);
+  const saved = slot.value === 'weekly' ? run.value : loadSlot('weekly');
+  const live = saved?.weekly === week && saved.phase === 'arrange' ? saved : null;
+  const done = profile.value.weekly.includes(week);
+  const best = dailyBest.value[`week:${week}`];
+  const note = live ? `Week ${live.round} of ${live.setup.rounds}` : done ? `Finished${best ? `, best ${best.score}` : ''}` : `+${WEEKLY.seeds} seeds`;
+  return (
+    <button class="menu-card weekly-card" onClick={() => { startWeekly(today()); screen.value = 'run'; }}>
+      <span class="mc-title"><Icon name="weekly" class="ico inline-ico big" /> Weekly Garden {done ? <Icon name="check" class="ico inline-ico done-check" /> : null}</span>
+      <span class="mc-sub"><b>{w.twist}</b>, new every Monday. {note}.</span>
+    </button>
+  );
+}
+
 function Title() {
   const d = new Date();
+  const streak = streakNow(profile.value.daily, today());
+  const todayDone = profile.value.daily.done[today()] ?? [];
   const main = slot.value === 'main' ? run.value : loadSlot('main');
   const live = main && main.phase === 'arrange' ? main : null;
   return (
@@ -94,26 +118,33 @@ function Title() {
         <button class={`menu-card${live ? '' : ' primary'}`} onClick={() => (screen.value = 'map')}>
           <span class="mc-title"><Icon name="map" class="ico inline-ico big" /> The Map</span>
           <span class="mc-sub">{profile.value.filled.length
-            ? `Nine gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
+            ? `Four regions of gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
             : 'Each week brings more numbers and three requests. Plant them to meet the requests until the garden is full. Start in the Kitchen Garden.'}</span>
         </button>
         <div class="menu-card daily-card">
-          <span class="mc-title">Daily Gardens <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span></span>
-          <span class="mc-sub">One of each size, the same for everyone today.</span>
+          <span class="mc-title">Daily Gardens <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span>
+            {streak ? <span class="streak-chip" aria-label={`${streak}-day streak`}><Icon name="flame" class="ico" />{streak}</span> : null}</span>
+          <span class="mc-sub">{todayDone.length === 4 ? 'All four done today. Come back tomorrow for the next four.'
+            : `The same for everyone today. +${DAILY.seeds} seeds each${todayDone.length ? '' : `, +${Math.min(streak + 1, DAILY.streakCap) * DAILY.perStreakDay} for your streak`}, +${DAILY.allFour} for all four.`}</span>
           <div class="daily-sizes">
             {SIZES.map((size) => (
-              <button key={size} class="daily-size" aria-label={`Daily Garden ${size}×${size}: ${dailyNote(size)}`}
+              <button key={size} class={`daily-size${todayDone.includes(size) ? ' done' : ''}`} aria-label={`Daily Garden ${size}×${size}: ${todayDone.includes(size) ? 'done, ' : ''}${dailyNote(size)}`}
                 onClick={() => { startDaily(today(), false, size); screen.value = 'run'; }}>
-                <span class="ds-size">{size}×{size}</span>
+                <span class="ds-size">{size}×{size}{todayDone.includes(size) ? <Icon name="check" class="ico ds-check" /> : null}</span>
                 <span class="ds-note">{dailyNote(size)}</span>
               </button>
             ))}
           </div>
         </div>
+        <WeeklyCard />
         <div class="title-minor">
-          <button class="minor-card" onClick={() => (screen.value = 'shop')}><Icon name="scriptorium" class="ico inline-ico" /> Potting Shed</button>
-          <button class="minor-card" onClick={() => (screen.value = 'library')}><Icon name="library" class="ico inline-ico" /> Herbarium</button>
-          <button class="minor-card" onClick={() => (screen.value = 'toy')}>Practice plot</button>
+          <button class="minor-card" onClick={() => (screen.value = 'home')}><Icon name="home" class="ico inline-ico" />Home garden</button>
+          <button class="minor-card" onClick={() => (screen.value = 'journal')}>
+            <Icon name="journal" class="ico inline-ico" />Journal{ready.value ? <span class="badge" aria-label={`${ready.value} to claim`}>{ready.value}</span> : null}
+          </button>
+          <button class="minor-card" onClick={() => (screen.value = 'shop')}><Icon name="scriptorium" class="ico inline-ico" />Potting Shed</button>
+          <button class="minor-card" onClick={() => (screen.value = 'library')}><Icon name="library" class="ico inline-ico" />Herbarium</button>
+          <button class="minor-card" onClick={() => (screen.value = 'toy')}><Icon name="page" class="ico inline-ico" />Practice plot</button>
         </div>
       </nav>
       <div class="bottom-pad" />
@@ -136,7 +167,7 @@ export function App() {
   return (
     <div class="app">
       {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'map' ? <MapScreen /> : s === 'shop' ? <ShopScreen />
-        : s === 'library' ? <LibraryScreen /> : <RunScreen />}
+        : s === 'library' ? <LibraryScreen /> : s === 'home' ? <HomeScreen /> : s === 'journal' ? <JournalScreen /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

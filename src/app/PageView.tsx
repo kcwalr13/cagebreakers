@@ -1,5 +1,6 @@
 import type { Ref } from 'preact';
 import { useMemo } from 'preact/hooks';
+import { cageLabel } from '../core/commission';
 import { gridOf } from '../core/grid';
 import type { Page } from '../core/page';
 import { CELL_PX, INSET_PX, boardPx } from './input';
@@ -28,6 +29,24 @@ function Flower({ x, y }: { x: number; y: number }) {
  * (green), a swap with the number standing there, or blocked by the Latin rule (shaded).
  */
 export type CellHint = 'open' | 'seals' | 'swap' | 'blocked';
+
+/**
+ * A greater-than fence on the edge between two squares: a chevron whose open side faces the
+ * bigger number, as in 5 > 3.
+ */
+function FenceMark({ page, a, b }: { page: Page; a: number; b: number }) {
+  const g = gridOf(page.size), n = page.size;
+  const across = g.rowOf(a) === g.rowOf(b);
+  const first = Math.min(a, b), second = Math.max(a, b);
+  // The shared edge's middle.
+  const x = across ? cellX(second, n) : cellX(first, n) + CELL_PX / 2 + 2;
+  const y = across ? cellY(first, n) + CELL_PX / 2 + 4 : cellY(second, n);
+  const bigFirst = a === first;
+  const d = across
+    ? (bigFirst ? `M${x - 4} ${y - 6.5}L${x + 4} ${y}L${x - 4} ${y + 6.5}` : `M${x + 4} ${y - 6.5}L${x - 4} ${y}L${x + 4} ${y + 6.5}`)
+    : (bigFirst ? `M${x - 6.5} ${y - 4}L${x} ${y + 4}L${x + 6.5} ${y - 4}` : `M${x - 6.5} ${y + 4}L${x} ${y - 4}L${x + 6.5} ${y + 4}`);
+  return <g class="fence"><path class="fence-halo" d={d} /><path class="fence-mark" d={d} /></g>;
+}
 
 export interface PieceView {
   key: string;
@@ -88,7 +107,7 @@ export function PageView(props: PageViewProps) {
   const y = (c: number) => INSET_PX + gridOf(p.size).rowOf(c) * CELL_PX;
 
   return (
-    <svg ref={props.svgRef} class={`board size-${p.size} ${props.class ?? ''}`} data-size={p.size} viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`} role="img" aria-label={props.label}>
+    <svg ref={props.svgRef} class={`board size-${p.size}${p.hidden ? ' hidden-signs' : ''} ${props.class ?? ''}`} data-size={p.size} viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`} role="img" aria-label={props.label}>
       <defs>
         <linearGradient id={`${id}-gold`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" class="g0" /><stop offset=".45" class="g1" /><stop offset=".55" class="g2" /><stop offset="1" class="g3" />
@@ -132,13 +151,21 @@ export function PageView(props: PageViewProps) {
         <rect key={`mo${c}`} class="marked-edge" x={cellX(c) + 2} y={y(c) + 2} width={CELL_PX - 4} height={CELL_PX - 4} rx="4" />
       )) : null}
 
+      {p.diagonal ? (
+        <g class="diagonals" aria-hidden="true">
+          <path d={`M${INSET_PX + 6} ${INSET_PX + 6}L${INSET_PX + span - 6} ${INSET_PX + span - 6}M${INSET_PX + span - 6} ${INSET_PX + 6}L${INSET_PX + 6} ${INSET_PX + span - 6}`} />
+        </g>
+      ) : null}
+
       <path d={rules.thin} class="rule-thin" />
       <path d={rules.heavy} class="rule-heavy" />
       <rect class="frame" x={INSET_PX} y={INSET_PX} width={span} height={span} />
 
+      {p.fences?.map((f) => <FenceMark key={`f${f.a}-${f.b}`} page={p} a={f.a} b={f.b} />)}
+
       {p.cages.map((cage) => (
         <text key={cage.id} class={`target${sealed.has(cage.id) ? ' on-gold' : ''}`} x={cellX(cage.cells[0]!) + 5} y={y(cage.cells[0]!) + 15}>
-          {cage.target}{cage.op}
+          {cageLabel(p, cage)}
         </text>
       ))}
 

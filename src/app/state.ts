@@ -224,6 +224,7 @@ export function exposeTestHooks() {
       startRun: r.startRun,
       startStation: r.startStation,
       startDaily: r.startDaily,
+      startWeekly: r.startWeekly,
       /** The scriptorium profile, and a way to set it for tests. */
       profile: () => m.profile.value,
       setProfile(p: unknown) { m.profile.value = p as never; },

@@ -48,10 +48,22 @@ const used = {
   purse: 'shiny-purse', strap: 'belt', bounty: 'gloves', palette: 'palette',
   kitchen: 'carrot', rocks: 'stone-pile', fallow: 'field', market: 'fruit-bowl', dry: 'sun', season: 'sunflower',
   box: 'daisy', allotment: 'wheelbarrow', walled: 'stone-wall',
+  // M9: the new gardens on the map
+  herbs: 'herbs-bundle', bees: 'beehive', espalier: 'fruit-tree', labels: 'price-tag', knot: 'knot', tea: 'teapot', secret: 'open-gate',
+  vineyard: 'grapes', moonGarden: 'moon', stones: 'stone-stack', orangery: 'orange', maze: 'maze',
+  bramble: 'thorny-vine', hedgerow: 'hedgehog', meadow: 'flowers', fern: 'fern', oak: 'oak', fairy: 'mushrooms',
+  // The twists, the streak, the Weekly Garden, the journal and the home garden
+  fences: 'wooden-fence', diagonal: 'crossed-chains', zen: 'lotus', overgrown: 'vines', path: 'footprint', unlock: 'padlock-open',
+  flame: 'flame', weekly: 'calendar', journal: 'open-book', home: 'house', packet: 'plant-seed', move: 'move', gift: 'present',
+  birdHouse: 'bird-house', frog: 'frog', lantern: 'lantern', scarecrow: 'scarecrow', bench: 'park-bench', butterflies: 'butterfly',
+  sundial: 'sundial', beehive: 'beehive', mushroomHouse: 'mushroom-house', fruitTree: 'fruit-tree', bonsai: 'bonsai-tree', swing: 'tree-swing',
+  well: 'well', fountain: 'fountain', bridge: 'japanese-bridge',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));
 const custom = {
+  // A garden square crossed by its two long diagonals.
+  diagonal: '<rect x="88" y="88" width="336" height="336" rx="28" fill="none" stroke="currentColor" stroke-width="40"/><path d="M150 150l212 212M362 150L150 362" fill="none" stroke="currentColor" stroke-width="44" stroke-linecap="round"/>',
   back: '<path d="M318 86L148 256l170 170" fill="none" stroke="currentColor" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const body = Object.entries(used)

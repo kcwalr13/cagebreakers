@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { gridOf } from './grid';
 import { generatePage } from './page';
-import { boardIsLatin, boardValues, combinationSets, completions, hintFor, isLegal, isSealed } from './rules';
+import { PAGE_VARIANTS } from '../content/stations';
+import { boardIsLatin, boardValues, brokenFence, combinationSets, completions, fencesKept, hintFor, isLegal, isSealed, sealedCages } from './rules';
 import { SEED_ALPHABET } from './seed';
 
 const CELLS = gridOf(6).cells;
@@ -89,5 +90,56 @@ describe('cages', () => {
       expect(sets.length).toBeGreaterThan(0);
       expect(completions(page, values, cage).length).toBeGreaterThanOrEqual(sets.length);
     }
+  });
+});
+
+describe('the twists', () => {
+  const twisted = (variant: Parameters<typeof generatePage>[1]) => fc.property(seedArb, fc.array(fc.tuple(fc.nat(63), fc.integer({ min: 1, max: 8 })), { maxLength: 80 }), (seed, moves) => {
+    const page = generatePage(seed, variant);
+    const n = page.stones.length;
+    const placed = new Array<number>(n).fill(0);
+    for (const [c, v] of moves) {
+      const cell = c % n, num = ((v - 1) % page.size) + 1;
+      const values = boardValues(page, placed);
+      if (values[cell]) continue;
+      if (isLegal(page, values, cell, num)) placed[cell] = num;
+    }
+    const board = boardValues(page, placed);
+    expect(boardIsLatin(board, page.diagonal)).toBe(true);
+    expect(fencesKept(page, board)).toBe(true);
+  });
+
+  it('never lets a placement break a fence or repeat on a counted diagonal', () => {
+    fc.assert(twisted(PAGE_VARIANTS['six-fences']), { numRuns: 150 });
+    fc.assert(twisted(PAGE_VARIANTS['seven-diagonal-fences']), { numRuns: 60 });
+  });
+
+  it('refuses a number that breaks a fence, and one already on the long diagonal', () => {
+    const page = generatePage('FENCEQ', PAGE_VARIANTS['six-fences']);
+    const f = page.fences!.find((x) => !page.stones[x.a] && !page.stones[x.b])!;
+    const placed = new Array<number>(page.stones.length).fill(0);
+    placed[f.b] = page.solution[f.b]!;
+    const values = boardValues(page, placed);
+    for (let v = 1; v <= 6; v++) if (v <= values[f.b]!) expect(isLegal(page, values, f.a, v)).toBe(false);
+    expect(brokenFence(page, values, f.a, values[f.b]!)).not.toBeNull();
+    // On a bare diagonal page, a number in one corner keeps it out of the opposite corner: they share the long diagonal but no row or column.
+    const diag = { ...generatePage('DIAGQQ', PAGE_VARIANTS['six-diagonal']), stones: new Array<number>(36).fill(0) };
+    const dPlaced = new Array<number>(36).fill(0);
+    dPlaced[35] = 4;
+    expect(isLegal(diag, dPlaced, 0, 4)).toBe(false);
+    expect(isLegal({ ...diag, diagonal: false }, dPlaced, 0, 4)).toBe(true);
+    dPlaced[30] = 2; // the other diagonal's bottom-left corner
+    expect(isLegal(diag, dPlaced, 5, 2)).toBe(false);
+  });
+
+  it('a plot with its sign hidden blooms when any operation makes its target', () => {
+    const page = generatePage('HIDDEN', PAGE_VARIANTS['six-hidden']);
+    const cage = { id: 0, cells: [0, 1], op: '+' as const, target: 2 };
+    expect(isSealed(cage, [4, 2], false)).toBe(false);
+    expect(isSealed(cage, [4, 2], true)).toBe(true); // 4 ÷ 2
+    expect(isSealed(cage, [3, 1], true)).toBe(true); // 3 − 1
+    expect(isSealed({ ...cage, cells: [0, 1, 2], target: 6 }, [1, 2, 3], true)).toBe(true);
+    expect(isSealed({ ...cage, cells: [0, 1, 2], target: 1 }, [3, 2, 1], true)).toBe(false); // no − or ÷ past two squares
+    expect(sealedCages(page, page.solution).size).toBe(page.cages.length);
   });
 });

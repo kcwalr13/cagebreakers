@@ -25,12 +25,14 @@ async function noSmallButtons(p: PWPage) {
   expect(small).toEqual([]);
 }
 
-test('the map: begin in the Kitchen Garden, finish it, save seeds and open the next gardens', async ({ page: p }, info) => {
+test('the map: begin in the Kitchen Garden, finish it, save seeds and buy a path to the next garden', async ({ page: p }, info) => {
   await fresh(p);
   await p.getByRole('button', { name: /The Map/ }).click();
-  await expect(p.locator('.station')).toHaveCount(9);
-  // The Kitchen Garden and the Window Box are open from the start.
-  await expect(p.locator('.station.locked')).toHaveCount(7);
+  await expect(p.locator('.station')).toHaveCount(27);
+  // The Kitchen Garden and the Window Box are open from the start; four gardens are hidden.
+  await expect(p.locator('.station.open')).toHaveCount(2);
+  await expect(p.locator('.station.hidden')).toHaveCount(4);
+  await expect(p.locator('.region')).toHaveCount(4);
   await noSmallButtons(p);
   await p.screenshot({ path: info.outputPath('m7-01-map.png') });
   await p.getByRole('button', { name: /The Kitchen Garden/ }).click();
@@ -44,23 +46,34 @@ test('the map: begin in the Kitchen Garden, finish it, save seeds and open the n
   expect(await R(p, FINISH)).toBe('done');
   await p.keyboard.press('Escape');
   await expect(p.locator('.leaf-panel')).toContainText(/\+\d+ seeds?/);
-  await expect(p.locator('.leaf-panel')).toContainText('Opened on the map: The Rock Garden and The Fallow Field');
+  await expect(p.locator('.leaf-panel')).toContainText('New paths to open on the map: The Herb Spiral, The Rock Garden and The Fallow Field');
+  await expect(p.locator('.leaf-panel')).toContainText('A packet of marigold seeds');
   await p.screenshot({ path: info.outputPath('m7-03-summary.png') });
+  expect(await R(p, '(r) => r.profile().leaf')).toBeGreaterThan(0);
+  // Enough seeds for the path, whatever the garden earned.
+  await R(p, '(r) => r.setProfile({ ...r.profile(), leaf: r.profile().leaf + 20 })');
   const leaf = await R(p, '(r) => r.profile().leaf') as number;
-  expect(leaf).toBeGreaterThan(0);
   await p.getByRole('button', { name: /Back to the map/ }).click();
-  await expect(p.locator('.station.locked')).toHaveCount(5);
+  await expect(p.locator('.station.buyable')).toHaveCount(3);
   await expect(p.locator('.station.filled')).toHaveCount(1);
-  // The run is counted once, even after a reload on the summary.
+  await p.getByRole('button', { name: /The Rock Garden, path for 12 seeds/ }).click();
+  await p.getByRole('button', { name: /Open the path/ }).click();
+  await expect(p.getByRole('button', { name: 'Begin' })).toBeVisible();
+  await p.keyboard.press('Escape');
+  await expect(p.locator('.station.open')).toHaveCount(3);
+  expect(await R(p, '(r) => r.profile().leaf')).toBe(leaf - 12);
+  // The run is counted once, even after a reload.
+  await p.goto('./?test&nosw&screen=run');
+  await p.waitForFunction(() => !!(window as Any).__run);
   await p.goto('./?test&nosw&screen=title');
   await p.waitForFunction(() => !!(window as Any).__run);
-  expect(await R(p, '(r) => r.profile().leaf')).toBe(leaf);
-  await expect(p.locator('.leaf-count')).toContainText(String(leaf));
+  expect(await R(p, '(r) => r.profile().leaf')).toBe(leaf - 12);
+  await expect(p.locator('.leaf-count')).toContainText(String(leaf - 12));
 });
 
 test('the Potting Shed sells tools, upgrades and looks; the tool belt carries tools into a garden', async ({ page: p }, info) => {
   await fresh(p);
-  await R(p, `(r) => r.setProfile({ ...r.profile(), leaf: 200, filled: ['copy-desk', 'cloister', 'bare-vellum'] })`);
+  await R(p, `(r) => r.setProfile({ ...r.profile(), leaf: 200, filled: ['copy-desk', 'cloister', 'bare-vellum'], paths: ['cloister', 'bare-vellum'] })`);
   await p.goto('./?test&nosw&screen=shop');
   await p.waitForFunction(() => !!(window as Any).__run);
   await noSmallButtons(p);
@@ -151,20 +164,21 @@ test("the back gesture steps back like the back arrow, and leaves the app only f
   await expect.poll(() => p.evaluate(() => history.state?.cagebreakers ?? null)).toBeNull();
 });
 
-test('gardens of other sizes: the Window Box from the start, the Allotment and the Walled Garden after the Long Season', async ({ page: p }, info) => {
+test('gardens of other sizes: the Window Box from the start, the Allotment and the Walled Garden in the Estate', async ({ page: p }, info) => {
   await fresh(p);
   await p.getByRole('button', { name: /The Map/ }).click();
-  await expect(p.locator('.station:not(.locked)')).toContainText(['The Kitchen Garden', 'The Window Box']);
+  await expect(p.locator('.station.open')).toContainText(['The Window Box', 'The Kitchen Garden']);
   await p.getByRole('button', { name: /The Window Box/ }).click();
   await p.getByRole('button', { name: 'Begin' }).click();
   await expect(p.locator('.hud-round')).toContainText('Week 1 of 4');
   expect(await p.locator('svg.board').getAttribute('data-size')).toBe('5');
   expect(await R(p, FINISH)).toBe('done');
-  // The Long Season opens both big gardens.
-  await R(p, `(r) => r.setProfile({ ...r.profile(), filled: ['copy-desk', 'cloister', 'bare-vellum', 'counting-house', 'long-night', 'grand-folio'] })`);
+  // Paths bought to the big gardens of the Estate.
+  await R(p, `(r) => r.setProfile({ ...r.profile(), filled: ['copy-desk', 'cloister', 'bare-vellum', 'counting-house', 'long-night', 'grand-folio', 'allotment', 'vineyard'],
+    paths: ['cloister', 'bare-vellum', 'counting-house', 'espalier', 'long-night', 'grand-folio', 'allotment', 'vineyard', 'walled-garden'] })`);
   await p.goto('./?test&nosw&screen=map');
   await p.waitForFunction(() => !!(window as Any).__run);
-  await expect(p.locator('.station.locked')).toHaveCount(0);
+  await expect(p.locator('.station.open')).toHaveCount(11);
   await noSmallButtons(p);
   await p.locator('.map-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
   await p.screenshot({ path: info.outputPath('m7-07-map-sizes.png') });

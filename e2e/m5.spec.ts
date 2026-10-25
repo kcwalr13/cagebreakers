@@ -17,7 +17,7 @@ async function settled(p: PWPage) {
 
 test('the Daily Page is the same page for everyone today, kept apart from your own run', async ({ page: p }, info) => {
   await fresh(p);
-  await expect(p.locator('.daily-card')).toContainText('One of each size, the same for everyone today');
+  await expect(p.locator('.daily-card')).toContainText('The same for everyone today');
   await expect(p.locator('.daily-size')).toHaveCount(4);
   await p.screenshot({ path: info.outputPath('m5-01-title.png') });
   // Start your own run first, so the daily must not replace it.

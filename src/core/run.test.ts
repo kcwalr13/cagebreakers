@@ -1,10 +1,10 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { RUN, TOOLS } from '../content/balance';
+import { RUN, TOOLS, ZEN } from '../content/balance';
 import { isMet, viewOf } from './commission';
 import { gridOf } from './grid';
 import { createRng } from './rng';
-import { boardIsLatin } from './rules';
+import { boardIsLatin, fencesKept } from './rules';
 import {
   type RunAction, type RunSetup, type RunState, STANDARD_SETUP, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun, standardSetup,
   pageOf, placementOf, replay, runPage, scoreOf, valuesOf, viewNow,
@@ -46,7 +46,8 @@ function checkInvariants(s: RunState) {
   const cells = s.tokens.filter((t) => t.cell >= 0).map((t) => t.cell);
   expect(new Set(cells).size).toBe(cells.length);
   expect(cells.every((c) => !p.stones[c])).toBe(true);
-  expect(boardIsLatin(valuesOf(s))).toBe(true);
+  expect(boardIsLatin(valuesOf(s), p.diagonal)).toBe(true);
+  expect(fencesKept(p, valuesOf(s))).toBe(true);
   expect(s.gold).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeLessThanOrEqual(s.setup.startInk);
@@ -58,7 +59,8 @@ function checkProof(s: RunState) {
   const p = runPage(s);
   const proof = s.proof!;
   expect(proof).toHaveLength(p.stones.length);
-  expect(boardIsLatin(proof)).toBe(true);
+  expect(boardIsLatin(proof, p.diagonal)).toBe(true);
+  expect(fencesKept(p, proof)).toBe(true);
   for (let c = 0; c < p.stones.length; c++) if (p.stones[c]) expect(proof[c]).toBe(p.stones[c]);
   const placed = proof.filter((n, c) => n && !p.stones[c]).sort();
   expect(placed, 'the proof places every number you hold, and no others').toEqual(s.tokens.map((t) => t.n).sort());
@@ -277,6 +279,22 @@ describe('a run', () => {
     expect(s.revealed).toEqual([cell]);
     expect(s.gold).toBe(5 - TOOLS.lens);
     expect(act(s, { type: 'lens', cell }).ok).toBe(false);
+  });
+
+  it('a Zen garden deals every number at once, asks for nothing, and pays for blooms', () => {
+    const setup = setupFor(NEW_PROFILE, 'herb-spiral');
+    let s = newRun('ZENRUN', { setup });
+    expect(s.posted).toEqual([]);
+    expect(bagCount(s.bag)).toBe(0);
+    expect(s.round).toBe(s.setup.rounds);
+    expect(s.setup.tools).toEqual(['lens']);
+    expect(act({ ...s, gold: 50, setup: { ...s.setup, tools: ['inkwell'] } }, { type: 'inkwell' }).reason).toMatch(/needs no water/);
+    s = placeOnSolution(s);
+    const r = act(s, { type: 'ink' });
+    expect(r.state.phase).toBe('done');
+    const cages = runPage(s).cages.length;
+    expect(r.inked).toMatchObject({ required: null, inkSpilled: 0, seals: cages, sealGold: cages * ZEN.bloomGold, perfect: true, perfectGold: ZEN.perfectGold });
+    expect(scoreOf(r.state).total).toBe(cages * ZEN.bloomGold + ZEN.perfectGold);
   });
 
   it('closes battle-era saves and restores current ones', () => {

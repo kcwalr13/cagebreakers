@@ -4,14 +4,14 @@
  * play thousands of runs through this module, and a run is reproducible from its seed, its setup
  * and its actions.
  */
-import { BASE_TOOLS, RUN, TOOLS, type ToolId } from '../content/balance';
+import { BASE_TOOLS, RUN, TOOLS, type ToolId, ZEN } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
 import { PAGE_VARIANTS, type PageVariant, SEASONS } from '../content/stations';
 import { type Holding, type Posted, type View, findLayout, isMet, planRound, viewOf } from './commission';
 import { type Size, gridOf } from './grid';
 import { type Page, generatePage } from './page';
 import { type Rng, stream } from './rng';
-import { boardValues, isLegal } from './rules';
+import { boardValues, brokenFence, isLegal, peersOf } from './rules';
 
 export interface Token {
   id: number;
@@ -34,6 +34,9 @@ export interface RoundRecord {
   /** Every number dealt this round was on the page, so the full-hand bonus was paid. */
   fullHand: boolean;
   fullHandGold: number;
+  /** In a Zen garden: every plot bloomed, and what that paid. (Absent elsewhere.) */
+  perfect?: boolean;
+  perfectGold?: number;
 }
 
 export type RunPhase = 'arrange' | 'done' | 'ruined';
@@ -59,6 +62,11 @@ export interface RunSetup {
   bountyBonus: number;
   /** Commission kinds a station has brought, enabled for this run. */
   kinds: readonly CommissionKind[];
+  /**
+   * A Zen garden: just the puzzle. Every number comes at once, no requests are posted and there's
+   * no water to lose; blooms pay, and a garden in full bloom pays a bonus.
+   */
+  zen?: boolean;
 }
 
 /** A standard 6×6 page with the standard tools and no upgrades: the 6×6 Daily Garden, and the default. */
@@ -85,6 +93,8 @@ export interface RunState {
   gilded: boolean;
   /** Set on a Daily Page run: the calendar day it belongs to. */
   daily?: string;
+  /** Set on a Weekly Garden run: the Monday of its week. */
+  weekly?: string;
   /** 1 to setup.rounds. */
   round: number;
   phase: RunPhase;
@@ -288,6 +298,12 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   // number that's already right left where it stands.
   s.gilded = false;
   s.rooted = rightCells(s);
+  if (s.setup.zen) {
+    // No requests: the proof is simply the finished garden.
+    s.posted = [];
+    s.proof = page.solution.slice();
+    return s;
+  }
   const plan = planRound({
     page, round: s.round, final,
     holding: { kept, dealt: drawn, need: drawn.length, rooted: s.rooted },
@@ -300,7 +316,7 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   return s;
 }
 
-export interface NewRunOptions { daily?: string; setup?: RunSetup; id?: string }
+export interface NewRunOptions { daily?: string; weekly?: string; setup?: RunSetup; id?: string }
 
 export function newRun(seed: string, opts: NewRunOptions = {}): RunState {
   const setup = opts.setup ?? STANDARD_SETUP;
@@ -308,7 +324,7 @@ export function newRun(seed: string, opts: NewRunOptions = {}): RunState {
   const bag = new Array<number>(page.size + 1).fill(0);
   for (let c = 0; c < page.stones.length; c++) if (!page.stones[c]) bag[page.solution[c]!]!++;
   const s: RunState = {
-    v: 3, seed, ...(opts.daily ? { daily: opts.daily } : {}), ...(opts.id ? { id: opts.id } : {}), setup, erased: [], gilded: false,
+    v: 3, seed, ...(opts.daily ? { daily: opts.daily } : {}), ...(opts.weekly ? { weekly: opts.weekly } : {}), ...(opts.id ? { id: opts.id } : {}), setup, erased: [], gilded: false,
     round: 1, phase: 'arrange', ink: setup.startInk, gold: setup.startGold,
     bag, tokens: [], nextId: 1, need: 0, posted: [], revealed: [], records: [],
   };
@@ -347,10 +363,14 @@ const refuse = (s: RunState, reason: string): ActResult => ({ state: s, ok: fals
 /** Says which line already holds a number, for a refused placement. */
 function conflictLine(page: Page, values: readonly number[], cell: number, n: number): string {
   const g = gridOf(page.size);
-  for (const p of g.peers[cell]!) {
+  for (const p of peersOf(page)[cell]!) {
     if (values[p] !== n) continue;
-    return g.rowOf(p) === g.rowOf(cell) ? `There's already a ${n} in row ${g.rowOf(cell) + 1}` : `There's already a ${n} in column ${g.colOf(cell) + 1}`;
+    if (g.rowOf(p) === g.rowOf(cell)) return `There's already a ${n} in row ${g.rowOf(cell) + 1}`;
+    if (g.colOf(p) === g.colOf(cell)) return `There's already a ${n} in column ${g.colOf(cell) + 1}`;
+    return `There's already a ${n} on that long diagonal`;
   }
+  const broken = brokenFence(page, values, cell, n);
+  if (broken) return broken.fence.a === cell ? `The fence says more than the ${values[broken.other]} beside it` : `The fence says less than the ${values[broken.other]} beside it`;
   return `A ${n} can't go there`;
 }
 
@@ -429,6 +449,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'inkwell': {
+      if (s.setup.zen) return refuse(prev, 'A Zen garden needs no water');
       if (s.ink >= s.setup.startInk) return refuse(prev, 'Your watering can is already full');
       const why = spend(s, 'inkwell');
       if (why) return refuse(prev, why);
@@ -479,13 +500,19 @@ export function act(prev: RunState, a: RunAction): ActResult {
         seals: view.sealed.size, sealGold: view.sealed.size * RUN.sealGold * (s.gilded ? 2 : 1),
         fullHand: placement.full, fullHandGold: placement.full ? placement.bonus : 0,
       };
+      if (s.setup.zen) {
+        // Blooms are what a Zen garden pays for, and a garden in full bloom pays a bonus.
+        record.sealGold = view.sealed.size * ZEN.bloomGold * (s.gilded ? 2 : 1);
+        record.perfect = view.sealed.size === page.cages.length;
+        record.perfectGold = record.perfect ? ZEN.perfectGold : 0;
+      }
       s.records.push(record);
       s.ink -= inkSpilled;
-      s.gold += record.bountyGold + record.sealGold + record.fullHandGold;
+      s.gold += record.bountyGold + record.sealGold + record.fullHandGold + (record.perfectGold ?? 0);
       // Unplaced numbers go back to the bag.
       for (const t of s.tokens) if (t.cell < 0) s.bag[t.n]!++;
       s.tokens = s.tokens.filter((t) => t.cell >= 0);
-      if (s.ink <= 0) { s.phase = 'ruined'; return { state: s, ok: true, inked: record }; }
+      if (!s.setup.zen && s.ink <= 0) { s.phase = 'ruined'; return { state: s, ok: true, inked: record }; }
       if (s.round >= s.setup.rounds) { s.phase = 'done'; return { state: s, ok: true, inked: record }; }
       const lastRequired = required?.c.kind;
       s.round++;

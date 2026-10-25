@@ -20,6 +20,13 @@ export interface Grid {
   peers: readonly (readonly number[])[];
   /** Every cell index, 0 to cells − 1. Shared: don't mutate. */
   all: readonly number[];
+  /** The two long diagonals: top-left to bottom-right, then top-right to bottom-left. Shared: don't mutate. */
+  diagonals: readonly [readonly number[], readonly number[]];
+  /**
+   * Peers on a page where the long diagonals count too: the row and column, and every other cell on
+   * either long diagonal the cell lies on. Shared: don't mutate.
+   */
+  crossPeers: readonly (readonly number[])[];
 }
 
 const grids = new Map<number, Grid>();
@@ -48,7 +55,17 @@ export function gridOf(size: number): Grid {
     }
     return out;
   });
-  g = { size, cells, numbers: Array.from({ length: size }, (_, i) => i + 1), rowOf, colOf, cellAt, neighbors, peers, all };
+  const down = Array.from({ length: size }, (_, i) => cellAt(i, i));
+  const up = Array.from({ length: size }, (_, i) => cellAt(i, size - 1 - i));
+  const crossPeers = all.map((c) => {
+    const out = new Set(peers[c]);
+    for (const d of [down, up]) if (d.includes(c)) for (const x of d) if (x !== c) out.add(x);
+    return [...out];
+  });
+  g = {
+    size, cells, numbers: Array.from({ length: size }, (_, i) => i + 1), rowOf, colOf, cellAt, neighbors, peers, all,
+    diagonals: [down, up], crossPeers,
+  };
   grids.set(size, g);
   return g;
 }

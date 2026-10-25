@@ -5,7 +5,7 @@ import { STATIONS, type StationId, stationById } from '../content/stations';
 import { describe as say } from './commission';
 import { gridOf } from './grid';
 import {
-  NEW_PROFILE, type Profile, buy, cantBuy, enabledKinds, migrateProfile, ownedTools, recordRun, rewardFor, satchelSize, setSatchel,
+  NEW_PROFILE, type Profile, buy, cantBuy, enabledKinds, migrateProfile, openPath, ownedTools, recordRun, rewardFor, satchelSize, setSatchel,
   setupFor, starsFor, stationOpen,
 } from './meta';
 import { pageOf } from './run';
@@ -49,7 +49,7 @@ describe('stations', () => {
       const setup = setupFor(fresh(), st.id);
       const s = fill(`ST${st.id.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X')}AQ`, setup);
       expect(s.phase, st.id).toBe('done');
-      expect(s.records).toHaveLength(st.rounds ?? RUN.rounds);
+      expect(s.records).toHaveLength(st.zen ? 1 : st.rounds ?? RUN.rounds);
       expect(valuesOf(s).every((n) => n > 0)).toBe(true);
     }
     expect(setupFor(fresh(), 'long-night').startInk).toBe(2);
@@ -83,15 +83,20 @@ describe('stations', () => {
     expect(kindsSeen({ ...STANDARD_SETUP, kinds: ['corners-min'] }).has('corners-min')).toBe(true);
   });
 
-  it('open in order', () => {
+  it('open free at the start, and by buying a path once a garden before them is finished', () => {
     const p = fresh();
     const open = (id: StationId, prof: Profile) => stationOpen(prof, stationById(id)!);
-    expect(open('copy-desk', p)).toBe(true);
+    expect(open('copy-desk', p) && open('window-box', p)).toBe(true);
     expect(open('cloister', p)).toBe(false);
-    const q: Profile = { ...p, filled: ['copy-desk'] };
-    expect(open('cloister', q) && open('bare-vellum', q)).toBe(true);
-    expect(open('counting-house', q)).toBe(false);
-    expect(open('counting-house', { ...q, filled: ['copy-desk', 'bare-vellum'] })).toBe(true);
+    expect(openPath({ ...p, leaf: 99 }, 'cloister').reason).toMatch(/Finish The Kitchen Garden first/);
+    const q: Profile = { ...p, filled: ['copy-desk'], leaf: 5 };
+    expect(open('cloister', q)).toBe(false);
+    expect(openPath(q, 'cloister').reason).toMatch(/Costs 12 seeds/);
+    const r = openPath({ ...q, leaf: 20 }, 'cloister');
+    expect(r.ok).toBe(true);
+    expect(r.profile.leaf).toBe(20 - stationById('cloister')!.price);
+    expect(open('cloister', r.profile)).toBe(true);
+    expect(openPath(r.profile, 'cloister').reason).toBe('Already open');
   });
 });
 
