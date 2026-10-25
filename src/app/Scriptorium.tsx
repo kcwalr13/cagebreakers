@@ -15,7 +15,7 @@ import { dismissTip, screenTip } from './coach';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { buy, chooseSatchel, profile, stars } from './meta';
-import { screen, sheet } from './nav';
+import { goBack, screen, sheet } from './nav';
 import { PageView, type PieceView } from './PageView';
 import { TOOL_ICON } from './run/Round';
 import { loadSlot, run, slot, startStation } from './run/state';
@@ -50,7 +50,7 @@ function Stars({ n, label }: { n: number; label?: boolean }) {
 function Header({ title, sub }: { title: string; sub?: string }) {
   return (
     <header class="header">
-      <button class="icon-btn" aria-label="Back to title" onClick={() => (screen.value = 'title')}><Icon name="back" /></button>
+      <button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button>
       <div class="title">
         <div class="title-page">{title}</div>
         {sub ? <div class="title-sub">{sub}</div> : null}

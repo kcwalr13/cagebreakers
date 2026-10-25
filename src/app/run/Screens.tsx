@@ -3,7 +3,7 @@ import { describe } from '../../core/commission';
 import { CELLS } from '../../core/grid';
 import { TOOL_NAMES, act, bagCount, scoreOf, tokenAt } from '../../core/run';
 import { Icon } from '../Icon';
-import { screen, sheet } from '../nav';
+import { goBack, screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { RoundScreen, TOOL_ICON } from './Round';
 import { aim, dailyBest, dispatch, lastInk, page, run, sealed, startDaily, startStation } from './state';
@@ -16,9 +16,7 @@ function Close() {
 
 /** What each tool does, in one or two plain sentences. */
 export const TOOL_TEXT: Record<ToolId, string> = {
-  redraw: 'Trade the numbers in your hand for others still to come. Numbers on the page stay put, and the new ones still let you meet all three commissions with every number placed.',
   lens: 'Shows the right number for one empty cell, the one it holds in the finished puzzle. It stays shown for the rest of the run.',
-  blotter: 'This round, missing the required commission spills no ink.',
   quill: 'Draws one extra number this round.',
   gilder: 'This round, every sealed cage pays double when you ink.',
   eraser: 'Turns one printed number into one of yours: it stays where it is, and can move like any other.',
@@ -26,7 +24,7 @@ export const TOOL_TEXT: Record<ToolId, string> = {
 };
 
 const TOOL_LABEL: Record<ToolId, string> = {
-  redraw: 'Swap', lens: 'Choose a cell', blotter: 'Shield this round', quill: 'Draw a number', gilder: 'Double this round',
+  lens: 'Choose a cell', quill: 'Draw a number', gilder: 'Double this round',
   eraser: 'Choose a printed number', inkwell: 'Refill a drop',
 };
 
@@ -34,21 +32,19 @@ export function ToolSheet({ tool }: { tool: ToolId }) {
   const s = run.value, p = page.value;
   if (!s || !p) return null;
   const cost = TOOLS[tool];
-  const loose = s.tokens.filter((t) => t.cell < 0).length;
   // Try the tool first (the rules are pure), so a refusal is explained before any gold changes hands.
   const instant = tool !== 'lens' && tool !== 'eraser' && s.gold >= cost ? act(s, { type: tool }) : null;
   const empty = Array.from({ length: CELLS }, (_, c) => c).filter((c) => !p.stones[c] && !tokenAt(s, c) && !s.revealed.includes(c)).length;
   const printed = p.stones.filter(Boolean).length;
   const why = s.gold < cost ? `You have ${s.gold} gold.`
-    : tool === 'redraw' && !loose ? 'Your hand is empty. Take numbers off the page to swap them.'
-      : tool === 'lens' && !empty ? 'There is no empty cell left to look at.'
+    : tool === 'lens' && !empty ? 'There is no empty cell left to look at.'
         : tool === 'eraser' && !printed ? 'There are no printed numbers left to erase.'
           : instant && !instant.ok ? `${instant.reason}.` : null;
   const buy = () => {
     if (tool === 'lens' || tool === 'eraser') { aim.value = tool; sheet.value = null; return; }
     if (dispatch({ type: tool })) sheet.value = null;
   };
-  const label = tool === 'redraw' ? `Swap ${loose} ${loose === 1 ? 'number' : 'numbers'}` : TOOL_LABEL[tool];
+  const label = TOOL_LABEL[tool];
   return (
     <>
       <div class="sheet-head"><h2><Icon name={TOOL_ICON[tool]} class="ico inline-ico big" /> {TOOL_NAMES[tool]}</h2><Close /></div>
@@ -77,11 +73,11 @@ export function RoundSheet() {
         {li.posted.map((c, i) => {
           const ok = li.met[i];
           const outcome = c.required
-            ? (ok ? 'Met' : r.blotted ? 'Missed, but Shield kept your ink' : 'Missed: a drop of ink spilled')
+            ? (ok ? 'Met' : 'Missed: a drop of ink spilled')
             : (ok ? `+${c.gold} gold` : 'Not met');
           return (
             <li key={i} class={`${ok ? 'ok' : c.required ? 'miss' : 'no'}`}>
-              <span class="il-mark">{ok ? <Icon name="check" class="ico" /> : c.required && !r.blotted ? <Icon name="spill" class="ico" /> : null}</span>
+              <span class="il-mark">{ok ? <Icon name="check" class="ico" /> : c.required ? <Icon name="spill" class="ico" /> : null}</span>
               <span class="il-text"><span>{describe(c.c, p)}</span><span class="il-out">{outcome}</span></span>
             </li>
           );
@@ -145,7 +141,7 @@ function RunSummary() {
   const station = s.setup.station ? stationById(s.setup.station) : undefined;
   return (
     <div class="column summary">
-      <header class="header"><button class="icon-btn" aria-label="Back to title" onClick={() => (screen.value = 'title')}><Icon name="back" /></button><div class="title">{station ? <span class="title-page">{station.name}</span> : null}</div></header>
+      <header class="header"><button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button><div class="title">{station ? <span class="title-page">{station.name}</span> : null}</div></header>
       <div class={`summary-verdict ${done ? 'won' : 'lost'}`}>
         <h1>{done ? 'The page is full' : `Ruined in round ${s.records.length}`}</h1>
         <p class="score"><b>{score.total}</b> points</p>
@@ -161,7 +157,7 @@ function RunSummary() {
           {s.records.map((r) => (
             <tr key={r.round}>
               <td>{r.round}</td>
-              <td class={r.required === false ? (r.blotted ? 'soft' : 'miss') : ''}>{r.required === null ? '–' : r.required ? 'met' : r.blotted ? 'shielded' : 'missed'}</td>
+              <td class={r.required === false ? 'miss' : ''}>{r.required === null ? '–' : r.required ? 'met' : 'missed'}</td>
               <td>{r.bounties}</td>
               <td>+{r.bountyGold + r.sealGold + r.fullHandGold}</td>
             </tr>

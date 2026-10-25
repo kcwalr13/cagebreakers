@@ -26,7 +26,6 @@ export interface RoundRecord {
   round: number;
   /** Whether the required commission was met; null when none was posted. */
   required: boolean | null;
-  blotted: boolean;
   inkSpilled: number;
   bounties: number;
   bountyGold: number;
@@ -94,16 +93,12 @@ export interface RunState {
    * all in the final round. The rule itself counts every number alike; see placementOf.
    */
   need: number;
-  /** Redraws bought this round. */
-  redraws: number;
   posted: Posted[];
   /**
    * A legal layout of numbers you could hold that meets every posted commission at once: the
    * proof that all three are possible. Never shown to the player. (Absent in saves from before it existed.)
    */
   proof?: number[];
-  /** Bought this round: missing the required commission spills no ink. */
-  blotter: boolean;
   /** Cells whose hidden number the Lens has shown. */
   revealed: number[];
   records: RoundRecord[];
@@ -112,9 +107,7 @@ export interface RunState {
 export type RunAction =
   /** Moves a number to a cell (swapping with whatever stands there), or to your hand with cell -1. */
   | { type: 'place'; id: number; cell: number }
-  | { type: 'redraw' }
   | { type: 'lens'; cell: number }
-  | { type: 'blotter' }
   | { type: 'quill' }
   | { type: 'gilder' }
   | { type: 'eraser'; cell: number }
@@ -274,8 +267,6 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
   s.need = final ? drawn.length : Math.max(0, drawn.length - 1);
   // The plan proves a perfect round: every number placed, all three commissions met.
-  s.redraws = 0;
-  s.blotter = false;
   s.gilded = false;
   const plan = planRound({
     page, round: s.round, final,
@@ -299,7 +290,7 @@ export function newRun(seed: string, opts: NewRunOptions = {}): RunState {
   const s: RunState = {
     v: 3, seed, ...(opts.daily ? { daily: opts.daily } : {}), ...(opts.id ? { id: opts.id } : {}), setup, erased: [], gilded: false,
     round: 1, phase: 'arrange', ink: setup.startInk, gold: setup.startGold,
-    bag, tokens: [], nextId: 1, need: 0, redraws: 0, posted: [], blotter: false, revealed: [], records: [],
+    bag, tokens: [], nextId: 1, need: 0, posted: [], revealed: [], records: [],
   };
   return startRound(s, undefined);
 }
@@ -311,7 +302,8 @@ export function migrateRun(raw: unknown): RunState | null {
   if (r.v !== 3 || typeof r.seed !== 'string' || !Array.isArray(r.tokens) || !Array.isArray(r.bag) || !Array.isArray(r.posted)) return null;
   return {
     ...(r as RunState),
-    setup: r.setup ?? STANDARD_SETUP,
+    // Swap and Shield were retired: a saved run carries only the tools that still exist.
+    setup: r.setup ? { ...r.setup, tools: r.setup.tools.filter((t) => t in TOOLS) } : STANDARD_SETUP,
     erased: r.erased ?? [],
     gilded: r.gilded ?? false,
     revealed: r.revealed ?? [],
@@ -342,7 +334,7 @@ function conflictLine(page: Page, values: readonly number[], cell: number, n: nu
 
 /** Tools are named for what they do. */
 export const TOOL_NAMES: Record<ToolId, string> = {
-  redraw: 'Swap', lens: 'Hint', blotter: 'Shield', quill: 'Extra', gilder: 'Double', eraser: 'Erase', inkwell: 'Refill',
+  lens: 'Hint', quill: 'Extra', gilder: 'Double', eraser: 'Erase', inkwell: 'Refill',
 };
 
 function spend(s: RunState, tool: ToolId): string | null {
@@ -376,33 +368,6 @@ export function act(prev: RunState, a: RunAction): ActResult {
       return { state: s, ok: true };
     }
 
-    case 'redraw': {
-      // Swaps the numbers in your hand, whenever they were dealt, for others still to come.
-      const loose = s.tokens.filter((t) => t.cell < 0);
-      if (!loose.length) return refuse(prev, 'Your hand is empty: take numbers off the page to swap them');
-      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has no other numbers to deal');
-      const bag = s.bag.slice();
-      for (const t of loose) bag[t.n]!++;
-      if (bagCount(bag) <= loose.length) return refuse(prev, 'There are no other numbers left to deal');
-      const why = spend(s, 'redraw');
-      if (why) return refuse(prev, why);
-      s.redraws++;
-      const stay = s.tokens.filter((t) => t.cell >= 0);
-      // The new numbers keep the round's promise: a layout of every number that meets all three.
-      const goals = s.posted.map((p) => p.c);
-      let pick: { drawn: number[]; bag: number[] } | null = null;
-      for (let attempt = 0; attempt < 16 && !pick; attempt++) {
-        const tag = `${s.round}:${s.redraws}:${attempt}`;
-        const d = draw(bag, loose.length, stream(s.seed, `deal:${tag}`));
-        const found = findLayout(page, everything(stay, d.drawn), goals, stream(s.seed, `redraw-check:${tag}`));
-        if (found) { pick = d; s.proof = found; }
-      }
-      if (!pick) return refuse(prev, 'No other numbers would keep all three commissions possible');
-      s.bag = pick.bag;
-      s.tokens = [...stay, ...giveTokens(s, pick.drawn)];
-      return { state: s, ok: true };
-    }
-
     case 'lens': {
       if (a.cell < 0 || a.cell >= CELLS || page.stones[a.cell]) return refuse(prev, 'Choose an empty cell');
       if (tokenAt(s, a.cell)) return refuse(prev, 'Choose an empty cell');
@@ -410,15 +375,6 @@ export function act(prev: RunState, a: RunAction): ActResult {
       const why = spend(s, 'lens');
       if (why) return refuse(prev, why);
       s.revealed.push(a.cell);
-      return { state: s, ok: true };
-    }
-
-    case 'blotter': {
-      if (s.blotter) return refuse(prev, 'Shield is already up this round');
-      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has nothing to shield');
-      const why = spend(s, 'blotter');
-      if (why) return refuse(prev, why);
-      s.blotter = true;
       return { state: s, ok: true };
     }
 
@@ -494,9 +450,9 @@ export function act(prev: RunState, a: RunAction): ActResult {
       const required = s.posted.find((p) => p.required);
       const met = required ? isMet(required.c, view) : null;
       const won = s.posted.filter((p) => !p.required && isMet(p.c, view));
-      const inkSpilled = met === false && !s.blotter ? 1 : 0;
+      const inkSpilled = met === false ? 1 : 0;
       const record: RoundRecord = {
-        round: s.round, required: met, blotted: met === false && s.blotter, inkSpilled,
+        round: s.round, required: met, inkSpilled,
         bounties: won.length, bountyGold: won.reduce((g, p) => g + p.gold, 0),
         seals: view.sealed.size, sealGold: view.sealed.size * RUN.sealGold * (s.gilded ? 2 : 1),
         fullHand: placement.full, fullHandGold: placement.full ? placement.bonus : 0,

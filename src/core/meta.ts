@@ -2,7 +2,7 @@
  * The scriptorium: the progress that lasts between runs. Pure functions over a plain profile, so
  * the app saves it, tests check it, and the bot lab can measure how fast a player progresses.
  */
-import { BASE_TOOLS, SATCHEL, type ToolId } from '../content/balance';
+import { BASE_TOOLS, SATCHEL, TOOLS, type ToolId } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
 import { ITEMS, type Item, type ItemId, LEAF, LIBRARY_SIZE, PERKS } from '../content/meta';
 import { STATIONS, type Station, type StationId, stationById } from '../content/stations';
@@ -53,7 +53,8 @@ export function migrateProfile(raw: unknown): Profile {
     ...NEW_PROFILE,
     ...r,
     owned: r.owned ?? [], filled: r.filled ?? [], stars: r.stars ?? {}, best: r.best ?? {},
-    satchel: r.satchel?.length ? r.satchel : [...BASE_TOOLS], counted: r.counted ?? [], library: r.library ?? [],
+    // Tools that were retired (Swap, Shield) drop out of a saved satchel.
+    satchel: r.satchel?.some((t) => t in TOOLS) ? r.satchel.filter((t) => t in TOOLS) : [...BASE_TOOLS], counted: r.counted ?? [], library: r.library ?? [],
   } as Profile;
 }
 

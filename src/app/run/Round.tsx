@@ -6,13 +6,17 @@ import { dismissTip, tip } from '../coach';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
 import { type PressHandlers, drag, pressBoard, pressItem, setBoardElement, setHandlers } from '../input';
-import { screen, sheet } from '../nav';
+import { goBack, screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
   blocker, blockers, canPutBack, clearPage, dispatch, focus, hints, holding, justPlaced, justSealed, legal, aim, message, met, page,
   placeToken, putBack, refused, revealed, run, say, sealed, selection, useAim, view,
 } from './state';
+
+/** The last tap that picked up a number on the page, so a second tap on it can send it home. */
+let lastPick = { cell: -1, at: 0 };
+const DOUBLE_TAP_MS = 350;
 
 const handlers: PressHandlers = {
   lookAt(cell) {
@@ -50,11 +54,17 @@ const handlers: PressHandlers = {
     const here = tokenAt(s, cell);
     const sel = selection.value;
     if (sel !== null) {
-      if (here?.id === sel) { selection.value = null; return; }
+      if (here?.id === sel) {
+        // A double tap on a number sends it back to your hand.
+        if (lastPick.cell === cell && performance.now() - lastPick.at < DOUBLE_TAP_MS) placeToken(sel, -1);
+        lastPick = { cell: -1, at: 0 };
+        selection.value = null;
+        return;
+      }
       if (placeToken(sel, cell)) selection.value = null;
       return;
     }
-    if (here) { selection.value = here.id; return; }
+    if (here) { selection.value = here.id; lastPick = { cell, at: performance.now() }; return; }
     sheet.value = { kind: 'cage', cage: p.cageOf[cell]! };
   },
 };
@@ -72,7 +82,7 @@ function Hud() {
   const final = s.round === s.setup.rounds;
   return (
     <header class="header hud-row">
-      <button class="icon-btn" aria-label="Back to title" onClick={() => (screen.value = 'title')}><Icon name="back" /></button>
+      <button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button>
       <span class="hud-round">{final ? 'Final round' : <>Round <b>{s.round}</b> of {s.setup.rounds}</>}</span>
       <Ink ink={s.ink} max={s.setup.startInk} />
       <span class="hud-stat" aria-label={`${s.gold} gold`}><Icon name="gold" class="ico gold" /><b>{s.gold}</b></span>
@@ -102,7 +112,7 @@ function Commissions() {
               </span>
               <span class="cm-tag">
                 {c.required
-                  ? (s.blotter ? <><Icon name="blotter" class="ico sm" />Shielded</> : <><Icon name="ink" class="ico sm ink" />Required</>)
+                  ? <><Icon name="ink" class="ico sm ink" />Required</>
                   : <><Icon name="gold" class="ico sm gold" />{c.gold}</>}
               </span>
             </button>
@@ -183,7 +193,14 @@ function Status() {
       </div>
     );
   }
-  return <div class="status" role="status">{roundStatus(s, blocker.value)}</div>;
+  return (
+    <div class="status with-action">
+      <span role="status">{roundStatus(s, blocker.value)}</span>
+      {canPutBack.value
+        ? <button class="pill-btn page-all" onClick={putBack}>Put back</button>
+        : <button class="pill-btn page-all" disabled={!s.tokens.some((t) => t.cell >= 0)} onClick={clearPage}>All to hand</button>}
+    </div>
+  );
 }
 
 /** What the round still needs before it can be inked, in plain words. */
@@ -207,7 +224,6 @@ function Hand() {
   const s = run.value!;
   const hand = inHand(s);
   const sel = selection.value;
-  const onPage = s.tokens.length - hand.length;
   return (
     <div class="hand" role="toolbar" aria-label="Your numbers">
       <div class="hand-tokens">
@@ -228,17 +244,14 @@ function Hand() {
             </button>
           );
         })}
-        {!hand.length ? <span class="hand-empty">All your numbers are on the page.</span> : null}
+        {!hand.length ? <span class="hand-empty">All your numbers are on the page. Double-tap one to take it back.</span> : null}
       </div>
-      {canPutBack.value
-        ? <button class="pill-btn hand-all" onClick={putBack}>Put back</button>
-        : <button class="pill-btn hand-all" disabled={!onPage} onClick={clearPage}>All to hand</button>}
     </div>
   );
 }
 
 export const TOOL_ICON: Record<ToolId, IconName> = {
-  redraw: 'redraw', lens: 'lens', blotter: 'blotter', quill: 'quill', gilder: 'gilder', eraser: 'eraser', inkwell: 'inkwell',
+  lens: 'lens', quill: 'quill', gilder: 'gilder', eraser: 'eraser', inkwell: 'inkwell',
 };
 const TOOL_NAME = TOOL_NAMES;
 
@@ -257,7 +270,7 @@ function Controls() {
       {tools.map((tool) => (
         <button
           key={tool}
-          class={`btn tool${(tool === 'blotter' && s.blotter) || (tool === 'gilder' && s.gilded) ? ' toggled' : ''}`}
+          class={`btn tool${tool === 'gilder' && s.gilded ? ' toggled' : ''}`}
           aria-label={`${TOOL_NAME[tool]}, ${TOOLS[tool]} gold`}
           onClick={() => { aim.value = null; sheet.value = { kind: 'tool', tool }; }}
         >

@@ -7,7 +7,7 @@
  * When a bot paints itself into a corner it falls back to a layout taken from the hidden
  * solution, which is always legal; a person would find their own way out.
  */
-import { RUN, TOOLS } from '../src/content/balance';
+import { RUN } from '../src/content/balance';
 import { choices, isMet, viewOf } from '../src/core/commission';
 import { CELLS } from '../src/core/grid';
 import { type Rng, stream } from '../src/core/rng';
@@ -66,11 +66,6 @@ const valuesWith = (s: RunState, target: Map<number, number>) => {
   const values = page.stones.slice();
   for (const t of s.tokens) { const c = target.get(t.id); if (c !== undefined) values[c] = t.n; }
   return values;
-};
-
-const metRequired = (s: RunState) => {
-  const req = s.posted.find((p) => p.required);
-  return !req || isMet(req.c, viewOf(runPage(s), valuesOf(s)));
 };
 
 /** Fills the rest of the page by backtracking on the Latin rule alone, as a player who ignores cages would. */
@@ -185,7 +180,6 @@ function carefulRound(p: Player, rng: Rng) {
     if (!improved) break;
   }
   p.layout(target);
-  if (!metRequired(p.s) && p.s.gold >= TOOLS.blotter && p.s.setup.tools.includes('blotter')) p.do({ type: 'blotter' });
 }
 
 const ROUND: Record<BotName, (p: Player, rng: Rng) => void> = { hasty: hastyRound, tidy: tidyRound, careful: carefulRound };

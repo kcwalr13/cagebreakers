@@ -32,7 +32,7 @@ const used = {
   back: 'return-arrow', info: 'info', help: 'help', remove: 'trash-can', page: 'scroll-unfurled',
   // The run: gold, ink and what they buy
   gold: 'two-coins', ink: 'drop', spill: 'droplet-splash', check: 'check-mark', seal: 'wax-seal', trophy: 'laurels-trophy',
-  redraw: 'cycle', lens: 'magnifying-glass', blotter: 'stamper',
+  lens: 'magnifying-glass',
   quill: 'quill', gilder: 'paint-brush', eraser: 'broom', inkwell: 'covered-jar',
   // The scriptorium
   map: 'treasure-map', library: 'bookshelf', scriptorium: 'desk', leaf: 'solid-leaf', star: 'round-star', lock: 'padlock',

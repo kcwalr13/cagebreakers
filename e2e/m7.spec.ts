@@ -34,7 +34,7 @@ test('the map: begin at the Copy Desk, fill it, earn leaf and open the next stat
   await p.screenshot({ path: info.outputPath('m7-01-map.png') });
   await p.getByRole('button', { name: /The Copy Desk/ }).click();
   await expect(p.getByRole('dialog')).toContainText('Fill the page');
-  await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(3);
+  await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(1);
   await p.waitForTimeout(250); // let the sheet finish rising
   await p.screenshot({ path: info.outputPath('m7-02-station.png') });
   await p.getByRole('button', { name: 'Begin' }).click();
@@ -72,17 +72,15 @@ test('the scriptorium sells tools, upgrades and styles; the satchel carries tool
   // A style, once bought, can be worn.
   await p.locator('.shop-item', { hasText: 'Newsprint' }).getByRole('button', { name: 'Use' }).click();
   await expect.poll(() => p.evaluate(() => document.documentElement.className)).toContain('theme-newsprint');
-  // Trade Shield for Extra in the satchel, then begin.
+  // Extra went straight into the satchel beside Hint; begin with both.
   await p.goto('./?test&nosw&screen=map');
   await p.waitForFunction(() => !!(window as Any).__run);
   await p.getByRole('button', { name: /The Cloister/ }).click();
-  await p.locator('.satchel-tool', { hasText: 'Shield' }).click();
-  await p.locator('.satchel-tool', { hasText: 'Extra' }).click();
-  await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(3);
+  await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(2);
+  await expect(p.locator('.satchel-tool', { hasText: 'Extra' })).toHaveAttribute('aria-pressed', 'true');
   await p.getByRole('button', { name: 'Begin' }).click();
   expect(await R(p, '(r) => r.state().gold')).toBe(3);
   await expect(p.getByRole('button', { name: /^Extra/ })).toBeVisible();
-  await expect(p.getByRole('button', { name: /^Shield/ })).toHaveCount(0);
   const before = await handCount(p);
   await p.getByRole('button', { name: /^Extra/ }).click();
   await p.getByRole('button', { name: /Draw a number for/ }).click();
@@ -113,12 +111,12 @@ test('the Daily Page ignores upgrades and the satchel', async ({ page: p }) => {
   await p.waitForFunction(() => !!(window as Any).__run);
   await p.getByRole('button', { name: /Daily Page/ }).click();
   const s = await R(p, '(r) => ({ gold: r.state().gold, ink: r.state().ink, tools: r.state().setup.tools, station: r.state().setup.station })');
-  expect(s).toEqual({ gold: 0, ink: 3, tools: ['redraw', 'lens', 'blotter'], station: null });
+  expect(s).toEqual({ gold: 0, ink: 3, tools: ['lens'], station: null });
 });
 
 test('Erase turns a printed number into one of yours', async ({ page: p }) => {
   await fresh(p);
-  await R(p, `(r) => { r.setProfile({ ...r.profile(), owned: ['eraser'], satchel: ['eraser', 'lens', 'redraw'], filled: ['copy-desk', 'cloister'] }); r.startStation('cloister'); r.load({ ...r.state(), gold: 20 }); }`);
+  await R(p, `(r) => { r.setProfile({ ...r.profile(), owned: ['eraser'], satchel: ['eraser', 'lens'], filled: ['copy-desk', 'cloister'] }); r.startStation('cloister'); r.load({ ...r.state(), gold: 20 }); }`);
   await p.goto('./?test&nosw&screen=run');
   await p.waitForFunction(() => !!(window as Any).__run);
   await p.getByRole('button', { name: /^Erase/ }).click();
@@ -128,4 +126,26 @@ test('Erase turns a printed number into one of yours', async ({ page: p }) => {
   const lifted = await R(p, `(r) => { const p = r.page(); for (let c = 0; c < 36; c++) if (p.stones[c] && r.dispatch({ type: 'eraser', cell: c })) return c; return -1; }`) as number;
   expect(lifted).toBeGreaterThanOrEqual(0);
   expect(await R(p, '(r) => r.state().tokens.some((t) => t.round === 0)')).toBe(true);
+});
+
+test("the back gesture steps back like the back arrow, and leaves the app only from the title", async ({ page: p }) => {
+  await fresh(p);
+  await p.getByRole('button', { name: /The Map/ }).click();
+  await expect(p.locator('.station').first()).toBeVisible();
+  await p.goBack();
+  await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
+  // A sheet closes first, then the screen goes back.
+  await p.getByRole('button', { name: /The Map/ }).click();
+  await p.getByRole('button', { name: /The Copy Desk/ }).click();
+  await expect(p.getByRole('dialog')).toBeVisible();
+  await p.goBack();
+  await expect(p.getByRole('dialog')).toHaveCount(0);
+  await expect(p.locator('.station').first()).toBeVisible();
+  await p.goBack();
+  await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
+  // The in-game back arrow also leaves nothing extra behind in history.
+  await p.getByRole('button', { name: /The Map/ }).click();
+  await p.getByRole('button', { name: 'Back to title' }).click();
+  await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
+  await expect.poll(() => p.evaluate(() => history.state?.cagebreakers ?? null)).toBeNull();
 });

@@ -151,18 +151,13 @@ test('anything on the page can move, All to hand clears it, and any one number m
   await expect(p.getByRole('dialog')).toContainText('Kept back');
 });
 
-test('gold buys a Swap, a Hint and a Shield', async ({ page: p }, info) => {
+test('gold buys a Hint', async ({ page: p }, info) => {
   await runOn(p, 'TQQKSA');
   await R(p, '(r) => r.load({ ...r.state(), gold: 20 })');
-  const before = await R(p, '(r) => r.state().tokens.map((t) => t.id).join()');
-  await p.getByRole('button', { name: /^Swap/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('meet all three commissions with every number placed');
-  await p.screenshot({ path: info.outputPath('m6-06-redraw.png') });
-  await p.getByRole('button', { name: /Swap 4 numbers for/ }).click();
-  expect(await R(p, '(r) => r.state().tokens.map((t) => t.id).join()')).not.toBe(before);
-  await expect(p.locator('.hud-stat')).toContainText('18');
-
+  await expect(p.locator('.run-controls .tool')).toHaveCount(1);
   await p.getByRole('button', { name: /^Hint/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('Shows the right number for one empty cell');
+  await p.screenshot({ path: info.outputPath('m6-06-hint-sheet.png') });
   await p.getByRole('button', { name: 'Choose a cell' }).click();
   await expect(p.locator('svg.board .tool-target').first()).toBeVisible();
   const empty = await R(p, '(r) => [...Array(36).keys()].find((c) => !r.page().stones[c] && !r.state().tokens.some((t) => t.cell === c))') as number;
@@ -171,11 +166,24 @@ test('gold buys a Swap, a Hint and a Shield', async ({ page: p }, info) => {
   await expect(p.locator('.status')).toContainText(/Hint: a \d belongs there/);
   await expect(p.locator('svg.board .revealed')).toHaveCount(1);
   await p.screenshot({ path: info.outputPath('m6-07-lens.png') });
+  expect(await R(p, '(r) => r.state().gold')).toBe(17);
+});
 
-  await p.getByRole('button', { name: /^Shield/ }).click();
-  await p.getByRole('button', { name: /Shield this round/ }).click();
-  await expect(p.locator('.commission.required')).toContainText('Shielded');
-  expect(await R(p, '(r) => r.state().gold')).toBe(10);
+test('a double tap sends a number on the page back to the hand', async ({ page: p }) => {
+  await runOn(p, 'DQBTAP');
+  await R(p, '(r) => r.solveHand()');
+  const t = await R(p, '(r) => r.state().tokens.find((t) => t.cell >= 0)') as { id: number; cell: number };
+  const at = await cellPoint(p, t.cell);
+  await p.mouse.click(at.x, at.y);
+  await p.mouse.click(at.x, at.y);
+  await expect.poll(() => R(p, '(r, id) => r.state().tokens.find((t) => t.id === id).cell', t.id)).toBe(-1);
+  // Two slow taps only pick it up and put it down.
+  const u = await R(p, '(r) => r.state().tokens.find((t) => t.cell >= 0)') as { id: number; cell: number };
+  const uat = await cellPoint(p, u.cell);
+  await p.mouse.click(uat.x, uat.y);
+  await p.waitForTimeout(500);
+  await p.mouse.click(uat.x, uat.y);
+  expect(await R(p, '(r, id) => r.state().tokens.find((t) => t.id === id).cell', u.id)).toBe(u.cell);
 });
 
 test('a run resumes after the game is closed', async ({ page: p }) => {

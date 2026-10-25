@@ -91,7 +91,7 @@ describe('stations', () => {
 });
 
 describe('tools', () => {
-  const all: RunSetup = { ...STANDARD_SETUP, startGold: 50, tools: ['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] };
+  const all: RunSetup = { ...STANDARD_SETUP, startGold: 50, tools: ['lens', 'quill', 'gilder', 'eraser', 'inkwell'] };
 
   it('refuse tools you are not carrying', () => {
     const s = { ...newRun('CARRYQ'), gold: 50 };
@@ -191,10 +191,11 @@ describe('the scriptorium', () => {
     expect(p.leaf).toBe(200 - ITEMS.find((i) => i.id === 'quill')!.price);
     expect(buy(p, 'quill').reason).toBe('Already yours');
     expect(ownedTools(p)).toEqual([...BASE_TOOLS, 'quill']);
-    // The satchel holds three until the Second Strap.
-    expect(p.satchel).toEqual(BASE_TOOLS);
-    p = setSatchel(p, ['quill', 'lens', 'redraw', 'blotter']);
-    expect(p.satchel).toEqual(['quill', 'lens', 'redraw']);
+    // A new tool goes into the satchel while there's room; it holds three until the Second Strap.
+    expect(p.satchel).toEqual([...BASE_TOOLS, 'quill']);
+    p = { ...p, owned: [...p.owned, 'eraser', 'inkwell'] };
+    p = setSatchel(p, ['quill', 'lens', 'eraser', 'inkwell']);
+    expect(p.satchel).toEqual(['quill', 'lens', 'eraser']);
     p = { ...p, filled: ['grand-folio'] };
     r = buy(p, 'second-strap');
     p = r.profile;
@@ -217,6 +218,9 @@ describe('the scriptorium', () => {
   it('reads an old or broken profile as a fresh one', () => {
     expect(migrateProfile(undefined)).toEqual(NEW_PROFILE);
     expect(migrateProfile({ v: 1, leaf: 7 }).leaf).toBe(7);
+    // Retired tools drop out of a saved satchel; an empty one falls back to the base tools.
+    expect(migrateProfile({ v: 1, satchel: ['redraw', 'quill', 'blotter'] }).satchel).toEqual(['quill']);
+    expect(migrateProfile({ v: 1, satchel: ['redraw', 'blotter'] }).satchel).toEqual(BASE_TOOLS);
     expect(say({ kind: 'corners-min', min: 14 }, pageOf('ANYPGE'))).toBe('The four corners add to 14 or more');
   });
 });

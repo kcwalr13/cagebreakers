@@ -8,7 +8,7 @@ import {
   complete, history, message, newPage, page, place, placed, placedCount, removeAt, say, sealed, seenIntro,
   selection, sheet, undo,
 } from './state';
-import { screen } from './nav';
+import { goBack, screen } from './nav';
 
 /** Touch handling for the page toy: numbers from the tray, numbers already on the page. */
 const toyHandlers: PressHandlers = {
@@ -47,7 +47,7 @@ function Header() {
   const p = page.value;
   return (
     <header class="header">
-      <button class="icon-btn" aria-label="Back" onClick={() => (screen.value = 'title')}><Icon name="back" /></button>
+      <button class="icon-btn" aria-label="Back" onClick={goBack}><Icon name="back" /></button>
       <div class="title">
         <div class="title-page">Page {p.seed}</div>
         <div class="title-sub">{sealed.value.size} of {p.cages.length} cages sealed</div>

@@ -135,7 +135,7 @@ describe('a run', () => {
     checkInvariants(s);
   });
 
-  it('spills ink for a missed required commission, unless the Blotter is down', () => {
+  it('spills ink for a missed required commission', () => {
     // Find a round 1 where placing on the solution misses the required commission.
     for (const seed of ['MISSAA', 'MISSBB', 'MISSCC', 'MISSDD', 'MISSEE', 'MISSFF', 'MISSGG', 'MISSHH']) {
       let s = placeOnSolution(newRun(seed));
@@ -144,12 +144,6 @@ describe('a run', () => {
       const missed = act(s, { type: 'ink' });
       expect(missed.inked!.required).toBe(false);
       expect(missed.state.ink).toBe(RUN.startInk - 1);
-      s = { ...s, gold: TOOLS.blotter };
-      s = act(s, { type: 'blotter' }).state;
-      expect(s.gold).toBe(0);
-      const blotted = act(s, { type: 'ink' });
-      expect(blotted.inked!.blotted).toBe(true);
-      expect(blotted.state.ink).toBe(RUN.startInk);
       return;
     }
     throw new Error('no seed missed its first required commission');
@@ -215,52 +209,6 @@ describe('a run', () => {
     }
   });
 
-  it('swaps the numbers in your hand for gold, keeping a perfect round possible', () => {
-    let s = newRun('REDRAWA');
-    expect(act(s, { type: 'redraw' }).reason).toMatch(/gold/);
-    s = { ...s, gold: 10 };
-    const before = dealtThisRound(s).map((t) => t.id);
-    const r = act(s, { type: 'redraw' });
-    expect(r.ok, r.reason).toBe(true);
-    expect(r.state.gold).toBe(10 - TOOLS.redraw);
-    expect(r.state.redraws).toBe(1);
-    expect(dealtThisRound(r.state).every((t) => !before.includes(t.id))).toBe(true);
-    checkInvariants(r.state);
-    // Placed numbers stay put; only loose ones are redrawn.
-    let t = placeOnSolution(s, 2);
-    const placed = dealtThisRound(t).filter((x) => x.cell >= 0).map((x) => x.id);
-    const again = act(t, { type: 'redraw' });
-    if (again.ok) {
-      t = again.state;
-      expect(dealtThisRound(t).filter((x) => placed.includes(x.id))).toHaveLength(2);
-      checkInvariants(t);
-    }
-    // A number from an earlier round in your hand is swapped like any other.
-    let later = act({ ...placeOnSolution(newRun('REDRAWB')), ink: RUN.startInk }, { type: 'ink' }).state;
-    later = { ...placeOnSolution(later), gold: 10 };
-    const old = later.tokens.find((x) => x.round === 1)!;
-    later = act(later, { type: 'place', id: old.id, cell: -1 }).state;
-    const swapped = act(later, { type: 'redraw' });
-    if (swapped.ok) {
-      expect(swapped.state.tokens.some((x) => x.id === old.id)).toBe(false);
-      checkInvariants(swapped.state);
-    } else expect(swapped.reason).toMatch(/possible/);
-    expect(act({ ...placeOnSolution(newRun('REDRAWB')), gold: 10 }, { type: 'redraw' }).reason).toMatch(/hand is empty/);
-  });
-
-  it('refuses a redraw that would break a promise, and charges nothing for it', () => {
-    let refused = 0;
-    for (const seed of ['RDAAAA', 'RDBBBB', 'RDCCCC', 'RDDDDD', 'RDEEEE', 'RDFFFF', 'RDGGGG', 'RDHHHH', 'RDJJJJ', 'RDKKKK', 'RDMMMM', 'RDNNNN']) {
-      const s = { ...newRun(seed), gold: 10 };
-      const r = act(s, { type: 'redraw' });
-      if (r.ok) { checkInvariants(r.state); continue; }
-      refused++;
-      expect(r.reason).toBe('No other numbers would keep all three commissions possible');
-      expect(r.state).toBe(s);
-    }
-    expect(refused).toBeLessThan(6);
-  });
-
   it('shows a hidden number with the Lens', () => {
     let s = { ...newRun('LENSES'), gold: 5 };
     const p = runPage(s);
@@ -278,6 +226,9 @@ describe('a run', () => {
     expect(migrateRun(null)).toBeNull();
     const s = newRun('KEEPME');
     expect(migrateRun(JSON.parse(JSON.stringify(s)))).toEqual(s);
+    // A run saved while Swap and Shield existed keeps only the tools that still do.
+    const old = JSON.parse(JSON.stringify({ ...s, setup: { ...s.setup, tools: ['redraw', 'lens', 'blotter'] } }));
+    expect(migrateRun(old)!.setup.tools).toEqual(['lens']);
   });
 });
 
@@ -303,7 +254,7 @@ function randomActions(seed: string, steps: number, salt: number, setup: RunSetu
       a = { type: 'ink' };
     } else {
       // Tools: give the run gold sometimes so they get used, through an action-free state edit.
-      const tool = rng.pick(['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] as const);
+      const tool = rng.pick(['lens', 'quill', 'gilder', 'eraser', 'inkwell'] as const);
       a = tool === 'lens' || tool === 'eraser' ? { type: tool, cell: rng.int(0, CELLS - 1) } : { type: tool };
     }
     const r = act(s, a);
@@ -317,8 +268,8 @@ function randomActions(seed: string, steps: number, salt: number, setup: RunSetu
 
 /** Every station's setup, carrying every tool, with gold to spend. */
 const RICH: RunSetup[] = [
-  { ...STANDARD_SETUP, startGold: 40, tools: ['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] },
-  ...STATIONS.map((st) => ({ ...setupFor(NEW_PROFILE, st.id), startGold: 40, tools: ['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] as RunSetup['tools'] })),
+  { ...STANDARD_SETUP, startGold: 40, tools: ['lens', 'quill', 'gilder', 'eraser', 'inkwell'] },
+  ...STATIONS.map((st) => ({ ...setupFor(NEW_PROFILE, st.id), startGold: 40, tools: ['lens', 'quill', 'gilder', 'eraser', 'inkwell'] as RunSetup['tools'] })),
 ];
 
 describe('random play', () => {
