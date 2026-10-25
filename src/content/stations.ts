@@ -39,12 +39,12 @@ export interface Station {
 }
 
 export const STATIONS: readonly Station[] = [
-  { id: 'copy-desk', name: 'The Kitchen Garden', twist: 'A standard garden.', page: 'standard', after: [], stars: [100, 158], at: [0, 1] },
-  { id: 'cloister', name: 'The Rock Garden', twist: 'More stones: a gentle garden.', page: 'cloister', brings: 'corners-min', after: ['copy-desk'], stars: [105, 165], at: [1, 0] },
-  { id: 'bare-vellum', name: 'The Fallow Field', twist: 'No stones at all.', page: 'bare', brings: 'quarter-min', after: ['copy-desk'], stars: [90, 140], at: [1, 2] },
-  { id: 'counting-house', name: 'The Market Garden', twist: 'Only + and × plots.', page: 'counting', brings: 'seal-op-count', after: ['cloister', 'bare-vellum'], stars: [100, 162], at: [2, 1] },
-  { id: 'long-night', name: 'The Dry Spell', twist: 'Two drops of water, each worth double at harvest.', page: 'standard', startInk: 2, inkBonus: 20, after: ['counting-house'], stars: [105, 169], at: [3, 1] },
-  { id: 'grand-folio', name: 'The Long Season', twist: 'Ten weeks, with fewer numbers dealt in each.', page: 'standard', rounds: 10, deal: [3, 3, 3, 3, 3, 3, 3, 4, 4], after: ['long-night'], stars: [110, 178], at: [4, 1] },
+  { id: 'copy-desk', name: 'The Kitchen Garden', twist: 'A standard garden.', page: 'standard', after: [], stars: [100, 129], at: [0, 1] },
+  { id: 'cloister', name: 'The Rock Garden', twist: 'More stones: a gentle garden.', page: 'cloister', brings: 'corners-min', after: ['copy-desk'], stars: [105, 136], at: [1, 0] },
+  { id: 'bare-vellum', name: 'The Fallow Field', twist: 'No stones at all.', page: 'bare', brings: 'quarter-min', after: ['copy-desk'], stars: [90, 115], at: [1, 2] },
+  { id: 'counting-house', name: 'The Market Garden', twist: 'Only + and × plots.', page: 'counting', brings: 'seal-op-count', after: ['cloister', 'bare-vellum'], stars: [100, 131], at: [2, 1] },
+  { id: 'long-night', name: 'The Dry Spell', twist: 'Two drops of water, each worth double at harvest.', page: 'standard', startInk: 2, inkBonus: 20, after: ['counting-house'], stars: [105, 140], at: [3, 1] },
+  { id: 'grand-folio', name: 'The Long Season', twist: 'Eight weeks, with fewer numbers dealt in each.', page: 'standard', rounds: 8, deal: [3, 3, 3, 3, 3, 3, 3], after: ['long-night'], stars: [110, 155], at: [4, 1] },
 ];
 
 export const stationById = (id: string): Station | undefined => STATIONS.find((s) => s.id === id);

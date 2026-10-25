@@ -47,7 +47,7 @@ const SOLUTION_CELL = `(r, id) => { const s = r.state(); const p = r.page(); con
 
 test('a week: drag numbers in, read the requests, water it', async ({ page: p }, info) => {
   await runOn(p, 'RQUND6');
-  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 6');
   await expect(p.locator('.commission')).toHaveCount(3);
   await expect(p.locator('.commission.required')).toHaveCount(1);
   await expect.poll(() => handCount(p)).toBe(4);
@@ -117,7 +117,7 @@ test('a week: drag numbers in, read the requests, water it', async ({ page: p },
   await expect(p.getByRole('dialog')).toContainText(/plots? in bloom|No blooms/);
   await p.screenshot({ path: info.outputPath('m6-04-inked.png') });
   await p.getByRole('button', { name: 'On to week 2' }).click();
-  await expect(p.locator('.hud-round')).toContainText('Week 2 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 2 of 6');
   // Last round's numbers stay on the page; this round's are in hand. They all look the same.
   await expect(p.locator('svg.board .token')).toHaveCount(4);
   await expect.poll(() => handCount(p)).toBe(4);
@@ -190,18 +190,18 @@ test('a garden resumes after the game is closed', async ({ page: p }) => {
   await runOn(p, 'RESUME');
   for (let i = 0; i < 2; i++) await R(p, `(r) => { r.load({ ...r.state(), ink: 3 }); r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.goto('./?test&nosw&screen=title');
-  await expect(p.getByRole('button', { name: /Keep growing/ })).toContainText(/week 3 of 8/i);
+  await expect(p.getByRole('button', { name: /Keep growing/ })).toContainText(/week 3 of 6/i);
   await p.getByRole('button', { name: /Keep growing/ }).click();
-  await expect(p.locator('.hud-round')).toContainText('Week 3 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 3 of 6');
 });
 
 test('a whole garden fills, then is harvested and scored', async ({ page: p }, info) => {
   test.setTimeout(90_000);
   await runOn(p, 'WHQKE6');
-  for (let r = 1; r < 8; r++) {
+  for (let r = 1; r < 6; r++) {
     await R(p, `(r) => { r.load({ ...r.state(), ink: 3 }); r.solveHand(); r.dispatch({ type: 'ink' }); }`);
     await p.keyboard.press('Escape');
-    if (r === 4) await p.screenshot({ path: info.outputPath('m6-08-midrun.png') });
+    if (r === 3) await p.screenshot({ path: info.outputPath('m6-08-midrun.png') });
   }
   await expect(p.locator('.hud-round')).toContainText('Harvest week');
   await expect(p.locator('.commission').first()).toContainText('Fill every square');
@@ -211,11 +211,11 @@ test('a whole garden fills, then is harvested and scored', async ({ page: p }, i
   await expect(p.getByRole('dialog')).toContainText('Harvest!');
   await p.getByRole('button', { name: 'See the garden' }).click();
   await expect(p.locator('.summary-verdict')).toContainText('points');
-  await expect(p.locator('.records tbody tr')).toHaveCount(8);
+  await expect(p.locator('.records tbody tr')).toHaveCount(6);
   await p.screenshot({ path: info.outputPath('m6-10-summary.png') });
   await expect(p.locator('.leaf-panel')).toContainText('seeds');
   await p.getByRole('button', { name: 'Again' }).click();
-  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 6');
 });
 
 test('losing the last drop of water dries the garden out', async ({ page: p }, info) => {

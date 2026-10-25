@@ -91,7 +91,7 @@ test('a save code moves everything to another phone', async ({ page: p, context 
   await p.waitForLoadState('load');
   await p.waitForFunction(() => !!(window as Any).__run);
   await expect(p.getByRole('button', { name: /Keep growing/ })).toBeVisible();
-  await expect(p.getByRole('button', { name: /Keep growing/ })).toContainText(new RegExp(`week ${before.round} of 8`, 'i'));
+  await expect(p.getByRole('button', { name: /Keep growing/ })).toContainText(new RegExp(`week ${before.round} of 6`, 'i'));
   const after = await p.evaluate(() => JSON.parse(localStorage.getItem('cagebreakers.run')!)) as { seed: string };
   expect(after.seed).toBe(before.seed);
 });

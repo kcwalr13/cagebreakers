@@ -27,8 +27,11 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   and a candidate in `candidates`, plus its pay and rounds in `src/content/commissions.ts`.
 - Every round must have a perfect round: all three commissions met with every number placed. `planRound`
   returns the posted commissions and a `proof` layout of every number meeting all three; it lives in
-  `RunState.proof`, and any tool that changes your numbers or the page (Swap, Extra, Erase) must keep one or be
+  `RunState.proof`, and any tool that changes your numbers or the page (Extra, Dig) must keep one or be
   refused for free.
+- Right numbers stay: `RunState.rooted` lists cells holding their right (hidden-solution) number when the round
+  began, and every proof leaves them in place (`Holding.rooted`, honored by `sampleLayout` and `findLayout`).
+  No request may ever need a right number moved. Nothing on screen marks which numbers are right.
 - Every number is alike: to ink, all your numbers are on the page, or all but one (`placementOf`). Token
   `round` is history, not a rule.
 - A run carries its `RunSetup` (station, page variant, rounds, deal, ink, gold, tools, enabled kinds). Read the

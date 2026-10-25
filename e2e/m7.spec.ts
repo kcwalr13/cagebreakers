@@ -38,7 +38,7 @@ test('the map: begin in the Kitchen Garden, finish it, save seeds and open the n
   await p.waitForTimeout(250); // let the sheet finish rising
   await p.screenshot({ path: info.outputPath('m7-02-station.png') });
   await p.getByRole('button', { name: 'Begin' }).click();
-  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 6');
   expect(await R(p, '(r) => r.state().setup.station')).toBe('copy-desk');
   expect(await R(p, FINISH)).toBe('done');
   await p.keyboard.press('Escape');

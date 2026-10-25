@@ -99,6 +99,12 @@ export interface RunState {
    * proof that all three are possible. Never shown to the player. (Absent in saves from before it existed.)
    */
   proof?: number[];
+  /**
+   * Cells that held their right number (the hidden solution's) when the round began. The round's
+   * promise keeps them: a perfect round exists that leaves every one where it stands, so no
+   * commission asks you to move a number that's right. (Absent in saves from before it existed.)
+   */
+  rooted?: number[];
   /** Cells whose hidden number the Lens has shown. */
   revealed: number[];
   records: RoundRecord[];
@@ -224,9 +230,15 @@ export function inkBlocker(s: RunState): string | null {
   return null;
 }
 
-/** Every number you hold, all placed: what a perfect round puts on the page. */
-const everything = (tokens: readonly Token[], extra: readonly number[] = []): Holding =>
-  ({ kept: [...tokens.map((t) => t.n), ...extra], dealt: [], need: 0 });
+/** Every number you hold, all placed: what a perfect round puts on the page, leaving rooted numbers where they stand. */
+const everything = (s: RunState, tokens: readonly Token[], extra: readonly number[] = []): Holding =>
+  ({ kept: [...tokens.map((t) => t.n), ...extra], dealt: [], need: 0, rooted: s.rooted ?? [] });
+
+/** Cells holding one of your numbers that's right: the hidden solution has that number there. */
+export function rightCells(s: RunState): number[] {
+  const page = runPage(s);
+  return s.tokens.filter((t) => t.cell >= 0 && page.solution[t.cell] === t.n).map((t) => t.cell).sort((a, b) => a - b);
+}
 
 export function scoreOf(s: RunState): { gold: number; ink: number; inkBonus: number; total: number } {
   const inkBonus = s.phase === 'done' ? s.ink * s.setup.inkBonus : 0;
@@ -266,11 +278,13 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   const kept = s.tokens.map((t) => t.n);
   s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
   s.need = final ? drawn.length : Math.max(0, drawn.length - 1);
-  // The plan proves a perfect round: every number placed, all three commissions met.
+  // The plan proves a perfect round: every number placed, all three commissions met, and every
+  // number that's already right left where it stands.
   s.gilded = false;
+  s.rooted = rightCells(s);
   const plan = planRound({
     page, round: s.round, final,
-    holding: { kept, dealt: drawn, need: drawn.length },
+    holding: { kept, dealt: drawn, need: drawn.length, rooted: s.rooted },
     now: viewOf(page, valuesOf(s)),
     lastRequired,
     kinds: s.setup.kinds,
@@ -316,6 +330,7 @@ const clone = (s: RunState): RunState => ({
   bag: s.bag.slice(),
   tokens: s.tokens.map((t) => ({ ...t })),
   posted: s.posted.slice(),
+  ...(s.rooted ? { rooted: s.rooted.slice() } : {}),
   erased: s.erased.slice(),
   revealed: s.revealed.slice(),
   records: s.records.slice(),
@@ -388,7 +403,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
       for (let attempt = 0; attempt < 8; attempt++) {
         const tag = `${s.round}:${s.nextId}:${attempt}`;
         const { drawn, bag } = draw(s.bag, 1, stream(s.seed, `quill:${tag}`));
-        const found = findLayout(page, everything(s.tokens, drawn), goals, stream(s.seed, `quill-check:${tag}`));
+        const found = findLayout(page, everything(s, s.tokens, drawn), goals, stream(s.seed, `quill-check:${tag}`));
         if (!found) continue;
         s.bag = bag;
         s.proof = found;
@@ -424,7 +439,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
       s.tokens = [...s.tokens, { id: s.nextId++, n, round: 0, cell: a.cell }];
       // Keep the round's promises on the changed page, or refuse.
       const next = runPage(s);
-      const holding = everything(s.tokens);
+      const holding = everything(s, s.tokens);
       const check = stream(s.seed, `eraser-check:${s.round}:${a.cell}`);
       // The proof still stands if it already has this number in this cell.
       const v = viewOf(next, s.proof ?? []);

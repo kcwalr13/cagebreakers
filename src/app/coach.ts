@@ -15,7 +15,7 @@ const TIPS: Tip[] = [
   { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the garden are this week\'s requests. Miss the required one and a drop of water dries up; the other two pay coins. All three can always be met at once, with every number planted: finding how is the puzzle. Tap one to see where it applies.' },
   { id: 'seal', when: (s) => viewNow(s).sealed.size > 0, text: 'In bloom! A full plot that makes its target blooms, and pays 1 coin every week you water it in bloom.' },
   { id: 'ink', when: (s) => s.round === 1 && inkBlocker(s) === null, text: `Plant all your numbers, or all but one, then Water it. Planting every one pays ${RUN.fullHandGold} bonus ${RUN.fullHandGold === 1 ? 'coin' : 'coins'}; a number you keep is dealt again later.` },
-  { id: 'move', when: (s) => s.round === 2, text: 'Everything in the garden can move. Drag numbers around to meet this week\'s requests, double-tap one to pick it up, or tap Pick up all to start over.' },
+  { id: 'move', when: (s) => s.round === 2, text: 'A number in its right square never has to move: all three requests can be met with it left there. Anything else can move to meet them. Double-tap a number to pick it up, or tap Pick up all to start over.' },
   { id: 'tools', when: (s) => s.round >= 3 && s.gold >= TOOLS.lens, text: 'Coins buy tools: Hint shows the right number for one empty square. The Potting Shed sells more to carry. Tap a tool to see what it does.' },
   { id: 'final', when: (s) => s.round === s.setup.rounds, text: 'Harvest week: every number still to come is dealt now, and all of them go in. Fill the garden to harvest it.' },
 ];

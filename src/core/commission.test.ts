@@ -136,7 +136,8 @@ group('proving commissions possible', () => {
           expect(b.gold).toBeGreaterThan(0);
         }
         // Never the same commission twice (two of a kind is a rare fallback on a tight page).
-        expect(new Set(s.posted.map((x) => JSON.stringify(x.c))).size).toBe(s.posted.length);
+        // No two are about the same thing (they may differ only in a threshold, which would make one redundant).
+        expect(new Set(s.posted.map((x) => JSON.stringify({ ...x.c, min: undefined, max: undefined, count: undefined }))).size).toBe(s.posted.length);
         // All three can be met at once: the round's proof layout does it.
         const v = viewOf(p, s.proof!);
         expect(boardIsLatin(s.proof!)).toBe(true);

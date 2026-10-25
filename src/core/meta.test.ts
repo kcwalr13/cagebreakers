@@ -48,7 +48,7 @@ describe('stations', () => {
       expect(valuesOf(s).every((n) => n > 0)).toBe(true);
     }
     expect(setupFor(fresh(), 'long-night').startInk).toBe(2);
-    expect(setupFor(fresh(), 'grand-folio').rounds).toBe(10);
+    expect(setupFor(fresh(), 'grand-folio').rounds).toBe(8);
   });
 
   it('bring their commission kinds to their own runs, and to every run once filled', () => {

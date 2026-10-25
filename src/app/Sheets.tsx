@@ -186,13 +186,13 @@ function MenuSheet() {
 
       <div class="section-label">How to play</div>
       <p>Your garden is a 6×6 bed. No number may repeat in a row or column. Each outlined plot shows a target; when its numbers make that target, it blooms.</p>
-      <p>A garden grows over {RUN.rounds} weeks (some gardens on the map differ). Each week deals you a few more numbers and posts three requests. Anything in the garden can move: double-tap a number to pick it up, or use Pick up all to start over. To water the week, plant all your numbers, or all but one; planting every one pays a bonus coin, and a number you keep is dealt again later. While you hold a number, bright squares can take it and shaded ones can't.</p>
-      <p>All three requests can always be met at once, with every number planted. Miss the required one and a drop of water dries up; lose all {RUN.startInk} and the garden dries out. The other two pay coins, and so does every blooming plot when you water. Coins buy the tools you carry. The numbers dealt over a season are exactly the ones the garden needs, so in harvest week the last of them go in and the garden is full. Your score is the coins you kept, plus {RUN.inkBonus} for each drop of water left.</p>
+      <p>A garden grows over {RUN.rounds} weeks (some gardens on the map differ). Each week deals you a few more numbers and posts three requests. Anything in the garden can move: double-tap a number to pick it up, or use Pick up all to start over. A request never makes you move a number that's in its right square, so once you've worked one out, it can stay. To water the week, plant all your numbers, or all but one; planting every one pays a bonus coin, and a number you keep is dealt again later. While you hold a number, bright squares can take it and shaded ones can't.</p>
+      <p>All three requests can always be met at once, with every number planted and every right number left where it is. If a request seems to need a number moved, that number is in the wrong square. Miss the required one and a drop of water dries up; lose all {RUN.startInk} and the garden dries out. The other two pay coins, and so does every blooming plot when you water. Coins buy the tools you carry. The numbers dealt over a season are exactly the ones the garden needs, so in harvest week the last of them go in and the garden is full. Your score is the coins you kept, plus {RUN.inkBonus} for each drop of water left.</p>
       <p>Between gardens, the Potting Shed keeps what lasts. A finished garden saves seeds: 1 for every 10 points and 5 for each new star. Finishing a garden on the map opens the ones beyond it. Spend seeds on tools to carry, upgrades and new looks.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.
-        Typefaces Alegreya and Alegreya Sans by Huerta Tipográfica, SIL Open Font License.
+        Typefaces Fraunces, Alegreya Sans, Nunito and DM Sans, SIL Open Font License.
         <br />Build {__BUILD__.commit}, {__BUILD__.date}.
       </p>
     </>

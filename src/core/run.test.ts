@@ -62,6 +62,8 @@ function checkProof(s: RunState) {
   expect(placed, 'the proof places every number you hold, and no others').toEqual(s.tokens.map((t) => t.n).sort());
   const v = viewOf(p, proof);
   for (const c of s.posted) expect(isMet(c.c, v), JSON.stringify(c.c)).toBe(true);
+  // Numbers that were right when the round began stay where they stand in the perfect round.
+  for (const c of s.rooted ?? []) expect(proof[c], `rooted cell ${c}`).toBe(p.solution[c]);
 }
 
 describe('a run', () => {
@@ -206,6 +208,35 @@ describe('a run', () => {
       const r = act(s, { type: 'ink' });
       s = r.state;
       if (req && r.inked!.required === false) { expect(s.phase).toBe('ruined'); return; }
+    }
+  });
+
+  it('never asks you to move a number that is right: a perfect round keeps every one where it stands', () => {
+    for (const seed of ['ROOTAA', 'ROOTBB', 'ROOTCC', 'ROOTDD', 'ROOTEE', 'ROOTFF']) {
+      // Each round, place this round's numbers where the hidden solution has them, and never move
+      // one again: the proof's layout is always reachable by moving only the new numbers.
+      let s = newRun(seed);
+      while (s.phase === 'arrange') {
+        const page = runPage(s);
+        const right = new Set(s.tokens.filter((t) => t.cell >= 0 && page.solution[t.cell] === t.n).map((t) => t.cell));
+        expect([...right].sort((a, b) => a - b)).toEqual(s.rooted);
+        const proof = s.proof!;
+        for (const c of right) expect(proof[c]).toBe(page.solution[c]);
+        // Move the new numbers into the proof's other cells.
+        const free = new Map<number, number[]>();
+        for (let c = 0; c < CELLS; c++) if (proof[c] && !page.stones[c] && !right.has(c)) free.set(proof[c]!, [...(free.get(proof[c]!) ?? []), c]);
+        for (const t of s.tokens) {
+          if (t.cell >= 0 && right.has(t.cell)) continue;
+          const cell = free.get(t.n)!.shift()!;
+          const r = act(s, { type: 'place', id: t.id, cell });
+          expect(r.ok, r.reason).toBe(true);
+          s = r.state;
+        }
+        const met = s.posted.map((p) => isMet(p.c, viewNow(s)));
+        expect(met.every(Boolean)).toBe(true);
+        s = act(s, { type: 'ink' }).state;
+      }
+      expect(s.phase).toBe('done');
     }
   });
 

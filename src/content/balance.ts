@@ -3,11 +3,11 @@
  * The bot lab tunes them against the design doc's targets.
  */
 export const RUN = {
-  rounds: 8,
+  rounds: 6,
   startInk: 3,
   startGold: 0,
   /** Numbers dealt each round before the last; the last round deals whatever is left. */
-  deal: [4, 4, 4, 4, 4, 5, 5] as readonly number[],
+  deal: [4, 4, 4, 4, 4] as readonly number[],
   /** Earlier deals never leave fewer than this many numbers for the final round. */
   finalReserve: 3,
   /** Each sealed cage pays this much gold when a round is inked. */

@@ -93,7 +93,7 @@ function Title() {
           <span class="mc-title"><Icon name="map" class="ico inline-ico big" /> The Map</span>
           <span class="mc-sub">{profile.value.filled.length
             ? `Six gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
-            : 'Each week brings more numbers and three requests. Rearrange to meet them until the garden is full. Start in the Kitchen Garden.'}</span>
+            : 'Each week brings more numbers and three requests. Plant them to meet the requests until the garden is full. Start in the Kitchen Garden.'}</span>
         </button>
         <button class="menu-card" onClick={() => { startDaily(); screen.value = 'run'; }}>
           <span class="mc-title">Daily Garden <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span></span>

@@ -3,7 +3,8 @@
  * of player, so the balance report can say whether commissions reward rearranging:
  *  - Hasty places dealt numbers anywhere legal and never moves the old ones.
  *  - Tidy keeps its layout and places new numbers where they help this round's commissions.
- *  - Careful searches whole layouts: the required commission first, then bounties, then seals.
+ *  - Careful searches whole layouts: the required commission first, then bounties, then seals. It
+ *    never moves a number that's already right, as a player who has worked one out wouldn't.
  * When a bot paints itself into a corner it falls back to a layout taken from the hidden
  * solution, which is always legal; a person would find their own way out.
  */
@@ -40,14 +41,25 @@ class Player {
   }
 }
 
-/** A layout of these tokens on the hidden solution's cells: always legal. */
-function witness(s: RunState, tokens: readonly Token[], rng: Rng): Map<number, number> {
+/** Whether a token stands where the hidden solution has its number. */
+const isRight = (s: RunState, t: Token) => t.cell >= 0 && runPage(s).solution[t.cell] === t.n;
+
+/**
+ * A layout of these tokens on the hidden solution's cells: always legal. Tokens that are already
+ * right stay where they stand.
+ */
+function witness(s: RunState, which: readonly Token[], rng: Rng): Map<number, number> {
   const page = runPage(s);
+  // Callers may hold token objects from before this round's moves: read where each stands now.
+  const tokens = which.map((w) => s.tokens.find((t) => t.id === w.id)!);
   const out = new Map<number, number>();
+  const taken = new Set<number>();
+  for (const t of s.tokens) if (isRight(s, t)) taken.add(t.cell);
+  for (const t of tokens) if (isRight(s, t)) out.set(t.id, t.cell);
   for (let n = 1; n <= 6; n++) {
-    const mine = tokens.filter((t) => t.n === n);
+    const mine = tokens.filter((t) => t.n === n && !out.has(t.id));
     if (!mine.length) continue;
-    const cells = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !page.stones[c] && page.solution[c] === n));
+    const cells = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !page.stones[c] && page.solution[c] === n && !taken.has(c)));
     mine.forEach((t, i) => out.set(t.id, cells[i]!));
   }
   return out;
@@ -158,12 +170,14 @@ function carefulRound(p: Player, rng: Rng) {
       if (!best || w > best.w) best = { target, w };
     }
   }
-  // Polish the best layout: single moves to any legal empty cell that earn more.
+  // Polish the best layout: single moves to any legal empty cell that earn more. Right numbers stay.
   const target = best!.target;
   for (let pass = 0; pass < 2; pass++) {
     let improved = false;
     for (const [id, from] of [...target]) {
-      const n = s.tokens.find((t) => t.id === id)!.n;
+      const tok = s.tokens.find((t) => t.id === id)!;
+      if (isRight(s, tok)) continue;
+      const n = tok.n;
       const values = valuesWith(s, target);
       const base = worth(s, values);
       values[from] = 0;

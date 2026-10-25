@@ -26,7 +26,7 @@ export default defineConfig({
         id: './',
         name: 'Plot Twist',
         short_name: 'Plot Twist',
-        description: 'An offline number garden: one KenKen-style garden, grown over eight weeks.',
+        description: 'An offline number garden: one KenKen-style garden, grown over six weeks.',
         start_url: './',
         scope: './',
         display: 'standalone',

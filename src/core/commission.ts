@@ -210,8 +210,13 @@ export function cellsOf(c: Commission, page: Page): number[] {
 
 // ---- Proving commissions possible ---------------------------------------------------------------
 
-/** What the player will hold this round: numbers from earlier rounds (all must stay), and the new deal. */
-export interface Holding { kept: readonly number[]; dealt: readonly number[]; need: number }
+/**
+ * What the player will hold this round: numbers from earlier rounds (all must stay), and the new
+ * deal. `rooted` lists cells that already hold their right number (the hidden solution's): every
+ * layout the planner considers leaves those numbers where they stand, so no commission ever asks
+ * you to move a number that's right.
+ */
+export interface Holding { kept: readonly number[]; dealt: readonly number[]; need: number; rooted?: readonly number[] }
 
 /** Every distinct set of numbers the player could end the round with. */
 export function choices(h: Holding): number[][] {
@@ -237,15 +242,25 @@ function openByValue(page: Page): number[][] {
   return out;
 }
 
+/** Open cells by the number the hidden solution holds there, leaving out rooted cells. */
+function freeByValue(page: Page, rooted: readonly number[]): number[][] {
+  const all = openByValue(page);
+  if (!rooted.length) return all;
+  const skip = new Set(rooted);
+  return all.map((cells) => cells.filter((c) => !skip.has(c)));
+}
+
 /**
  * A legal layout of these numbers: each number goes to a cell where the hidden solution holds
- * it. Every subset of a Latin square is legal, so this always works.
+ * it. Every subset of a Latin square is legal, so this always works. Numbers in `rooted` cells
+ * (which must be among `numbers`) stay where they are.
  */
-export function sampleLayout(page: Page, numbers: readonly number[], rng: Rng): number[] {
+export function sampleLayout(page: Page, numbers: readonly number[], rng: Rng, rooted: readonly number[] = []): number[] {
   const values = page.stones.slice();
   const counts = new Array<number>(7).fill(0);
   for (const n of numbers) counts[n]!++;
-  const byValue = openByValue(page);
+  for (const c of rooted) { const n = page.solution[c]!; values[c] = n; counts[n]!--; }
+  const byValue = freeByValue(page, rooted);
   for (let n = 1; n <= 6; n++) {
     const cells = byValue[n]!.slice();
     const k = Math.min(counts[n]!, cells.length);
@@ -415,8 +430,9 @@ export function planRound(input: PostInput, rng: Rng): RoundPlan {
 
 function planFrom(input: PostInput, rng: Rng, samples: number): RoundPlan {
   const { page, round, holding, now } = input;
+  const rooted = holding.rooted ?? [];
   const views = choices(holding).map((set) =>
-    Array.from({ length: samples }, () => viewOf(page, sampleLayout(page, set, rng))));
+    Array.from({ length: samples }, () => viewOf(page, sampleLayout(page, set, rng, rooted))));
   const all = views.flat();
   const pool = candidates(page, round, input.kinds ?? []);
   const statsCache = new Map<Candidate, number[][]>();
@@ -453,15 +469,21 @@ function planFrom(input: PostInput, rng: Rng, samples: number): RoundPlan {
     return given;
   };
 
-  // The required commission: possible whichever dealt numbers you keep, and not a given.
-  const required = choose(pool.filter((c) => c.req), input.lastRequired, (cand) => {
+  // The required commission: possible whichever dealt numbers you keep, and not a given. Late in
+  // a season most of your numbers may be right and rooted, leaving the new ones little room; then
+  // one that every layout of the right numbers meets will do, so the week still asks for something.
+  const requiredUpTo = (maxRate: number) => choose(pool.filter((c) => c.req), input.lastRequired, (cand) => {
     const j = judgeRequired(cand, statsOf(cand), now);
-    return j && j.worstRate >= DIFFICULTY.requiredMinRate && j.worstRate <= DIFFICULTY.requiredMaxRate ? j : null;
+    return j && j.worstRate >= DIFFICULTY.requiredMinRate && j.worstRate <= maxRate ? j : null;
   }, () => 1);
+  const required = requiredUpTo(DIFFICULTY.requiredMaxRate) ?? requiredUpTo(1);
   const meetsRequired = required ? all.flatMap((v, i) => (isMet(required.c, v) ? [i] : [])) : all.map((_, i) => i);
 
   // Two bounties of other kinds, each ambitious, all three met together by some sampled layout.
-  const same = (a: Commission, b: Commission) => JSON.stringify(a) === JSON.stringify(b);
+  // Two commissions about the same thing (the same row, plot or pair of columns) differ at most in
+  // their threshold, and the stricter one makes the other redundant: never post both.
+  const subject = (c: Commission) => JSON.stringify({ ...c, min: undefined, max: undefined, count: undefined });
+  const same = (a: Commission, b: Commission) => subject(a) === subject(b);
   const bountyFor = (anchor: readonly number[], taken: readonly Commission[], distinct: boolean, maxRate: number) => choose(
     pool.filter((c) => c.bty && !(distinct && taken.some((t) => t.kind === c.kind))), undefined,
     (cand) => {
@@ -471,11 +493,15 @@ function planFrom(input: PostInput, rng: Rng, samples: number): RoundPlan {
     (j) => 0.2 + j.bestRate,
   );
   // Ambitious bounties of new kinds first. A thin early page sometimes can't fit two beside the
-  // required commission; then a gentler bounty, and then a second of the same kind, will do.
+  // required commission; then a gentler bounty, and then a second of the same kind, will do. When
+  // rooted numbers leave the new ones almost no room, a bounty every layout meets still pays for
+  // getting the new numbers right.
   const levels = [
     { distinct: true, maxRate: DIFFICULTY.bountyMaxRate },
     { distinct: true, maxRate: DIFFICULTY.bountyFallbackRate },
     { distinct: false, maxRate: DIFFICULTY.bountyFallbackRate },
+    { distinct: true, maxRate: 1 },
+    { distinct: false, maxRate: 1 },
   ];
   const base: Commission[] = required ? [required.c] : [];
   let bounties: Judged[] = [];
@@ -512,7 +538,7 @@ export function goldFor(c: Commission, page: Page): number {
  */
 export function possible(page: Page, holding: Holding, c: Commission, rng: Rng, everyChoice: boolean, samples = 120): boolean {
   const found = (set: number[]) => {
-    for (let i = 0; i < samples; i++) if (isMet(c, viewOf(page, sampleLayout(page, set, rng)))) return true;
+    for (let i = 0; i < samples; i++) if (isMet(c, viewOf(page, sampleLayout(page, set, rng, holding.rooted)))) return true;
     return false;
   };
   const sets = choices(holding);
@@ -537,15 +563,16 @@ function closeness(c: Commission, v: View): number {
 /**
  * Searches for one legal layout of numbers you could hold that meets every commission at once:
  * random layouts on the hidden solution's cells, improved by moving one number at a time to
- * another cell where the solution has it. Returns the layout, or null if none turned up.
+ * another cell where the solution has it. Rooted numbers never move. Returns the layout, or null
+ * if none turned up.
  */
 export function findLayout(page: Page, holding: Holding, cs: readonly Commission[], rng: Rng, restarts = 6, steps = 120): number[] | null {
-  const byValue = Array.from({ length: 7 }, () => [] as number[]);
-  for (let c = 0; c < CELLS; c++) if (!page.stones[c]) byValue[page.solution[c]!]!.push(c);
+  const rooted = holding.rooted ?? [];
+  const byValue = freeByValue(page, rooted);
   const score = (values: number[]) => { const v = viewOf(page, values); return cs.reduce((s, c) => s + closeness(c, v), 0); };
   for (const set of rng.shuffle(choices(holding))) {
     for (let r = 0; r < restarts; r++) {
-      const values = sampleLayout(page, set, rng);
+      const values = sampleLayout(page, set, rng, rooted);
       let best = score(values);
       if (best >= cs.length) return values;
       for (let k = 0; k < steps; k++) {
