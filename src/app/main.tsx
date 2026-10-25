@@ -5,15 +5,19 @@ import { App } from './App';
 import { updateReady } from './nav';
 import { applySettingsToDocument } from './settings';
 import { unlockAudio } from './sound';
+import { profile } from './meta';
 import { exposeTestHooks, theme } from './state';
 import './theme.css';
 
 // Theme: follow the phone unless the player picked one, and keep the browser chrome in step.
 const dark = window.matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => {
-  const isDark = theme.value === 'dark' || (theme.value === 'system' && dark.matches);
-  document.documentElement.className = isDark ? 'theme-dark' : 'theme-light';
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#15100C' : '#E2D3B4');
+  // A style the scriptorium no longer holds (after loading another phone's save) falls back to the phone's choice.
+  const t = (theme.value === 'newsprint' || theme.value === 'neon') && !profile.value.owned.includes(theme.value) ? 'system' : theme.value;
+  const isDark = t === 'dark' || t === 'neon' || (t === 'system' && dark.matches);
+  document.documentElement.className = `${isDark ? 'theme-dark' : 'theme-light'}${t === 'newsprint' ? ' theme-newsprint' : t === 'neon' ? ' theme-neon' : ''}`;
+  const bg = t === 'newsprint' ? '#E9E6DE' : t === 'neon' ? '#0B0B14' : isDark ? '#15100C' : '#E2D3B4';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
 };
 effect(applyTheme);
 dark.addEventListener?.('change', applyTheme);

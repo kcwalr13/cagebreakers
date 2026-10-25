@@ -13,7 +13,7 @@ import { CELLS } from '../src/core/grid';
 import { type Rng, stream } from '../src/core/rng';
 import { isLegal } from '../src/core/rules';
 import {
-  type RunAction, type RunState, type Token, act, dealtThisRound, inkBlocker, legalCells, newRun, pageOf, valuesOf,
+  type RunAction, type RunState, type Token, type RunSetup, act, dealtThisRound, inkBlocker, legalCells, newRun, runPage, valuesOf,
 } from '../src/core/run';
 
 export type BotName = 'hasty' | 'tidy' | 'careful';
@@ -42,7 +42,7 @@ class Player {
 
 /** A layout of these tokens on the hidden solution's cells: always legal. */
 function witness(s: RunState, tokens: readonly Token[], rng: Rng): Map<number, number> {
-  const page = pageOf(s.seed);
+  const page = runPage(s);
   const out = new Map<number, number>();
   for (let n = 1; n <= 6; n++) {
     const mine = tokens.filter((t) => t.n === n);
@@ -55,14 +55,14 @@ function witness(s: RunState, tokens: readonly Token[], rng: Rng): Map<number, n
 
 /** What a layout earns this round, as a bot weighs it: required ≫ bounties > seals. */
 function worth(s: RunState, values: number[]): number {
-  const v = viewOf(pageOf(s.seed), values);
+  const v = viewOf(runPage(s), values);
   let score = v.sealed.size * RUN.sealGold * 2;
   for (const p of s.posted) if (isMet(p.c, v)) score += p.required ? 1000 : p.gold * 10;
   return score;
 }
 
 const valuesWith = (s: RunState, target: Map<number, number>) => {
-  const page = pageOf(s.seed);
+  const page = runPage(s);
   const values = page.stones.slice();
   for (const t of s.tokens) { const c = target.get(t.id); if (c !== undefined) values[c] = t.n; }
   return values;
@@ -70,13 +70,13 @@ const valuesWith = (s: RunState, target: Map<number, number>) => {
 
 const metRequired = (s: RunState) => {
   const req = s.posted.find((p) => p.required);
-  return !req || isMet(req.c, viewOf(pageOf(s.seed), valuesOf(s)));
+  return !req || isMet(req.c, viewOf(runPage(s), valuesOf(s)));
 };
 
 /** Fills the rest of the page by backtracking on the Latin rule alone, as a player who ignores cages would. */
 function latinFill(p: Player, rng: Rng): boolean {
   const s = p.s;
-  const page = pageOf(s.seed);
+  const page = runPage(s);
   const values = valuesOf(s);
   const loose = s.tokens.filter((t) => t.cell < 0);
   const empty = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !values[c]));
@@ -110,7 +110,7 @@ function rescue(p: Player, rng: Rng, which: readonly Token[]) {
 
 function hastyRound(p: Player, rng: Rng) {
   const s = p.s;
-  const final = s.round === RUN.rounds;
+  const final = s.round === s.setup.rounds;
   const fresh = rng.shuffle(dealtThisRound(s)).slice(0, final ? undefined : s.need);
   if (final && latinFill(p, rng)) return;
   for (const t of fresh) {
@@ -121,7 +121,7 @@ function hastyRound(p: Player, rng: Rng) {
 }
 
 function tidyRound(p: Player, rng: Rng) {
-  const final = p.s.round === RUN.rounds;
+  const final = p.s.round === p.s.setup.rounds;
   if (final) { if (!latinFill(p, rng)) rescue(p, rng, p.s.tokens); return; }
   const fresh = dealtThisRound(p.s);
   for (let k = 0; k < p.s.need; k++) {
@@ -143,10 +143,10 @@ function tidyRound(p: Player, rng: Rng) {
 
 function carefulRound(p: Player, rng: Rng) {
   const s = p.s;
-  const page = pageOf(s.seed);
+  const page = runPage(s);
   const kept = s.tokens.filter((t) => t.round < s.round);
   const fresh = dealtThisRound(s);
-  if (s.round === RUN.rounds) { rescue(p, rng, s.tokens); return; }
+  if (s.round === s.setup.rounds) { rescue(p, rng, s.tokens); return; }
   // Every distinct choice of dealt numbers to place, as token lists.
   const sets = choices({ kept: [], dealt: fresh.map((t) => t.n), need: s.need }).map((nums) => {
     const pool = fresh.slice();
@@ -183,13 +183,13 @@ function carefulRound(p: Player, rng: Rng) {
     if (!improved) break;
   }
   p.layout(target);
-  if (!metRequired(p.s) && p.s.gold >= TOOLS.blotter) p.do({ type: 'blotter' });
+  if (!metRequired(p.s) && p.s.gold >= TOOLS.blotter && p.s.setup.tools.includes('blotter')) p.do({ type: 'blotter' });
 }
 
 const ROUND: Record<BotName, (p: Player, rng: Rng) => void> = { hasty: hastyRound, tidy: tidyRound, careful: carefulRound };
 
-export function playRun(seed: string, bot: BotName): Played {
-  const p = new Player(newRun(seed));
+export function playRun(seed: string, bot: BotName, setup?: RunSetup): Played {
+  const p = new Player(newRun(seed, { setup }));
   const rng = stream(seed, `bot:${bot}`);
   while (p.s.phase === 'arrange') {
     ROUND[bot](p, rng);

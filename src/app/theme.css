@@ -319,3 +319,114 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .coach .pill-btn { height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--rule); background: var(--paper); font-weight: 600; flex: none; }
 @keyframes coach-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 [data-hand='left'] .coach { flex-direction: row-reverse; }
+
+/* ---- The scriptorium ------------------------------------------------------------------------ */
+.leaf-count { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; white-space: nowrap; }
+.leaf-count b { font-family: 'Alegreya', serif; font-weight: 800; font-size: 20px; }
+.ico.leaf { fill: var(--gold-edge); width: 20px; height: 20px; }
+.ico.leaf.xs { width: 14px; height: 14px; }
+.ico.star { width: 16px; height: 16px; fill: var(--rule); }
+.ico.star.on { fill: var(--gold-edge); }
+.stars { display: inline-flex; gap: 1px; vertical-align: -2px; }
+.ico.inline-ico.big { width: 24px; height: 24px; vertical-align: -5px; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+
+/* The map: stations on a vellum ground, joined by inked paths that turn gold once walked */
+.map-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 0 12px; }
+.map { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; min-height: 100%; }
+.map-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.map-path { stroke: var(--rule); stroke-width: 3; stroke-dasharray: 2 6; stroke-linecap: round; }
+.map-path.lit { stroke: var(--gold-edge); stroke-dasharray: none; }
+.station {
+  position: relative; z-index: 1; align-self: center; justify-self: center; width: 100%; max-width: 128px; min-height: 96px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 14px;
+  background: var(--paper); border: 1.5px solid var(--rule); text-align: center; box-shadow: 0 2px 0 var(--rule);
+}
+.station.filled { border-color: var(--gold-edge); }
+.station.locked { background: var(--bg); border-style: dashed; box-shadow: none; color: var(--ink-soft); }
+.station.locked .station-medal { opacity: .6; }
+.station-medal { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--paper-hi); border: 1.5px solid var(--ink); }
+.station.filled .station-medal { background: linear-gradient(135deg, var(--g0), var(--g1) 45%, var(--g2) 55%, var(--g3)); border-color: var(--gold-edge); }
+.station.filled .station-medal .ico { fill: var(--on-gold); }
+.station-medal .ico { width: 22px; height: 22px; }
+.station-name { font-family: 'Alegreya', serif; font-weight: 800; font-size: 14px; line-height: 1.1; }
+.station-lock, .station-best { font-size: 12px; color: var(--ink-soft); }
+.star-marks { list-style: none; padding: 0; margin: 6px 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.star-marks li { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 15px; }
+.star-marks li.on { color: var(--ink); font-weight: 600; }
+.satchel { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 6px 0 10px; }
+.satchel-tool { min-height: 48px; display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; column-gap: 6px; align-items: center; text-align: left; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--rule); background: var(--paper-hi); }
+.satchel-tool > .ico { grid-row: span 2; width: 22px; height: 22px; }
+.satchel-tool span { font-weight: 600; font-size: 14px; }
+.satchel-tool small { display: flex; align-items: center; gap: 2px; color: var(--ink-soft); font-size: 12px; }
+.satchel-tool[aria-pressed='true'] { border: 2px solid var(--gold-edge); background: var(--paper); }
+.satchel-tool[disabled] { opacity: .45; }
+
+/* The shop */
+.shop-item { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--rule); }
+.shop-icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--paper); border: 1.5px solid var(--ink); }
+.shop-item.owned .shop-icon { background: linear-gradient(135deg, var(--g0), var(--g1) 45%, var(--g2) 55%, var(--g3)); border-color: var(--gold-edge); }
+.shop-item.owned .shop-icon .ico { fill: var(--on-gold); }
+.shop-icon .ico { width: 22px; height: 22px; }
+.shop-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.shop-name { font-family: 'Alegreya', serif; font-weight: 800; font-size: 18px; }
+.shop-why { font-size: 13px; color: var(--rubric); }
+.shop-owned { display: flex; align-items: center; gap: 4px; color: var(--gold-edge); font-weight: 600; font-size: 14px; }
+.shop-owned .ico { width: 16px; height: 16px; fill: var(--gold-edge); }
+.pill-btn { height: 44px; min-width: 64px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--rule); background: var(--paper-hi); color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.pill-btn.buy { font-family: 'Alegreya', serif; font-weight: 800; font-size: 17px; border-color: var(--gold-edge); }
+.pill-btn[disabled] { opacity: .45; }
+.pill-btn[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+
+/* The library */
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.book { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 12px; background: var(--paper); border: 1px solid var(--rule); text-align: left; }
+.book .board { width: 100%; height: auto; }
+.book-name { font-family: 'Alegreya', serif; font-weight: 800; font-size: 15px; line-height: 1.15; }
+.book-score { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink-soft); }
+.book-big { width: min(100%, 320px); margin: 4px auto; }
+
+/* What a run earned */
+.leaf-panel { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--gold-edge); background: var(--paper-hi); text-align: center; display: flex; flex-direction: column; gap: 4px; align-items: center; flex: none; }
+.leaf-earned { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.leaf-earned b { font-family: 'Alegreya', serif; font-weight: 800; font-size: 24px; }
+.leaf-stars { display: flex; gap: 2px; }
+.leaf-stars .ico.star { width: 22px; height: 22px; }
+.leaf-news { font-weight: 600; font-size: 14px; }
+
+/* Four tools in the satchel */
+.run-controls.four .btn.tool { min-width: 54px; padding: 4px 2px; }
+.run-controls.four .tool-name { font-size: 11px; }
+
+/* ---- Styles from the scriptorium ------------------------------------------------------------- */
+/* Newsprint: black ink and one spot colour on cheap paper. */
+.theme-newsprint {
+  --bg: #E9E6DE; --paper: #F7F5EF; --paper-hi: #FFFFFF; --ink: #111111; --ink-soft: #5E5B55; --rule: #B9B5AC;
+  --rubric: #D2401E; --button: #111111; --argent: #FFFFFF;
+  --g0: #FFE07A; --g1: #F2B705; --g2: #FFD43B; --g3: #D99A00; --gold-edge: #C98F00; --on-gold: #111111; --on-gold-red: #8A1F05;
+  --tool: rgba(0, 0, 0, .18); --sheen: rgba(255, 255, 255, .8);
+  --token: #111111; --token-num: #FFFFFF; --token-ring: rgba(255, 255, 255, .35);
+  --hint-open: #FFFFFF; --hint-open-edge: rgba(0, 0, 0, .55); --hint-blocked: rgba(0, 0, 0, .22);
+  --lens: #1E5BD2; --mark-wash: rgba(210, 64, 30, .1);
+}
+.theme-newsprint .vellum { fill: var(--paper); }
+.theme-newsprint .tooling { fill: rgba(0, 0, 0, .22); }
+.theme-newsprint body, .theme-newsprint .app { background-image: radial-gradient(rgba(0, 0, 0, .06) 1px, transparent 1.2px); background-size: 6px 6px; }
+/* Neon Abacus: a dark page with glowing numerals. */
+.theme-neon {
+  --bg: #0B0B14; --paper: #14142A; --paper-hi: #1C1C38; --ink: #E8E8FF; --ink-soft: #8F8FC2; --rule: #2E2E5A;
+  --rubric: #FF4FA3; --button: #FF4FA3; --argent: #0B0B14;
+  --g0: #A6FFE9; --g1: #2CE8C1; --g2: #6BFFE0; --g3: #13B892; --gold-edge: #2CE8C1; --on-gold: #062A22; --on-gold-red: #7A0040;
+  --tool: rgba(0, 0, 0, .3); --sheen: rgba(255, 255, 255, .5);
+  --token: #1E1E44; --token-num: #FFE14F; --token-ring: rgba(255, 225, 79, .55);
+  --hint-open: rgba(255, 255, 255, .14); --hint-open-edge: rgba(166, 255, 233, .8); --hint-blocked: rgba(0, 0, 0, .6);
+  --lens: #4FC3FF; --mark-wash: rgba(255, 79, 163, .14);
+}
+.theme-neon .tok-num { filter: drop-shadow(0 0 3px rgba(255, 225, 79, .7)); }
+.theme-neon .stone { filter: drop-shadow(0 0 3px rgba(154, 160, 255, .6)); }
+.theme-neon .target { filter: drop-shadow(0 0 2px rgba(255, 79, 163, .6)); }
+.theme-neon .tok-num { fill: var(--token-num); }
+.theme-neon .stone { fill: #9AA0FF; }
+
+/* First-visit tips on the scriptorium's screens sit in the flow, above the bottom edge. */
+.coach.screen-tip { position: static; transform: none; width: 100%; margin: 6px 0 0; flex: none; animation: none; }

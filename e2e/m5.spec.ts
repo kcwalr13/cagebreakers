@@ -20,7 +20,9 @@ test('the Daily Page is the same page for everyone today, kept apart from your o
   await expect(p.getByRole('button', { name: /Daily Page/ })).toContainText('same page, deals and commissions');
   await p.screenshot({ path: info.outputPath('m5-01-title.png') });
   // Start your own run first, so the daily must not replace it.
-  await p.getByRole('button', { name: /^New run/ }).click();
+  await p.getByRole('button', { name: /The Map/ }).click();
+  await p.getByRole('button', { name: /The Copy Desk/ }).click();
+  await p.getByRole('button', { name: 'Begin' }).click();
   const ownSeed = await R(p, '(r) => r.state().seed');
   await p.getByRole('button', { name: 'Back to title' }).click();
   await p.getByRole('button', { name: /Daily Page/ }).click();
@@ -34,7 +36,7 @@ test('the Daily Page is the same page for everyone today, kept apart from your o
   expect(await R(p, '(r) => r.state().seed')).toBe(daily.seed);
   await p.getByRole('button', { name: 'Back to title' }).click();
   await expect(p.getByRole('button', { name: /Daily Page/ })).toContainText('In progress: round 1');
-  await expect(p.getByRole('button', { name: /^New run/ })).toBeVisible();
+  await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
 });
 
 test('settings: sound, vibration, less motion and left-thumb controls', async ({ page: p }, info) => {
@@ -89,14 +91,16 @@ test('a save code moves everything to another phone', async ({ page: p, context 
   await p.waitForLoadState('load');
   await p.waitForFunction(() => !!(window as Any).__run);
   await expect(p.getByRole('button', { name: /Continue run/ })).toBeVisible();
-  await expect(p.getByRole('button', { name: /Continue run/ })).toContainText(`Round ${before.round} of 8`);
+  await expect(p.getByRole('button', { name: /Continue run/ })).toContainText(new RegExp(`round ${before.round} of 8`, 'i'));
   const after = await p.evaluate(() => JSON.parse(localStorage.getItem('cagebreakers.run')!)) as { seed: string };
   expect(after.seed).toBe(before.seed);
 });
 
 test('the first rounds teach as you play, one tip at a time', async ({ page: p }, info) => {
   await fresh(p, '&coach');
-  await p.getByRole('button', { name: /^New run/ }).click();
+  await R(p, `(r) => r.startRun('CQACHA')`);
+  await p.goto('./?test&nosw&coach&screen=run');
+  await p.waitForFunction(() => !!(window as Any).__run);
   await expect(p.locator('.coach')).toContainText('Bright cells can take it');
   await p.locator('.coach').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   await p.screenshot({ path: info.outputPath('m5-05-first-tip.png') });

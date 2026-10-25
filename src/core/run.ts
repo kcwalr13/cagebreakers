@@ -1,10 +1,12 @@
 /**
- * A run is a pure state machine: (state, action) → state. Eight rounds on one page: each round
+ * A run is a pure state machine: (state, action) → state. Several rounds on one page: each round
  * deals numbers from the bag and posts three commissions; you arrange the page and ink it. Bots
- * play thousands of runs through this module, and a run is reproducible from its seed and actions.
+ * play thousands of runs through this module, and a run is reproducible from its seed, its setup
+ * and its actions.
  */
-import { RUN, TOOLS, type ToolId } from '../content/balance';
+import { BASE_TOOLS, RUN, TOOLS, type ToolId } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
+import { PAGE_VARIANTS, type PageVariant } from '../content/stations';
 import { type Holding, type Posted, type View, findLayout, isMet, planRound, possible, viewOf } from './commission';
 import { CELLS, PEERS, colOf, rowOf } from './grid';
 import { type Page, generatePage } from './page';
@@ -34,12 +36,48 @@ export interface RoundRecord {
 
 export type RunPhase = 'arrange' | 'done' | 'ruined';
 
+/**
+ * Everything that shapes a run before it starts: the station's twist, the satchel and the
+ * scriptorium's upgrades. Kept in the state, so a run replays from its seed, setup and actions.
+ */
+export interface RunSetup {
+  /** The map station this run is for; null for the Daily Page and plain runs. */
+  station: string | null;
+  page: PageVariant;
+  rounds: number;
+  /** Numbers dealt each round before the last; the last round deals whatever is left. */
+  deal: readonly number[];
+  startInk: number;
+  startGold: number;
+  /** Score per drop of ink left at the end. */
+  inkBonus: number;
+  /** The tools carried this run. */
+  tools: readonly ToolId[];
+  /** Extra gold each bounty pays. */
+  bountyBonus: number;
+  /** Commission kinds a station has brought, enabled for this run. */
+  kinds: readonly CommissionKind[];
+}
+
+/** A standard page with the standard tools and no upgrades: the Daily Page, and the default. */
+export const STANDARD_SETUP: RunSetup = {
+  station: null, page: 'standard', rounds: RUN.rounds, deal: RUN.deal, startInk: RUN.startInk, startGold: RUN.startGold,
+  inkBonus: RUN.inkBonus, tools: BASE_TOOLS, bountyBonus: 0, kinds: [],
+};
+
 export interface RunState {
   v: 3;
   seed: string;
+  /** An id the app gives each run, so its rewards are counted once. */
+  id?: string;
+  setup: RunSetup;
+  /** Printed numbers the Eraser has lifted off the page. */
+  erased: number[];
+  /** Set this round by the Gilder: sealed cages pay double when the round is inked. */
+  gilded: boolean;
   /** Set on a Daily Page run: the calendar day it belongs to. */
   daily?: string;
-  /** 1 to RUN.rounds. */
+  /** 1 to setup.rounds. */
   round: number;
   phase: RunPhase;
   ink: number;
@@ -71,6 +109,10 @@ export type RunAction =
   | { type: 'redraw' }
   | { type: 'lens'; cell: number }
   | { type: 'blotter' }
+  | { type: 'quill' }
+  | { type: 'gilder' }
+  | { type: 'eraser'; cell: number }
+  | { type: 'inkwell' }
   | { type: 'ink' };
 
 export interface ActResult {
@@ -85,10 +127,26 @@ export interface ActResult {
 // ---- Pages and views ------------------------------------------------------------------------
 
 const pages = new Map<string, Page>();
-export function pageOf(seed: string): Page {
-  let p = pages.get(seed);
-  if (!p) { p = generatePage(seed); pages.set(seed, p); if (pages.size > 8) pages.delete(pages.keys().next().value!); }
+function remember(key: string, make: () => Page): Page {
+  let p = pages.get(key);
+  if (!p) { p = make(); pages.set(key, p); if (pages.size > 16) pages.delete(pages.keys().next().value!); }
   return p;
+}
+
+/** The page a seed makes, for a kind of page. */
+export function pageOf(seed: string, variant: PageVariant = 'standard'): Page {
+  return remember(`${seed}|${variant}`, () => generatePage(seed, PAGE_VARIANTS[variant]));
+}
+
+/** The run's page as it stands: its kind of page, with any printed numbers the Eraser lifted. */
+export function runPage(s: Pick<RunState, 'seed' | 'setup' | 'erased'>): Page {
+  const base = pageOf(s.seed, s.setup.page);
+  if (!s.erased.length) return base;
+  return remember(`${s.seed}|${s.setup.page}|${s.erased.join(',')}`, () => {
+    const stones = base.stones.slice();
+    for (const c of s.erased) stones[c] = 0;
+    return { ...base, stones };
+  });
 }
 
 export const onPage = (s: RunState) => s.tokens.filter((t) => t.cell >= 0);
@@ -101,10 +159,10 @@ export const dealtThisRound = (s: RunState) => s.tokens.filter((t) => t.round ==
 export function valuesOf(s: RunState): number[] {
   const placed = new Array<number>(CELLS).fill(0);
   for (const t of s.tokens) if (t.cell >= 0) placed[t.cell] = t.n;
-  return boardValues(pageOf(s.seed), placed);
+  return boardValues(runPage(s), placed);
 }
 
-export const viewNow = (s: RunState): View => viewOf(pageOf(s.seed), valuesOf(s));
+export const viewNow = (s: RunState): View => viewOf(runPage(s), valuesOf(s));
 
 /** For each posted commission, whether the page meets it right now. */
 export const metNow = (s: RunState): boolean[] => { const v = viewNow(s); return s.posted.map((p) => isMet(p.c, v)); };
@@ -113,7 +171,7 @@ export const metNow = (s: RunState): boolean[] => { const v = viewNow(s); return
 export function legalCells(s: RunState, id: number): number[] {
   const t = s.tokens.find((x) => x.id === id);
   if (!t) return [];
-  const page = pageOf(s.seed);
+  const page = runPage(s);
   const values = valuesOf(s);
   if (t.cell >= 0) values[t.cell] = 0;
   const out: number[] = [];
@@ -138,7 +196,7 @@ export function inkBlocker(s: RunState): string | null {
 }
 
 export function scoreOf(s: RunState): { gold: number; ink: number; inkBonus: number; total: number } {
-  const inkBonus = s.phase === 'done' ? s.ink * RUN.inkBonus : 0;
+  const inkBonus = s.phase === 'done' ? s.ink * s.setup.inkBonus : 0;
   return { gold: s.gold, ink: s.ink, inkBonus, total: s.gold + inkBonus };
 }
 
@@ -166,10 +224,10 @@ function giveTokens(s: RunState, numbers: readonly number[]): Token[] {
 
 /** Deals a round and posts its commissions. Mutates the fresh state it's given. */
 function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunState {
-  const page = pageOf(s.seed);
-  const final = s.round === RUN.rounds;
+  const page = runPage(s);
+  const final = s.round === s.setup.rounds;
   const left = bagCount(s.bag);
-  const want = final ? left : Math.min(RUN.deal[s.round - 1] ?? 0, Math.max(0, left - RUN.finalReserve));
+  const want = final ? left : Math.min(s.setup.deal[s.round - 1] ?? 0, Math.max(0, left - RUN.finalReserve));
   const { drawn, bag } = draw(s.bag, want, stream(s.seed, `deal:${s.round}:0`));
   s.bag = bag;
   const kept = s.tokens.map((t) => t.n);
@@ -177,23 +235,29 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   s.need = final ? drawn.length : Math.max(0, drawn.length - 1);
   s.redraws = 0;
   s.blotter = false;
+  s.gilded = false;
   const plan = planRound({
     page, round: s.round, final,
     holding: { kept, dealt: drawn, need: s.need },
     now: viewOf(page, valuesOf(s)),
     lastRequired,
+    kinds: s.setup.kinds,
   }, stream(s.seed, `commissions:${s.round}`));
-  s.posted = plan.posted;
+  s.posted = plan.posted.map((p) => (p.required || final ? p : { ...p, gold: p.gold + s.setup.bountyBonus }));
   s.proof = plan.proof;
   return s;
 }
 
-export function newRun(seed: string, daily?: string): RunState {
-  const page = pageOf(seed);
+export interface NewRunOptions { daily?: string; setup?: RunSetup; id?: string }
+
+export function newRun(seed: string, opts: NewRunOptions = {}): RunState {
+  const setup = opts.setup ?? STANDARD_SETUP;
+  const page = pageOf(seed, setup.page);
   const bag = new Array<number>(7).fill(0);
   for (let c = 0; c < CELLS; c++) if (!page.stones[c]) bag[page.solution[c]!]!++;
   const s: RunState = {
-    v: 3, seed, ...(daily ? { daily } : {}), round: 1, phase: 'arrange', ink: RUN.startInk, gold: RUN.startGold,
+    v: 3, seed, ...(opts.daily ? { daily: opts.daily } : {}), ...(opts.id ? { id: opts.id } : {}), setup, erased: [], gilded: false,
+    round: 1, phase: 'arrange', ink: setup.startInk, gold: setup.startGold,
     bag, tokens: [], nextId: 1, need: 0, redraws: 0, posted: [], blotter: false, revealed: [], records: [],
   };
   return startRound(s, undefined);
@@ -206,6 +270,9 @@ export function migrateRun(raw: unknown): RunState | null {
   if (r.v !== 3 || typeof r.seed !== 'string' || !Array.isArray(r.tokens) || !Array.isArray(r.bag) || !Array.isArray(r.posted)) return null;
   return {
     ...(r as RunState),
+    setup: r.setup ?? STANDARD_SETUP,
+    erased: r.erased ?? [],
+    gilded: r.gilded ?? false,
     revealed: r.revealed ?? [],
     records: r.records ?? [],
   };
@@ -216,6 +283,7 @@ const clone = (s: RunState): RunState => ({
   bag: s.bag.slice(),
   tokens: s.tokens.map((t) => ({ ...t })),
   posted: s.posted.slice(),
+  erased: s.erased.slice(),
   revealed: s.revealed.slice(),
   records: s.records.slice(),
 });
@@ -231,7 +299,12 @@ function conflictLine(page: Page, values: readonly number[], cell: number, n: nu
   return `A ${n} can't go there`;
 }
 
+export const TOOL_NAMES: Record<ToolId, string> = {
+  redraw: 'Redraw', lens: 'Lens', blotter: 'Blotter', quill: 'Quill', gilder: 'Gilder', eraser: 'Eraser', inkwell: 'Inkwell',
+};
+
 function spend(s: RunState, tool: ToolId): string | null {
+  if (!s.setup.tools.includes(tool)) return `You aren't carrying the ${TOOL_NAMES[tool]}`;
   if (s.gold < TOOLS[tool]) return `Not enough gold: it costs ${TOOLS[tool]}`;
   s.gold -= TOOLS[tool];
   return null;
@@ -240,7 +313,7 @@ function spend(s: RunState, tool: ToolId): string | null {
 export function act(prev: RunState, a: RunAction): ActResult {
   if (prev.phase !== 'arrange') return refuse(prev, 'The run is over');
   const s = clone(prev);
-  const page = pageOf(s.seed);
+  const page = runPage(s);
   switch (a.type) {
     case 'place': {
       const t = s.tokens.find((x) => x.id === a.id);
@@ -308,10 +381,65 @@ export function act(prev: RunState, a: RunAction): ActResult {
 
     case 'blotter': {
       if (s.blotter) return refuse(prev, 'The Blotter is already down this round');
-      if (s.round === RUN.rounds) return refuse(prev, 'The final round has nothing to blot');
+      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has nothing to blot');
       const why = spend(s, 'blotter');
       if (why) return refuse(prev, why);
       s.blotter = true;
+      return { state: s, ok: true };
+    }
+
+    case 'quill': {
+      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has every number already');
+      if (bagCount(s.bag) <= RUN.finalReserve) return refuse(prev, 'No spare numbers are left to draw');
+      const why = spend(s, 'quill');
+      if (why) return refuse(prev, why);
+      // An extra number is optional, so every commission stays possible as it was.
+      const { drawn, bag } = draw(s.bag, 1, stream(s.seed, `quill:${s.round}:${s.nextId}`));
+      s.bag = bag;
+      s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
+      return { state: s, ok: true };
+    }
+
+    case 'gilder': {
+      if (s.gilded) return refuse(prev, 'The Gilder is already at work this round');
+      const why = spend(s, 'gilder');
+      if (why) return refuse(prev, why);
+      s.gilded = true;
+      return { state: s, ok: true };
+    }
+
+    case 'inkwell': {
+      if (s.ink >= s.setup.startInk) return refuse(prev, 'Your ink is already full');
+      const why = spend(s, 'inkwell');
+      if (why) return refuse(prev, why);
+      s.ink++;
+      return { state: s, ok: true };
+    }
+
+    case 'eraser': {
+      if (a.cell < 0 || a.cell >= CELLS || !page.stones[a.cell]) return refuse(prev, 'Choose a printed number');
+      const why = spend(s, 'eraser');
+      if (why) return refuse(prev, why);
+      // The lifted number becomes yours: it stays where it was, can move, and must stay on the page.
+      const n = page.stones[a.cell]!;
+      s.erased.push(a.cell);
+      s.tokens = [...s.tokens, { id: s.nextId++, n, round: 0, cell: a.cell }];
+      // Keep the round's promises on the changed page, or refuse.
+      const next = runPage(s);
+      const holding: Holding = {
+        kept: s.tokens.filter((t) => t.round < s.round).map((t) => t.n),
+        dealt: dealtThisRound(s).map((t) => t.n),
+        need: s.need,
+      };
+      const check = stream(s.seed, `eraser-check:${s.round}:${a.cell}`);
+      const required = s.posted.find((p) => p.required);
+      if (required && !possible(next, holding, required.c, check, true)) return refuse(prev, 'Lifting that number would make the required commission impossible');
+      const v = viewOf(next, s.proof ?? []);
+      if (!s.proof || !s.posted.every((p) => isMet(p.c, v))) {
+        const found = findLayout(next, holding, s.posted.map((p) => p.c), check);
+        if (!found) return refuse(prev, 'Lifting that number would make a commission impossible');
+        s.proof = found;
+      }
       return { state: s, ok: true };
     }
 
@@ -326,7 +454,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
       const record: RoundRecord = {
         round: s.round, required: met, blotted: met === false && s.blotter, inkSpilled,
         bounties: won.length, bountyGold: won.reduce((g, p) => g + p.gold, 0),
-        seals: view.sealed.size, sealGold: view.sealed.size * RUN.sealGold,
+        seals: view.sealed.size, sealGold: view.sealed.size * RUN.sealGold * (s.gilded ? 2 : 1),
       };
       s.records.push(record);
       s.ink -= inkSpilled;
@@ -335,7 +463,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
       for (const t of s.tokens) if (t.cell < 0) s.bag[t.n]!++;
       s.tokens = s.tokens.filter((t) => t.cell >= 0);
       if (s.ink <= 0) { s.phase = 'ruined'; return { state: s, ok: true, inked: record }; }
-      if (s.round >= RUN.rounds) { s.phase = 'done'; return { state: s, ok: true, inked: record }; }
+      if (s.round >= s.setup.rounds) { s.phase = 'done'; return { state: s, ok: true, inked: record }; }
       const lastRequired = required?.c.kind;
       s.round++;
       return { state: startRound(s, lastRequired), ok: true, inked: record };
@@ -343,9 +471,9 @@ export function act(prev: RunState, a: RunAction): ActResult {
   }
 }
 
-/** Replays a run from its seed and actions; refused actions are skipped, as they were in play. */
-export function replay(seed: string, actions: readonly RunAction[], daily?: string): RunState {
-  let s = newRun(seed, daily);
+/** Replays a run from its seed, setup and actions; refused actions are skipped, as they were in play. */
+export function replay(seed: string, actions: readonly RunAction[], opts: NewRunOptions = {}): RunState {
+  let s = newRun(seed, opts);
   for (const a of actions) s = act(s, a).state;
   return s;
 }

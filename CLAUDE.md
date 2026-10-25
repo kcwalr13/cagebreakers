@@ -19,6 +19,15 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
 - Commissions must be provably possible: `src/core/commission.ts` only posts one after finding legal layouts
   (subsets of the hidden solution) that meet it. A new kind needs `measure`, `describe`, `readout`, `cellsOf`
   and a candidate in `candidates`, plus its pay and rounds in `src/content/commissions.ts`.
-- After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets.
+- All three of a round's commissions must be possible together. `planRound` returns the posted commissions
+  and a `proof` layout meeting all three; it lives in `RunState.proof`, and any tool that changes what you hold
+  or the page (Redraw, Eraser) must keep a joint layout or be refused for free.
+- A run carries its `RunSetup` (station, page variant, rounds, deal, ink, gold, tools, enabled kinds). Read the
+  page with `runPage(s)`, never `pageOf(s.seed)`, so variants and erased stones apply. The Daily Page always
+  uses the standard setup.
+- The scriptorium profile is pure (`src/core/meta.ts`); `recordRun` counts each run once by its id. Stations
+  and the shop live in `src/content/stations.ts` and `src/content/meta.ts`.
+- After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets. After a
+  station, price or leaf change: `npx tsx lab/meta.ts` must pass too.
 - Before shipping: `npm run typecheck && npm test && npm run build && npm run e2e`, then look at the
   screenshots in `test-results/`.

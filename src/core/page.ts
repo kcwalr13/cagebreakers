@@ -31,6 +31,8 @@ export interface PageRules {
   /** Relative odds of each cage size when growing the partition. */
   sizeWeights: readonly (readonly [number, number])[];
   maxStonesPerLine: number;
+  /** Which operations cages may use: all four, or only + and ×. */
+  ops?: 'all' | 'plus-times';
 }
 
 export const DEFAULT_PAGE_RULES: PageRules = {
@@ -109,7 +111,8 @@ function tryPartition(rng: Rng, rules: PageRules): number[][] | null {
   return result;
 }
 
-function chooseOp(rng: Rng, values: number[]): Op {
+function chooseOp(rng: Rng, values: number[], ops: PageRules['ops'] = 'all'): Op {
+  if (ops === 'plus-times') return rng.weighted([['+', 1], ['×', 1]]);
   if (values.length === 2) {
     const [a, b] = values as [number, number];
     const hi = Math.max(a, b), lo = Math.min(a, b);
@@ -156,7 +159,7 @@ export function generatePage(seed: string, rules: PageRules = DEFAULT_PAGE_RULES
   const opRng = stream(seed, 'page.ops');
   const cages: Cage[] = cells.map((cage, id) => {
     const values = cage.map((c) => solution[c]!);
-    const op = chooseOp(opRng, values);
+    const op = chooseOp(opRng, values, rules.ops);
     return { id, cells: cage, op, target: evaluate(op, values) };
   });
 

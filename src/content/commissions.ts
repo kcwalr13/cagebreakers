@@ -5,13 +5,16 @@
 export type CommissionKind =
   | 'line-min' | 'line-max' | 'no-number' | 'zone' | 'seal-count' | 'seal-op' | 'seal-cage' | 'empty-cage'
   | 'line-count-max' | 'fill-line' | 'equal-lines' | 'no-seal-line' | 'diagonal-min' | 'rising' | 'parity-line'
-  | 'fill-page' | 'seal-all';
+  | 'fill-page' | 'seal-all' | 'corners-min' | 'quarter-min' | 'seal-op-count';
+
+/** Kinds that only appear once a station has brought them (see src/content/stations.ts). */
+export const GATED_KINDS: readonly CommissionKind[] = ['corners-min', 'quarter-min', 'seal-op-count'];
 
 /** Gold a bounty of each kind pays. */
 export const BOUNTY_GOLD: Record<CommissionKind, number> = {
   'line-min': 2, 'line-max': 2, 'no-number': 2, zone: 4, 'seal-count': 4, 'seal-op': 2, 'seal-cage': 4,
   'empty-cage': 2, 'line-count-max': 2, 'fill-line': 4, 'equal-lines': 6, 'no-seal-line': 4, 'diagonal-min': 4,
-  rising: 6, 'parity-line': 4, 'fill-page': 0, 'seal-all': 12,
+  rising: 6, 'parity-line': 4, 'fill-page': 0, 'seal-all': 12, 'corners-min': 4, 'quarter-min': 4, 'seal-op-count': 6,
 };
 
 /** A four-cell cage is worth this much more gold to seal on command. */
@@ -23,13 +26,13 @@ export const FINAL_SEALS = { share: 0.6, gold: 6 } as const;
 /** Which kinds can be the required commission, and from which round. */
 export const REQUIRED_FROM: Partial<Record<CommissionKind, number>> = {
   'line-min': 1, 'no-number': 1, 'seal-op': 1, 'seal-count': 2, 'line-max': 2, zone: 2,
-  'empty-cage': 3, 'line-count-max': 3, 'seal-cage': 4, 'no-seal-line': 5,
+  'empty-cage': 3, 'line-count-max': 3, 'seal-cage': 4, 'no-seal-line': 5, 'corners-min': 2, 'quarter-min': 2,
 };
 
 /** Which kinds can be bounties, and from which round. */
 export const BOUNTY_FROM: Partial<Record<CommissionKind, number>> = {
   'line-min': 1, 'seal-op': 1, 'seal-count': 1, 'seal-cage': 1, zone: 1, 'diagonal-min': 1, 'no-number': 2, 'line-max': 2, 'parity-line': 3, 'fill-line': 3, 'empty-cage': 3, 'no-seal-line': 3, 'equal-lines': 4,
-  rising: 4, 'line-count-max': 4,
+  rising: 4, 'line-count-max': 4, 'corners-min': 1, 'quarter-min': 1, 'seal-op-count': 2,
 };
 
 /** The sensible range of a threshold, as a required commission and as a bounty. */
@@ -39,6 +42,9 @@ export const THRESHOLD_RANGE: Partial<Record<CommissionKind, { required: readonl
   'line-count-max': { required: [1, 4], bounty: [1, 4] },
   'seal-count': { required: [1, 99], bounty: [2, 99] },
   'diagonal-min': { required: [8, 36], bounty: [8, 36] },
+  'corners-min': { required: [6, 24], bounty: [8, 24] },
+  'quarter-min': { required: [8, 54], bounty: [12, 54] },
+  'seal-op-count': { required: [2, 99], bounty: [2, 99] },
 };
 
 /** The fixed variants of yes-or-no kinds that the generator chooses among. */

@@ -33,6 +33,11 @@ const used = {
   // The run: gold, ink and what they buy
   gold: 'two-coins', ink: 'drop', spill: 'droplet-splash', check: 'check-mark', seal: 'wax-seal', trophy: 'laurels-trophy',
   redraw: 'cycle', lens: 'magnifying-glass', blotter: 'stamper',
+  quill: 'quill', gilder: 'paint-brush', eraser: 'broom', inkwell: 'covered-jar',
+  // The scriptorium
+  map: 'treasure-map', library: 'bookshelf', scriptorium: 'desk', leaf: 'solid-leaf', star: 'round-star', lock: 'padlock',
+  purse: 'shiny-purse', strap: 'shoulder-bag', bounty: 'coins-pile', palette: 'palette',
+  church: 'church', vellum: 'scroll-unfurled', candle: 'candle-flame', folio: 'open-book',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

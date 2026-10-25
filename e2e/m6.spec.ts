@@ -173,7 +173,7 @@ test('a run resumes after the game is closed', async ({ page: p }) => {
   await runOn(p, 'RESUME');
   for (let i = 0; i < 2; i++) await R(p, `(r) => { r.load({ ...r.state(), ink: 3 }); r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.goto('./?test&nosw&screen=title');
-  await expect(p.getByRole('button', { name: /Continue run/ })).toContainText('Round 3 of 8');
+  await expect(p.getByRole('button', { name: /Continue run/ })).toContainText(/round 3 of 8/i);
   await p.getByRole('button', { name: /Continue run/ }).click();
   await expect(p.locator('.hud-round')).toContainText('Round 3 of 8');
 });
@@ -196,7 +196,8 @@ test('a whole run fills the page, then is scored', async ({ page: p }, info) => 
   await expect(p.locator('.summary-verdict')).toContainText('points');
   await expect(p.locator('.records tbody tr')).toHaveCount(8);
   await p.screenshot({ path: info.outputPath('m6-10-summary.png') });
-  await p.getByRole('button', { name: 'New run' }).click();
+  await expect(p.locator('.leaf-panel')).toContainText('gold leaf');
+  await p.getByRole('button', { name: 'Again' }).click();
   await expect(p.locator('.hud-round')).toContainText('Round 1 of 8');
 });
 

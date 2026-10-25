@@ -5,7 +5,8 @@
  * legal layout), and sets thresholds from how many such layouts reach them.
  */
 import {
-  BIG_CAGE_BONUS, BOUNTY_FROM, BOUNTY_GOLD, type CommissionKind, DIFFICULTY, FINAL_SEALS, REQUIRED_FROM, THRESHOLD_RANGE, VARIANTS,
+  BIG_CAGE_BONUS, BOUNTY_FROM, BOUNTY_GOLD, type CommissionKind, DIFFICULTY, FINAL_SEALS, GATED_KINDS, REQUIRED_FROM, THRESHOLD_RANGE,
+  VARIANTS,
 } from '../content/commissions';
 import { CELLS, SIZE, colOf, rowOf } from './grid';
 import type { Op, Page } from './page';
@@ -33,7 +34,12 @@ export type Commission =
   | { kind: 'rising'; line: number; count: number }
   | { kind: 'parity-line'; axis: Axis; line: number; even: boolean; count: number }
   | { kind: 'fill-page' }
-  | { kind: 'seal-all' };
+  | { kind: 'seal-all' }
+  | { kind: 'corners-min'; min: number }
+  | { kind: 'quarter-min'; quarter: Quarter; min: number }
+  | { kind: 'seal-op-count'; op: Op; count: number };
+
+export type Quarter = 'tl' | 'tr' | 'bl' | 'br';
 
 /** A commission as posted for a round: required ones spill ink when missed; bounties pay gold. */
 export interface Posted { c: Commission; required: boolean; gold: number }
@@ -51,6 +57,14 @@ const LINES: Record<Axis, readonly (readonly number[])[]> = {
 /** The cells of a row or column, top to bottom or left to right. Shared: don't mutate. */
 export const lineCells = (axis: Axis, line: number): readonly number[] => LINES[axis][line]!;
 const DIAGONAL = Array.from({ length: SIZE }, (_, i) => i * SIZE + i);
+const CORNERS = [0, SIZE - 1, CELLS - SIZE, CELLS - 1];
+const QUARTERS: Record<Quarter, readonly number[]> = {
+  tl: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) < 3 && colOf(c) < 3),
+  tr: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) < 3 && colOf(c) >= 3),
+  bl: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) >= 3 && colOf(c) < 3),
+  br: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) >= 3 && colOf(c) >= 3),
+};
+const QUARTER_WORD: Record<Quarter, string> = { tl: 'top-left', tr: 'top-right', bl: 'bottom-left', br: 'bottom-right' };
 const IN_ZONE: Record<Zone, (cell: number) => boolean> = {
   top: (c) => rowOf(c) < 3, bottom: (c) => rowOf(c) >= 3, left: (c) => colOf(c) < 3, right: (c) => colOf(c) >= 3,
 };
@@ -106,16 +120,18 @@ export function measure(c: Commission, v: View): number {
     }
     case 'fill-page': return values.every((n) => n) ? 1 : 0;
     case 'seal-all': return sealed.size === page.cages.length ? 1 : 0;
+    case 'corners-min': return total(v, CORNERS);
+    case 'quarter-min': return total(v, QUARTERS[c.quarter]);
+    case 'seal-op-count': return [...sealed].filter((id) => page.cages[id]!.op === c.op).length;
   }
 }
 
 export function isMet(c: Commission, v: View): boolean {
   const m = measure(c, v);
   switch (c.kind) {
-    case 'line-min': return m >= c.min;
+    case 'line-min': case 'diagonal-min': case 'corners-min': case 'quarter-min': return m >= c.min;
     case 'line-max': case 'line-count-max': return m <= c.max;
-    case 'diagonal-min': return m >= c.min;
-    case 'seal-count': return m >= c.count;
+    case 'seal-count': case 'seal-op-count': return m >= c.count;
     default: return m === 1;
   }
 }
@@ -140,6 +156,9 @@ export function describe(c: Commission, page: Page): string {
     case 'parity-line': return `Only ${c.even ? 'even' : 'odd'} numbers in ${lineName(c.axis, c.line).toLowerCase()}, ${c.count} or more`;
     case 'fill-page': return 'Fill every cell';
     case 'seal-all': return 'Seal every cage';
+    case 'corners-min': return `The four corners add to ${c.min} or more`;
+    case 'quarter-min': return `The ${QUARTER_WORD[c.quarter]} quarter adds to ${c.min} or more`;
+    case 'seal-op-count': return `Seal ${c.count} ${OP_WORD[c.op]} cages`;
   }
 }
 
@@ -147,7 +166,8 @@ export function describe(c: Commission, page: Page): string {
 export function readout(c: Commission, v: View): string {
   const m = measure(c, v);
   switch (c.kind) {
-    case 'line-min': case 'line-max': case 'diagonal-min': return `now ${m}`;
+    case 'line-min': case 'line-max': case 'diagonal-min': case 'corners-min': case 'quarter-min': return `now ${m}`;
+    case 'seal-op-count': return `${m} sealed`;
     case 'line-count-max': return `${m} now`;
     case 'seal-count': return `${m} sealed`;
     case 'no-number': return m ? 'clear' : `a ${c.n} is there`;
@@ -175,6 +195,9 @@ export function cellsOf(c: Commission, page: Page): number[] {
     case 'equal-lines': return [...lineCells(c.axis, c.a), ...lineCells(c.axis, c.b)];
     case 'rising': return [...lineCells('col', c.line)];
     case 'diagonal-min': return DIAGONAL.slice();
+    case 'corners-min': return CORNERS.slice();
+    case 'quarter-min': return [...QUARTERS[c.quarter]];
+    case 'seal-op-count': return page.cages.filter((g) => g.op === c.op).flatMap((g) => g.cells);
     case 'zone': return Array.from({ length: CELLS }, (_, x) => x).filter(IN_ZONE[c.zone]);
     case 'seal-cage': case 'empty-cage': return page.cages[c.cage]!.cells.slice();
     case 'seal-op': return page.cages.filter((g) => g.op === c.op).flatMap((g) => g.cells);
@@ -242,9 +265,10 @@ interface Candidate {
   bty: boolean;
 }
 
-function candidates(page: Page, round: number): Candidate[] {
+function candidates(page: Page, round: number, enabled: readonly CommissionKind[]): Candidate[] {
   const out: Candidate[] = [];
   const add = (kind: CommissionKind, dir: Direction, make: (t: number) => Commission) => {
+    if (GATED_KINDS.includes(kind) && !enabled.includes(kind)) return;
     const req = (REQUIRED_FROM[kind] ?? 99) <= round, bty = (BOUNTY_FROM[kind] ?? 99) <= round;
     if (req || bty) out.push({ kind, dir, make, req, bty });
   };
@@ -269,7 +293,12 @@ function candidates(page: Page, round: number): Candidate[] {
   }
   add('seal-count', 'min', (t) => ({ kind: 'seal-count', count: t }));
   add('diagonal-min', 'min', (t) => ({ kind: 'diagonal-min', min: t }));
-  for (const op of [...new Set(page.cages.map((g) => g.op))]) add('seal-op', 'bool', () => ({ kind: 'seal-op', op }));
+  add('corners-min', 'min', (t) => ({ kind: 'corners-min', min: t }));
+  for (const quarter of ['tl', 'tr', 'bl', 'br'] as Quarter[]) add('quarter-min', 'min', (t) => ({ kind: 'quarter-min', quarter, min: t }));
+  for (const op of [...new Set(page.cages.map((g) => g.op))]) {
+    add('seal-op', 'bool', () => ({ kind: 'seal-op', op }));
+    add('seal-op-count', 'min', (t) => ({ kind: 'seal-op-count', op, count: t }));
+  }
   for (const cage of page.cages) {
     add('seal-cage', 'bool', () => ({ kind: 'seal-cage', cage: cage.id }));
     if (cage.cells.filter((c) => !page.stones[c]).length >= VARIANTS.emptyCageOpen) add('empty-cage', 'bool', () => ({ kind: 'empty-cage', cage: cage.id }));
@@ -347,6 +376,8 @@ export interface PostInput {
   now: View;
   /** Last round's required kind, so the same kind rarely comes twice running. */
   lastRequired?: CommissionKind;
+  /** Kinds that only appear once a station has brought them, enabled for this run. */
+  kinds?: readonly CommissionKind[];
 }
 
 /** A round's commissions, and a legal layout of numbers you'll hold that meets all of them at once. */
@@ -383,7 +414,7 @@ function planFrom(input: PostInput, rng: Rng, samples: number): RoundPlan {
   const views = choices(holding).map((set) =>
     Array.from({ length: samples }, () => viewOf(page, sampleLayout(page, set, rng))));
   const all = views.flat();
-  const pool = candidates(page, round);
+  const pool = candidates(page, round, input.kinds ?? []);
   const statsCache = new Map<Candidate, number[][]>();
   const statsOf = (cand: Candidate) => {
     let s = statsCache.get(cand);
@@ -491,7 +522,8 @@ function closeness(c: Commission, v: View): number {
   switch (c.kind) {
     case 'line-min': return m / c.min;
     case 'diagonal-min': return m / c.min;
-    case 'seal-count': return m / c.count;
+    case 'seal-count': case 'seal-op-count': return m / c.count;
+    case 'corners-min': case 'quarter-min': return m / c.min;
     case 'line-max': return c.max / Math.max(1, m);
     case 'line-count-max': return c.max / Math.max(1, m);
     default: return 0;

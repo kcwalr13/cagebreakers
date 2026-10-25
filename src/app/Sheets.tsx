@@ -7,6 +7,9 @@ import { coachOff, resetTips } from './coach';
 import { Icon } from './Icon';
 import { screen, sheet } from './nav';
 import { RoundSheet, ToolSheet } from './run/Screens';
+import { BookSheet, StationSheet } from './Scriptorium';
+import { profile } from './meta';
+import { stationById } from '../content/stations';
 import * as runState from './run/state';
 import { exportCode, importCode } from './savecode';
 import { type HandChoice, type MotionChoice, buzz, setSetting, settings } from './settings';
@@ -61,10 +64,10 @@ function ConfirmNewRun() {
   const s = runState.slot.value === 'main' ? runState.run.value : runState.loadSlot('main');
   return (
     <>
-      <div class="sheet-head"><h2>Start a new run?</h2><Close /></div>
-      <p>Your run in round {s?.round ?? 1} with {s?.gold ?? 0} gold will be abandoned.</p>
+      <div class="sheet-head"><h2>Abandon this run?</h2><Close /></div>
+      <p>Your run in round {s?.round ?? 1} with {s?.gold ?? 0} gold will be abandoned. It earns nothing for the scriptorium.</p>
       <div class="row-btns">
-        <button class="btn primary" onClick={() => { runState.openSlot('main'); runState.abandonRun(); runState.startRun(); sheet.value = null; screen.value = 'run'; }}>Start fresh</button>
+        <button class="btn primary" onClick={() => { runState.openSlot('main'); runState.abandonRun(); sheet.value = null; screen.value = 'map'; }}>Abandon it</button>
         <button class="btn" onClick={() => (sheet.value = null)}>Keep playing</button>
       </div>
     </>
@@ -72,6 +75,7 @@ function ConfirmNewRun() {
 }
 
 const THEMES: [ThemeChoice, string][] = [['system', 'Match phone'], ['light', 'Vellum'], ['dark', 'Night Vellum']];
+const STYLES: [ThemeChoice, string][] = [['newsprint', 'Newsprint'], ['neon', 'Neon Abacus']];
 const MOTIONS: [MotionChoice, string][] = [['system', 'Match phone'], ['reduced', 'Less'], ['full', 'Full']];
 const HANDS: [HandChoice, string][] = [['right', 'Right thumb'], ['left', 'Left thumb']];
 
@@ -123,7 +127,7 @@ function MenuSheet() {
       {s === 'run' && runState.run.value ? (
         <>
           <div class="section-label">This run</div>
-          <p>Code <strong class="code">{runState.run.value.seed}</strong>. Your run is saved after every move, so you can close the game anytime.</p>
+          <p>{runState.run.value.setup.station ? `${stationById(runState.run.value.setup.station)?.name}. ` : runState.run.value.daily ? 'The Daily Page. ' : ''}Code <strong class="code">{runState.run.value.seed}</strong>. Your run is saved after every move, so you can close the game anytime.</p>
           {runState.slot.value === 'main' ? (
             <div class="row-btns">
               <button class="btn" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>Abandon and start over</button>
@@ -138,6 +142,13 @@ function MenuSheet() {
           <button key={value} aria-pressed={theme.value === value} onClick={() => (theme.value = value)}>{label}</button>
         ))}
       </div>
+      {STYLES.some(([v]) => profile.value.owned.includes(v as never)) ? (
+        <div class="seg" role="group" aria-label="Styles">
+          {STYLES.filter(([v]) => profile.value.owned.includes(v as never)).map(([value, label]) => (
+            <button key={value} aria-pressed={theme.value === value} onClick={() => (theme.value = value)}>{label}</button>
+          ))}
+        </div>
+      ) : null}
       <div class="settings-grid">
         <div>
           <div class="section-label">Sound</div>
@@ -175,8 +186,9 @@ function MenuSheet() {
 
       <div class="section-label">How to play</div>
       <p>No number may repeat in a row or column. Each outlined cage shows a target in red; when its numbers make that target, it seals in gold.</p>
-      <p>A run is {RUN.rounds} rounds on one page. Each round deals you a few numbers and posts three commissions. Place at least all but one of them, then ink the round; a spare comes back in a later round. Anything on the page can move before you ink. While you hold a number, bright cells can take it and shaded ones can't.</p>
-      <p>All three commissions can always be met at once. Miss the required one and you spill a drop of ink; spill all {RUN.startInk} and the page is ruined. The other two pay gold, and so does every sealed cage when you ink. Gold buys the Redraw, the Lens and the Blotter. The numbers dealt over a run are exactly the ones the page needs, so in the final round the last of them go in and the page is full. Your score is the gold you kept, plus {RUN.inkBonus} for each drop of ink left.</p>
+      <p>A run is {RUN.rounds} rounds on one page (some stations differ). Each round deals you a few numbers and posts three commissions. Place at least all but one of them, then ink the round; a spare comes back in a later round. Anything on the page can move before you ink. While you hold a number, bright cells can take it and shaded ones can't.</p>
+      <p>All three commissions can always be met at once. Miss the required one and you spill a drop of ink; spill all {RUN.startInk} and the page is ruined. The other two pay gold, and so does every sealed cage when you ink. Gold buys the tools you carry. The numbers dealt over a run are exactly the ones the page needs, so in the final round the last of them go in and the page is full. Your score is the gold you kept, plus {RUN.inkBonus} for each drop of ink left.</p>
+      <p>Between runs, the scriptorium keeps what lasts. A filled page earns gold leaf: 1 for every 10 points and 5 for each new star. Leaf opens no stations by itself; filling a station's page opens the ones beyond it. Spend leaf on tools to carry, upgrades and styles.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.
@@ -227,6 +239,8 @@ export function Sheets() {
           : s.kind === 'menu' ? <MenuSheet />
           : s.kind === 'tool' ? <ToolSheet tool={s.tool} />
           : s.kind === 'round' ? <RoundSheet />
+          : s.kind === 'station' ? <StationSheet id={s.station} />
+          : s.kind === 'book' ? <BookSheet id={s.id} />
           : s.kind === 'transfer' ? <TransferSheet />
           : s.kind === 'confirm-new-run' ? <ConfirmNewRun /> : null}
       </div>

@@ -16,10 +16,20 @@ export const RUN = {
   inkBonus: 10,
 } as const;
 
+/** What each tool costs in gold when you use it during a run. */
 export const TOOLS = {
   redraw: 2,
   lens: 3,
   blotter: 5,
+  quill: 3,
+  gilder: 4,
+  eraser: 4,
+  inkwell: 10,
 } as const;
 
 export type ToolId = keyof typeof TOOLS;
+
+/** The tools every run carries unless the satchel says otherwise. */
+export const BASE_TOOLS: readonly ToolId[] = ['redraw', 'lens', 'blotter'];
+/** How many tools fit in the satchel, before and after the Second Strap. */
+export const SATCHEL = { slots: 3, strapSlots: 4 } as const;

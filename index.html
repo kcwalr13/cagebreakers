@@ -16,8 +16,8 @@
       // Paint the right background before the app loads, so a dark cabin never sees a white flash.
       try {
         var t = JSON.parse(localStorage.getItem('cagebreakers.prefs') || '{}').theme || 'system';
-        var d = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.className = d ? 'theme-dark' : 'theme-light';
+        var d = t === 'dark' || t === 'neon' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.className = (d ? 'theme-dark' : 'theme-light') + (t === 'newsprint' ? ' theme-newsprint' : t === 'neon' ? ' theme-neon' : '');
       } catch (e) {}
     </script>
   </head>

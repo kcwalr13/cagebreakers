@@ -1,11 +1,11 @@
 /**
- * Save codes: everything this phone remembers (runs, the Daily Page, best scores, settings),
+ * Save codes: everything this phone remembers (runs, the Daily Page, the scriptorium, settings),
  * packed into text you can paste on another phone. No account, no server.
  */
 import { storage } from './storage';
 
 const KEYS = [
-  'cagebreakers.run', 'cagebreakers.daily', 'cagebreakers.daily.best', 'cagebreakers.slot',
+  'cagebreakers.run', 'cagebreakers.daily', 'cagebreakers.daily.best', 'cagebreakers.slot', 'cagebreakers.meta', 'cagebreakers.meta.last',
   'cagebreakers.settings', 'cagebreakers.prefs', 'cagebreakers.coach', 'cagebreakers.m1.page',
 ];
 const PREFIX = 'CB1';

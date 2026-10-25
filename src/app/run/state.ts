@@ -3,9 +3,12 @@ import { type Posted, isMet, viewOf } from '../../core/commission';
 import { CELLS } from '../../core/grid';
 import { hintFor } from '../../core/rules';
 import type { CellHint } from '../PageView';
+import type { StationId } from '../../content/stations';
+import { setupFor } from '../../core/meta';
 import {
-  type RoundRecord, type RunAction, type RunState, act, inkBlocker, legalCells, migrateRun, newRun, pageOf, scoreOf, valuesOf,
+  type RoundRecord, type RunAction, type RunState, act, inkBlocker, legalCells, migrateRun, newRun, runPage, scoreOf, valuesOf,
 } from '../../core/run';
+import { profile, runId, settle } from '../meta';
 import { dailySeed, normalizeSeed } from '../../core/seed';
 import { drag } from '../input';
 import { sheet } from '../nav';
@@ -34,8 +37,8 @@ storage.remove('cagebreakers.codex');
 
 /** The number in hand, by token id. */
 export const selection = signal<number | null>(null);
-/** Set while the Lens waits for a cell. */
-export const lensMode = signal(false);
+/** A tool waiting for its target: the Lens wants an empty cell, the Eraser a printed number. */
+export const aim = signal<'lens' | 'eraser' | null>(null);
 /** The commission lit up on the page. */
 export const focus = signal<number | null>(null);
 export const message = signal<{ text: string; warn: boolean; id: number } | null>(null);
@@ -74,7 +77,7 @@ export function today(d = new Date()): string {
 }
 
 function resetView() {
-  selection.value = null; lensMode.value = false; focus.value = null; lastInk.value = null;
+  selection.value = null; aim.value = null; focus.value = null; lastInk.value = null;
 }
 
 /** Switches to a slot, resuming whatever run it holds. */
@@ -87,20 +90,32 @@ export function startDaily(day = today(), fresh = false) {
   const saved = loadSlot('daily');
   batch(() => {
     slot.value = 'daily';
-    run.value = saved?.daily === day && !fresh ? saved : newRun(dailySeed(day), day);
+    run.value = saved?.daily === day && !fresh ? saved : newRun(dailySeed(day), { daily: day, id: runId() });
     resetView();
   });
 }
 
+/** Starts a run at a map station, with the satchel and upgrades from the scriptorium. */
+export function startStation(station: StationId, seed = freshSeed()) {
+  batch(() => { slot.value = 'main'; run.value = newRun(seed, { setup: setupFor(profile.value, station), id: runId() }); resetView(); });
+}
+
+/** Starts a run at the first station. */
 export function startRun(seed = freshSeed()) {
-  batch(() => { slot.value = 'main'; run.value = newRun(seed); resetView(); });
+  startStation('copy-desk', seed);
 }
 
 export function abandonRun() {
   batch(() => { run.value = null; resetView(); });
 }
 
-export const page = computed(() => (run.value ? pageOf(run.value.seed) : null));
+export const page = computed(() => (run.value ? runPage(run.value) : null));
+
+// A finished run is counted into the scriptorium once.
+effect(() => {
+  const s = run.value;
+  if (s && s.phase !== 'arrange') settle(s, today());
+});
 export const values = computed(() => (run.value ? valuesOf(run.value) : new Array<number>(CELLS).fill(0)));
 export const view = computed(() => (page.value ? viewOf(page.value, values.value) : null));
 export const sealed = computed(() => view.value?.sealed ?? new Set<number>());
@@ -211,11 +226,14 @@ export function placeToken(id: number, cell: number): boolean {
   return dispatch({ type: 'place', id, cell }, cell);
 }
 
-/** Taps on the page while the Lens is waiting. */
-export function useLens(cell: number) {
-  if (dispatch({ type: 'lens', cell }, cell)) {
-    lensMode.value = false;
+/** A tap on the page while a tool waits for its target. */
+export function useAim(cell: number) {
+  const tool = aim.value;
+  if (!tool) return;
+  if (dispatch({ type: tool, cell }, cell)) {
+    aim.value = null;
     const p = page.value!;
-    say(`The Lens shows a ${p.solution[cell]} belongs there.`, false, 3600);
+    if (tool === 'lens') say(`The Lens shows a ${p.solution[cell]} belongs there.`, false, 3600);
+    else say('The number is yours now: move it like any other, but keep it on the page.', false, 3600);
   }
 }

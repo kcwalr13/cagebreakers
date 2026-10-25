@@ -11,7 +11,7 @@ import { readJson, storage, writeJson } from './storage';
 
 /** What the player is holding: a number from the tray, or a number already on the page. */
 export type Selection = { kind: 'tray'; n: number } | { kind: 'cell'; cell: number };
-export type ThemeChoice = 'system' | 'light' | 'dark';
+export type ThemeChoice = 'system' | 'light' | 'dark' | 'newsprint' | 'neon';
 
 const SAVE_KEY = 'cagebreakers.m1.page';
 const PREFS_KEY = 'cagebreakers.prefs';
@@ -212,18 +212,22 @@ export function exposeTestHooks() {
     place,
     newPage,
   };
-  void Promise.all([import('./run/state'), import('../core/run'), import('../core/commission'), import('../core/rng')]).then(([r, core, cm, rng]) => {
+  void Promise.all([import('./run/state'), import('../core/run'), import('../core/commission'), import('../core/rng'), import('./meta')]).then(([r, core, cm, rng, m]) => {
     (window as unknown as { __run: unknown }).__run = {
       state: () => r.run.value,
       dispatch: r.dispatch,
       startRun: r.startRun,
-      page: () => (r.run.value ? core.pageOf(r.run.value.seed) : null),
+      startStation: r.startStation,
+      /** The scriptorium profile, and a way to set it for tests. */
+      profile: () => m.profile.value,
+      setProfile(p: unknown) { m.profile.value = p as never; },
+      page: () => (r.run.value ? core.runPage(r.run.value) : null),
       /** Cells a number could move to, for test autopilots. */
       legalCells: (id: number) => core.legalCells(r.run.value!, id),
       /** Puts every number in hand onto a cell where the hidden solution has it. */
       solveHand() {
         let st = r.run.value!;
-        const p = core.pageOf(st.seed);
+        const p = core.runPage(st);
         for (const t of st.tokens.filter((x) => x.cell < 0)) {
           const cell = Array.from({ length: 36 }, (_, c) => c).find((c) => !p.stones[c] && p.solution[c] === t.n && !st.tokens.some((o) => o.cell === c));
           if (cell !== undefined && r.dispatch({ type: 'place', id: t.id, cell })) st = r.run.value!;
@@ -232,7 +236,7 @@ export function exposeTestHooks() {
       /** Milliseconds to post this round's commissions afresh, averaged, for timing on the phone. */
       benchPost(times = 10) {
         const st = r.run.value!;
-        const p = core.pageOf(st.seed);
+        const p = core.runPage(st);
         const holding = { kept: st.tokens.filter((t) => t.round < st.round).map((t) => t.n), dealt: core.dealtThisRound(st).map((t) => t.n), need: st.need };
         const now = cm.viewOf(p, core.valuesOf({ ...st, tokens: st.tokens.filter((t) => t.round < st.round) }));
         const t0 = performance.now();

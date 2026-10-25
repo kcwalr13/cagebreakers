@@ -1,10 +1,13 @@
 import { useEffect } from 'preact/hooks';
 import { RUN } from '../content/balance';
+import { stationById } from '../content/stations';
 import { Icon } from './Icon';
 import { LIFT_PX, drag } from './input';
 import { screen, sheet, updateReady } from './nav';
 import { RunScreen } from './run/Screens';
-import { dailyBest, lensMode, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, startRun, today } from './run/state';
+import { aim, dailyBest, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, today } from './run/state';
+import { LibraryScreen, Leaf, MapScreen, ShopScreen } from './Scriptorium';
+import { profile, stars } from './meta';
 import { Sheets } from './Sheets';
 import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
@@ -51,7 +54,7 @@ function Title() {
   return (
     <div class="column title-screen">
       <header class="header">
-        <div class="title" />
+        <div class="title"><Leaf n={profile.value.leaf} /></div>
         <button class="icon-btn" aria-label="Menu" onClick={() => (sheet.value = { kind: 'menu' })}><Icon name="menu" /></button>
       </header>
       <div class="wordmark" aria-label="Cagebreakers">
@@ -70,20 +73,22 @@ function Title() {
         {live ? (
           <button class="menu-card primary" onClick={() => { openSlot('main'); screen.value = 'run'; }}>
             <span class="mc-title">Continue run</span>
-            <span class="mc-sub">Round {live.round} of {RUN.rounds}, {live.ink} ink, {live.gold} gold.</span>
+            <span class="mc-sub">{live.setup.station ? `${stationById(live.setup.station)?.name}: r` : 'R'}ound {live.round} of {live.setup.rounds}, {live.ink} ink, {live.gold} gold.</span>
           </button>
-        ) : (
-          <button class="menu-card primary" onClick={() => { startRun(); screen.value = 'run'; }}>
-            <span class="mc-title">New run</span>
-            <span class="mc-sub">Each round deals more numbers and three commissions. Rearrange to meet them, until the page is full.</span>
-          </button>
-        )}
+        ) : null}
+        <button class={`menu-card${live ? '' : ' primary'}`} onClick={() => (screen.value = 'map')}>
+          <span class="mc-title"><Icon name="map" class="ico inline-ico big" /> The Map</span>
+          <span class="mc-sub">{profile.value.filled.length
+            ? `Six stations, each a page with a twist. ${stars.value.have} of ${stars.value.of} stars.`
+            : 'Each round deals more numbers and three commissions. Rearrange to meet them, until the page is full. Start at the Copy Desk.'}</span>
+        </button>
         <button class="menu-card" onClick={() => { startDaily(); screen.value = 'run'; }}>
           <span class="mc-title">Daily Page <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span></span>
           <span class="mc-sub">{dailyLine()}</span>
         </button>
         <div class="title-minor">
-          {live ? <button class="minor-card" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>New run</button> : null}
+          <button class="minor-card" onClick={() => (screen.value = 'shop')}><Icon name="scriptorium" class="ico inline-ico" /> Scriptorium</button>
+          <button class="minor-card" onClick={() => (screen.value = 'library')}><Icon name="library" class="ico inline-ico" /> Library</button>
           <button class="minor-card" onClick={() => (screen.value = 'toy')}>Page toy</button>
         </div>
       </nav>
@@ -97,7 +102,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      sheet.value = null; toySelection.value = null; runSelection.value = null; lensMode.value = false;
+      sheet.value = null; toySelection.value = null; runSelection.value = null; aim.value = null;
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -106,7 +111,8 @@ export function App() {
   const s = screen.value;
   return (
     <div class="app">
-      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : <RunScreen />}
+      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'map' ? <MapScreen /> : s === 'shop' ? <ShopScreen />
+        : s === 'library' ? <LibraryScreen /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

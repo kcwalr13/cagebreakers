@@ -32,7 +32,9 @@ test('a run can be started and played with the network off', async ({ page, cont
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller), { timeout: 15_000 }).toBe(true);
   await context.setOffline(true);
   await page.reload();
-  await page.getByRole('button', { name: /New run/ }).click();
+  await page.getByRole('button', { name: /The Map/ }).click();
+  await page.getByRole('button', { name: /The Copy Desk/ }).click();
+  await page.getByRole('button', { name: 'Begin' }).click();
   await expect(page.locator('.commission')).toHaveCount(3);
   await expect(page.locator('.hand-slot')).toHaveCount(4);
   await page.locator('.hand-slot').first().click();

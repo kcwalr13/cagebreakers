@@ -35,5 +35,16 @@ export const tip = computed<Tip | null>(() => {
   return TIPS.find((t) => !coachSeen.value.includes(t.id) && t.when(s)) ?? null;
 });
 
+/** Tips for the scriptorium's screens, shown once each on first visit. */
+export const SCREEN_TIPS = {
+  map: 'Each station is a page with a twist. Fill one to open the stations beyond it; the score marks earn stars, and every new star pays extra gold leaf.',
+  shop: 'Gold leaf buys things that stay: tools to carry, upgrades for every map run, and styles. Choose which tools to carry when you begin a station.',
+  library: 'Every page you fill is bound here, with its score and stars.',
+} as const;
+
+/** The screen tip to show, if it hasn't been seen and tips are on. */
+export const screenTip = (id: keyof typeof SCREEN_TIPS): string | null =>
+  coachOff.value || coachSeen.value.includes(id) ? null : SCREEN_TIPS[id];
+
 export function dismissTip(id: string) { if (!coachSeen.value.includes(id)) coachSeen.value = [...coachSeen.value, id]; }
 export function resetTips() { coachSeen.value = []; coachOff.value = false; }

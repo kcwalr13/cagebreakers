@@ -6,12 +6,14 @@ import { CELLS } from './grid';
 import { createRng } from './rng';
 import { boardIsLatin } from './rules';
 import {
-  type RunAction, type RunState, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun, pageOf, replay,
-  scoreOf, valuesOf, viewNow,
+  type RunAction, type RunSetup, type RunState, STANDARD_SETUP, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun,
+  pageOf, replay, runPage, scoreOf, valuesOf, viewNow,
 } from './run';
+import { STATIONS } from '../content/stations';
+import { NEW_PROFILE, setupFor } from './meta';
 
 const solutionCell = (s: RunState, n: number) => {
-  const p = pageOf(s.seed);
+  const p = runPage(s);
   for (let c = 0; c < CELLS; c++) if (!p.stones[c] && p.solution[c] === n && !s.tokens.some((t) => t.cell === c)) return c;
   return -1;
 };
@@ -25,19 +27,19 @@ function placeOnSolution(s: RunState, count = Infinity): RunState {
   return s;
 }
 
-function openCounts(seed: string): number[] {
-  const p = pageOf(seed);
+function openCounts(s: RunState): number[] {
+  const p = runPage(s);
   const out = new Array<number>(7).fill(0);
   for (let c = 0; c < CELLS; c++) if (!p.stones[c]) out[p.solution[c]!]!++;
   return out;
 }
 
 function checkInvariants(s: RunState) {
-  const p = pageOf(s.seed);
+  const p = runPage(s);
   // The bag and the tokens together are exactly the page's open cells.
   const counts = s.bag.slice();
   for (const t of s.tokens) counts[t.n]!++;
-  expect(counts).toEqual(openCounts(s.seed));
+  expect(counts).toEqual(openCounts(s));
   // Tokens stand on distinct open cells, and the page obeys the Latin rule.
   const cells = s.tokens.filter((t) => t.cell >= 0).map((t) => t.cell);
   expect(new Set(cells).size).toBe(cells.length);
@@ -45,13 +47,13 @@ function checkInvariants(s: RunState) {
   expect(boardIsLatin(valuesOf(s))).toBe(true);
   expect(s.gold).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeGreaterThanOrEqual(0);
-  expect(s.ink).toBeLessThanOrEqual(RUN.startInk);
+  expect(s.ink).toBeLessThanOrEqual(s.setup.startInk);
   if (s.phase === 'arrange') checkProof(s);
 }
 
 /** The round's proof is a legal layout of numbers you could end the round with, meeting all three commissions. */
 function checkProof(s: RunState) {
-  const p = pageOf(s.seed);
+  const p = runPage(s);
   const proof = s.proof!;
   expect(proof).toHaveLength(CELLS);
   expect(boardIsLatin(proof)).toBe(true);
@@ -80,7 +82,7 @@ describe('a run', () => {
 
   it('refuses a number its row or column already holds, and printed cells', () => {
     let s = newRun('LEGALA');
-    const p = pageOf(s.seed);
+    const p = runPage(s);
     const t = dealtThisRound(s)[0]!;
     const legal = new Set(legalCells(s, t.id));
     for (let c = 0; c < CELLS; c++) {
@@ -224,7 +226,7 @@ describe('a run', () => {
 
   it('shows a hidden number with the Lens', () => {
     let s = { ...newRun('LENSES'), gold: 5 };
-    const p = pageOf(s.seed);
+    const p = runPage(s);
     const stone = p.stones.findIndex((n) => n > 0);
     expect(act(s, { type: 'lens', cell: stone }).ok).toBe(false);
     const cell = p.stones.findIndex((n) => n === 0);
@@ -242,19 +244,19 @@ describe('a run', () => {
   });
 });
 
-/** A state-aware random player: mostly sensible moves, plus refusals and tool use. */
-function randomActions(seed: string, steps: number, salt: number): { state: RunState; actions: RunAction[] } {
+/** A state-aware random player: mostly sensible moves, plus refusals and every tool. */
+function randomActions(seed: string, steps: number, salt: number, setup: RunSetup = STANDARD_SETUP): { state: RunState; actions: RunAction[] } {
   const rng = createRng(`${seed}:${salt}`);
-  let s = newRun(seed);
+  let s = newRun(seed, { setup });
   const actions: RunAction[] = [];
   for (let i = 0; i < steps && s.phase === 'arrange'; i++) {
     const roll = rng.next();
     let a: RunAction;
-    if (roll < 0.6) {
+    if (roll < 0.55) {
       const t = rng.pick(s.tokens);
       const legal = legalCells(s, t.id);
       a = { type: 'place', id: t.id, cell: legal.length && rng.next() < 0.85 ? rng.pick(legal) : rng.int(-1, CELLS - 1) };
-    } else if (roll < 0.8) {
+    } else if (roll < 0.75) {
       if (inkBlocker(s)) {
         for (const t of s.tokens) if (t.cell < 0 && (t.round < s.round || rng.next() < 0.8)) {
           const c = solutionCell(s, t.n);
@@ -262,9 +264,11 @@ function randomActions(seed: string, steps: number, salt: number): { state: RunS
         }
       }
       a = { type: 'ink' };
-    } else if (roll < 0.9) a = { type: 'redraw' };
-    else if (roll < 0.95) a = { type: 'lens', cell: rng.int(0, CELLS - 1) };
-    else a = { type: 'blotter' };
+    } else {
+      // Tools: give the run gold sometimes so they get used, through an action-free state edit.
+      const tool = rng.pick(['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] as const);
+      a = tool === 'lens' || tool === 'eraser' ? { type: tool, cell: rng.int(0, CELLS - 1) } : { type: tool };
+    }
     const r = act(s, a);
     if (!r.ok) expect(r.state).toBe(s);
     s = r.state;
@@ -274,14 +278,25 @@ function randomActions(seed: string, steps: number, salt: number): { state: RunS
   return { state: s, actions };
 }
 
+/** Every station's setup, carrying every tool, with gold to spend. */
+const RICH: RunSetup[] = [
+  { ...STANDARD_SETUP, startGold: 40, tools: ['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] },
+  ...STATIONS.map((st) => ({ ...setupFor(NEW_PROFILE, st.id), startGold: 40, tools: ['redraw', 'lens', 'blotter', 'quill', 'gilder', 'eraser', 'inkwell'] as RunSetup['tools'] })),
+];
+
 describe('random play', () => {
-  it('never breaks the rules, and replays exactly from seed and actions', () => {
+  it('never breaks the rules, and replays exactly from seed, setup and actions', () => {
     fc.assert(
-      fc.property(fc.constantFrom('RNDAAA', 'RNDBBB', 'RNDCCC', 'RNDDDD', 'RNDEEE', 'RNDFFF', 'RNDGGG', 'RNDHHH'), fc.integer({ min: 0, max: 1e6 }), (seed, salt) => {
-        const { state, actions } = randomActions(seed, 120, salt);
-        expect(replay(seed, actions)).toEqual(state);
-      }),
-      { numRuns: 40, seed: 20261024 },
+      fc.property(
+        fc.constantFrom('RNDAAA', 'RNDBBB', 'RNDCCC', 'RNDDDD', 'RNDEEE', 'RNDFFF', 'RNDGGG', 'RNDHHH'),
+        fc.integer({ min: 0, max: 1e6 }),
+        fc.constantFrom(...RICH),
+        (seed, salt, setup) => {
+          const { state, actions } = randomActions(seed, 120, salt, setup);
+          expect(replay(seed, actions, { setup })).toEqual(state);
+        },
+      ),
+      { numRuns: 50, seed: 20261024 },
     );
   });
 });

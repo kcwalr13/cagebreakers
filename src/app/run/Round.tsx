@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { RUN, TOOLS, type ToolId } from '../../content/balance';
 import { cellsOf, describe, readout } from '../../core/commission';
-import { bagCount, inHand, tokenAt } from '../../core/run';
+import { TOOL_NAMES, bagCount, inHand, tokenAt } from '../../core/run';
 import { dismissTip, tip } from '../coach';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
@@ -10,21 +10,21 @@ import { screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
-  blocker, blockers, dispatch, focus, hints, holding, justPlaced, justSealed, legal, lensMode, message, met, page, placeToken, refused,
-  revealed, run, say, sealed, selection, useLens, view,
+  blocker, blockers, dispatch, focus, hints, holding, justPlaced, justSealed, legal, aim, message, met, page, placeToken, refused,
+  revealed, run, say, sealed, selection, useAim, view,
 } from './state';
 
 const handlers: PressHandlers = {
   lookAt(cell) {
     const s = run.value;
-    if (!s || lensMode.value) return null;
+    if (!s || aim.value) return null;
     const t = tokenAt(s, cell);
     return t ? { n: t.n, fresh: t.round === s.round } : null;
   },
   lookOf(key) {
     const s = run.value;
     const t = s?.tokens.find((x) => x.id === Number(key));
-    return s && t && !lensMode.value ? { n: t.n, fresh: t.round === s.round } : null;
+    return s && t && !aim.value ? { n: t.n, fresh: t.round === s.round } : null;
   },
   drop(from, cell) {
     const s = run.value;
@@ -39,14 +39,14 @@ const handlers: PressHandlers = {
     selection.value = null;
   },
   tapItem(key) {
-    if (lensMode.value) return;
+    if (aim.value) return;
     const id = Number(key);
     selection.value = selection.value === id ? null : id;
   },
   tapCell(cell) {
     const s = run.value, p = page.value;
     if (!s || !p) return;
-    if (lensMode.value) { useLens(cell); return; }
+    if (aim.value) { useAim(cell); return; }
     const here = tokenAt(s, cell);
     const sel = selection.value;
     if (sel !== null) {
@@ -142,16 +142,16 @@ function Board() {
   const hover = d && d.over >= 0 && h ? { cell: d.over, ok: d.over === h.origin || !!legal.value?.has(d.over) } : null;
   const f = focus.value;
   const marked = f !== null && s.posted[f] ? new Set(cellsOf(s.posted[f]!.c, p)) : undefined;
-  const lensTargets = lensMode.value
+  const aimTargets = aim.value === 'lens'
     ? new Set(p.stones.map((v, c) => (!v && !s.revealed.includes(c) && !tokenAt(s, c) ? c : -1)).filter((c) => c >= 0))
-    : undefined;
+    : aim.value === 'eraser' ? new Set(p.stones.map((v, c) => (v ? c : -1)).filter((c) => c >= 0)) : undefined;
   return (
     <div class="board-wrap" onPointerDown={(e) => pressBoard(e as unknown as PointerEvent)}>
       <Coach />
       <PageView
         id="run" svgRef={setBoardElement} page={p} pieces={pieces} sealed={sealed.value} flashing={justSealed.value}
-        hints={lensMode.value ? undefined : hints.value} blockers={lensMode.value ? undefined : blockers.value} hover={hover} refused={refused.value}
-        revealed={revealed.value} targets={lensTargets} marked={marked}
+        hints={aim.value ? undefined : hints.value} blockers={aim.value ? undefined : blockers.value} hover={hover} refused={refused.value}
+        revealed={revealed.value} targets={aimTargets} marked={marked}
         label={`Your page: ${s.tokens.filter((t) => t.cell >= 0).length} numbers placed, ${sealed.value.size} of ${p.cages.length} cages sealed`}
       />
     </div>
@@ -162,11 +162,11 @@ function Status() {
   const s = run.value!;
   const m = message.value;
   if (m) return <div class={`status${m.warn ? ' warn' : ''}`} role="status" key={m.id}>{m.text}</div>;
-  if (lensMode.value) {
+  if (aim.value) {
     return (
       <div class="status">
-        <span><Icon name="lens" class="ico inline-ico" /> Tap an empty cell to see its hidden number.</span>
-        <button class="pill-btn" onClick={() => (lensMode.value = false)}>Cancel</button>
+        <span><Icon name={aim.value} class="ico inline-ico" /> {aim.value === 'lens' ? 'Tap an empty cell to see its hidden number.' : 'Tap a printed number to lift it into your hand.'}</span>
+        <button class="pill-btn" onClick={() => (aim.value = null)}>Cancel</button>
       </div>
     );
   }
@@ -219,27 +219,29 @@ function Hand() {
   );
 }
 
-const TOOL_ICON: Record<ToolId, IconName> = { redraw: 'redraw', lens: 'lens', blotter: 'blotter' };
-const TOOL_NAME: Record<ToolId, string> = { redraw: 'Redraw', lens: 'Lens', blotter: 'Blotter' };
+export const TOOL_ICON: Record<ToolId, IconName> = {
+  redraw: 'redraw', lens: 'lens', blotter: 'blotter', quill: 'quill', gilder: 'gilder', eraser: 'eraser', inkwell: 'inkwell',
+};
+const TOOL_NAME = TOOL_NAMES;
 
 function Controls() {
   const s = run.value!;
   const final = s.round === RUN.rounds;
-  const tools: ToolId[] = final ? ['lens'] : ['redraw', 'lens', 'blotter'];
+  const tools = s.setup.tools;
   const ink = () => {
     const why = blocker.value;
     if (why) { say(`${why}.`, true); return; }
-    selection.value = null; lensMode.value = false;
+    selection.value = null; aim.value = null;
     dispatch({ type: 'ink' });
   };
   return (
-    <div class="run-controls">
+    <div class={`run-controls${tools.length > 3 ? ' four' : ''}`}>
       {tools.map((tool) => (
         <button
           key={tool}
-          class={`btn tool${tool === 'blotter' && s.blotter ? ' toggled' : ''}`}
+          class={`btn tool${(tool === 'blotter' && s.blotter) || (tool === 'gilder' && s.gilded) ? ' toggled' : ''}`}
           aria-label={`${TOOL_NAME[tool]}, ${TOOLS[tool]} gold`}
-          onClick={() => { lensMode.value = false; sheet.value = { kind: 'tool', tool }; }}
+          onClick={() => { aim.value = null; sheet.value = { kind: 'tool', tool }; }}
         >
           <span class="tool-top"><Icon name={TOOL_ICON[tool]} /><span class="tool-cost"><Icon name="gold" class="ico gold xs" />{TOOLS[tool]}</span></span>
           <span class="tool-name">{TOOL_NAME[tool]}</span>
