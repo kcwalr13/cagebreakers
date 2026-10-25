@@ -195,6 +195,24 @@ test('a garden resumes after the game is closed', async ({ page: p }) => {
   await expect(p.locator('.hud-round')).toContainText('Week 3 of 6');
 });
 
+test('a new week is announced over the garden, then gets out of the way', async ({ page: p }, info) => {
+  await runOn(p, 'WKTRN4');
+  await R(p, `(r) => { r.solveHand(); r.dispatch({ type: 'ink' }); }`);
+  await p.getByRole('button', { name: 'On to week 2' }).click();
+  const card = p.locator('.week-card');
+  await expect(card).toContainText('Week 2');
+  await expect(card).toContainText(/\d new numbers?, 3 new requests/);
+  await p.screenshot({ path: info.outputPath('m6-12-new-week.png') });
+  // It never blocks the garden, and it's gone in a moment.
+  expect(await card.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+  await expect(card).toHaveCount(0, { timeout: 3000 });
+  await expect(p.locator('.hud-round')).toContainText('Week 2 of 6');
+  // Closing the summary any other way announces the week too.
+  await R(p, `(r) => { r.solveHand(); r.dispatch({ type: 'ink' }); }`);
+  await p.keyboard.press('Escape');
+  await expect(card).toContainText('Week 3');
+});
+
 test('a whole garden fills, then is harvested and scored', async ({ page: p }, info) => {
   test.setTimeout(90_000);
   await runOn(p, 'WHQKE6');
@@ -204,6 +222,7 @@ test('a whole garden fills, then is harvested and scored', async ({ page: p }, i
     if (r === 3) await p.screenshot({ path: info.outputPath('m6-08-midrun.png') });
   }
   await expect(p.locator('.hud-round')).toContainText('Harvest week');
+  await expect(p.locator('.week-card')).toContainText('Harvest week');
   await expect(p.locator('.commission').first()).toContainText('Fill every square');
   await p.screenshot({ path: info.outputPath('m6-09-final-round.png') });
   await R(p, '(r) => r.solveHand()');

@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { TOOLS, type ToolId } from '../../content/balance';
 import { cellsOf, describe, readout } from '../../core/commission';
-import { type RunState, type Token, TOOL_NAMES, inHand, placementOf, tokenAt } from '../../core/run';
+import { type RunState, type Token, TOOL_NAMES, dealtThisRound, inHand, placementOf, tokenAt } from '../../core/run';
 import { dismissTip, tip } from '../coach';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
@@ -11,8 +11,11 @@ import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
   blocker, blockers, canPutBack, clearPage, dispatch, focus, hints, holding, justPlaced, justSealed, legal, aim, message, met, page,
-  placeToken, putBack, refused, revealed, run, say, sealed, selection, useAim, view,
+  placeToken, putBack, refused, revealed, run, say, sealed, selection, useAim, view, weekTurn,
 } from './state';
+
+/** How long the new week's card shows over the garden. */
+const WEEK_CARD_MS = 1500;
 
 /** The last tap that picked up a number on the page, so a second tap on it can send it home. */
 let lastPick = { cell: -1, at: 0 };
@@ -83,7 +86,7 @@ function Hud() {
   return (
     <header class="header hud-row">
       <button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button>
-      <span class="hud-round">{final ? 'Harvest week' : <>Week <b>{s.round}</b> of {s.setup.rounds}</>}</span>
+      <span class={`hud-round${weekTurn.value ? ' turned' : ''}`}>{final ? 'Harvest week' : <>Week <b>{s.round}</b> of {s.setup.rounds}</>}</span>
       <Ink ink={s.ink} max={s.setup.startInk} />
       <span class="hud-stat" aria-label={`${s.gold} ${s.gold === 1 ? 'coin' : 'coins'}`}><Icon name="gold" class="ico gold" /><b>{s.gold}</b></span>
       <button class="icon-btn" aria-label="Menu" onClick={() => (sheet.value = { kind: 'menu' })}><Icon name="menu" /></button>
@@ -94,12 +97,12 @@ function Hud() {
 function Commissions() {
   const s = run.value!, p = page.value!, v = view.value!;
   return (
-    <ol class="commissions" aria-label="This week's requests">
+    <ol class={`commissions${weekTurn.value ? ' arrive' : ''}`} aria-label="This week's requests">
       {s.posted.map((c, i) => {
         const ok = met.value[i];
         const on = focus.value === i;
         return (
-          <li key={i}>
+          <li key={i} style={`--i:${i}`}>
             <button
               class={`commission${c.required ? ' required' : ''}${ok ? ' met' : ''}${on ? ' focused' : ''}`}
               aria-pressed={on}
@@ -120,6 +123,33 @@ function Commissions() {
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * The new week, announced over the garden once the last week's summary closes: the board looks
+ * the same from one week to the next, so this card (with the requests and numbers arriving behind
+ * it) is what says a week has passed.
+ */
+function WeekCard() {
+  const t = weekTurn.value;
+  useEffect(() => {
+    if (!t) return;
+    const timer = setTimeout(() => { if (weekTurn.value?.id === t.id) weekTurn.value = null; }, WEEK_CARD_MS);
+    return () => clearTimeout(timer);
+  }, [t?.id]);
+  const s = run.value!;
+  if (!t || t.round !== s.round) return null;
+  const final = s.round === s.setup.rounds;
+  const n = dealtThisRound(s).length;
+  const numbers = `${n} ${n === 1 ? 'number' : 'numbers'}`;
+  const requests = s.posted.length;
+  return (
+    <div class="week-card" key={t.id} role="status" aria-live="polite">
+      <Icon name="sun" class="ico week-sun" />
+      <span class="week-title">{final ? 'Harvest week' : `Week ${s.round}`}</span>
+      <span class="week-line">{final ? `The last ${numbers}: fill the garden.` : `${n} new ${n === 1 ? 'number' : 'numbers'}, ${requests} new ${requests === 1 ? 'request' : 'requests'}`}</span>
+    </div>
   );
 }
 
@@ -158,6 +188,7 @@ function Board() {
   return (
     <div class="board-wrap" onPointerDown={(e) => pressBoard(e as unknown as PointerEvent)}>
       <Coach />
+      <WeekCard />
       <PageView
         id="run" svgRef={setBoardElement} page={p} pieces={pieces} sealed={sealed.value} flashing={justSealed.value}
         hints={aim.value ? undefined : hints.value} blockers={aim.value ? undefined : blockers.value} hover={hover} refused={refused.value}
@@ -224,16 +255,18 @@ function Hand() {
   const s = run.value!;
   const hand = inHand(s);
   const sel = selection.value;
+  const dealing = !!weekTurn.value;
   return (
     <div class="hand" role="toolbar" aria-label="Your numbers to plant">
       <div class="hand-tokens">
-        {stacks(hand).map(([n, ts]) => {
+        {stacks(hand).map(([n, ts], i) => {
           // Equal numbers share one stack; pressing it takes one of them.
           const t = ts.find((x) => x.id === sel) ?? ts[0]!;
           return (
             <button
               key={n}
-              class={`hand-slot${sel === t.id ? ' selected' : ''}`}
+              class={`hand-slot${sel === t.id ? ' selected' : ''}${dealing ? ' dealt' : ''}`}
+              style={`--i:${i}`}
               data-count={ts.length}
               aria-label={ts.length > 1 ? `Number ${n}, ${ts.length} in your basket` : `Number ${n}`}
               aria-pressed={sel === t.id}

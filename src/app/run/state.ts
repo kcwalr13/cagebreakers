@@ -46,6 +46,20 @@ export const justPlaced = signal(-1);
 export const justSealed = signal<Set<number>>(new Set());
 export const refused = signal<{ cell: number; id: number } | null>(null);
 /** The round just inked, for the result sheet: what was posted, what was met, what it paid. */
+/**
+ * Set when the week's summary closes and the garden moves on to a new week, so the round screen
+ * can show the change: the board itself looks the same, so the new week needs announcing.
+ */
+export const weekTurn = signal<{ id: number; round: number } | null>(null);
+let turns = 0;
+let shownSheet = sheet.peek();
+effect(() => {
+  const now = sheet.value;
+  const s = run.peek();
+  if (shownSheet?.kind === 'round' && now?.kind !== 'round' && s?.phase === 'arrange') weekTurn.value = { id: ++turns, round: s.round };
+  shownSheet = now;
+});
+
 export const lastInk = signal<{ record: RoundRecord; posted: Posted[]; met: boolean[]; spare: number[] } | null>(null);
 
 effect(() => {
