@@ -14,6 +14,30 @@ const flower = (x, y, k) => [[0, -4.6], [4.4, -1.4], [2.7, 3.8], [-2.7, 3.8], [-
   .map(([dx, dy]) => `<circle cx="${x + dx * k}" cy="${y + dy * k}" r="${3.9 * k}" fill="#E08E9A"/>`).join('')
   + `<circle cx="${x}" cy="${y}" r="${2.6 * k}" fill="#F2C14E"/>`;
 
+/**
+ * Android crops a maskable icon to its own shape, keeping only the middle 80% circle for sure, so the
+ * maskable icon draws the same plot smaller, all of it inside that circle.
+ */
+function maskableDesign() {
+  const cx = 262, cy = 284, r = 84;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E4EDC6"/><stop offset=".45" stop-color="#A9C47A"/><stop offset=".55" stop-color="#CADB9C"/><stop offset="1" stop-color="#86A45A"/>
+    </linearGradient>
+    <pattern id="t" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r="2.4" fill="rgba(60,90,30,.24)"/></pattern>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)"/>
+  <rect width="512" height="512" fill="url(#t)"/>
+  <rect x="118" y="118" width="276" height="276" fill="none" stroke="#26331F" stroke-width="14"/>
+  <text x="138" y="178" font-family="Fraunces" font-style="italic" font-weight="600" font-size="46" fill="#7C3418">12+</text>
+  ${flower(352, 162, 5)}
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="#34452B"/>
+  <circle cx="${cx}" cy="${cy}" r="${r - 8}" fill="none" stroke="rgba(245,243,231,.4)" stroke-width="3.5"/>
+  <text x="${cx}" y="${cy + r * 0.42}" text-anchor="middle" font-family="Fraunces" font-weight="800" font-size="${r * 1.22}" fill="#F5F3E7">6</text>
+</svg>`;
+}
+
 function design({ maskable = false, framed = true } = {}) {
   const tokenR = maskable ? 120 : 146;
   const cx = maskable ? 256 : 270, cy = maskable ? 276 : 292;
@@ -46,7 +70,7 @@ const shots = [
   ['icon-512.png', 512, design()],
   ['icon-192.png', 192, design()],
   ['apple-touch-icon.png', 180, design({ framed: false })],
-  ['icon-maskable-512.png', 512, design({ maskable: true, framed: false })],
+  ['icon-maskable-512.png', 512, maskableDesign()],
 ];
 for (const [file, size, svg] of shots) {
   const p = await browser.newPage({ viewport: { width: 512, height: 512 }, deviceScaleFactor: size / 512 });
