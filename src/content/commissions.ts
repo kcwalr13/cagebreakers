@@ -28,8 +28,7 @@ export const REQUIRED_FROM: Partial<Record<CommissionKind, number>> = {
 
 /** Which kinds can be bounties, and from which round. */
 export const BOUNTY_FROM: Partial<Record<CommissionKind, number>> = {
-  'line-min': 1, 'seal-op': 1, 'seal-count': 1, 'seal-cage': 1, zone: 2, 'no-number': 2, 'line-max': 2,
-  'diagonal-min': 2, 'parity-line': 3, 'fill-line': 3, 'empty-cage': 3, 'no-seal-line': 3, 'equal-lines': 4,
+  'line-min': 1, 'seal-op': 1, 'seal-count': 1, 'seal-cage': 1, zone: 1, 'diagonal-min': 1, 'no-number': 2, 'line-max': 2, 'parity-line': 3, 'fill-line': 3, 'empty-cage': 3, 'no-seal-line': 3, 'equal-lines': 4,
   rising: 4, 'line-count-max': 4,
 };
 
@@ -66,6 +65,8 @@ export const DIFFICULTY = {
   /** Commissions met by more layouts than this are too easy: a required one above it is a given, a bounty a gift. */
   requiredMaxRate: 0.9,
   bountyMaxRate: 0.35,
+  /** When no ambitious second bounty fits alongside the others, one met by up to this share of layouts will do. */
+  bountyFallbackRate: 0.6,
   /** A kind of required commission your page already meets is taken this often instead of passed over. */
   alreadyMetWeight: 0.2,
   /** Layouts sampled per set of numbers when posting commissions. */

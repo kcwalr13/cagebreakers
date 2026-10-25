@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { RUN, TOOLS } from '../content/balance';
-import { isMet } from './commission';
+import { isMet, viewOf } from './commission';
 import { CELLS } from './grid';
 import { createRng } from './rng';
 import { boardIsLatin } from './rules';
@@ -46,6 +46,25 @@ function checkInvariants(s: RunState) {
   expect(s.gold).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeLessThanOrEqual(RUN.startInk);
+  if (s.phase === 'arrange') checkProof(s);
+}
+
+/** The round's proof is a legal layout of numbers you could end the round with, meeting all three commissions. */
+function checkProof(s: RunState) {
+  const p = pageOf(s.seed);
+  const proof = s.proof!;
+  expect(proof).toHaveLength(CELLS);
+  expect(boardIsLatin(proof)).toBe(true);
+  for (let c = 0; c < CELLS; c++) if (p.stones[c]) expect(proof[c]).toBe(p.stones[c]);
+  const placed = proof.filter((n, c) => n && !p.stones[c]);
+  const pool = placed.slice();
+  const take = (n: number) => { const i = pool.indexOf(n); if (i < 0) return false; pool.splice(i, 1); return true; };
+  for (const t of s.tokens.filter((x) => x.round < s.round)) expect(take(t.n), 'an earlier number is missing from the proof').toBe(true);
+  const fresh = dealtThisRound(s).map((t) => t.n);
+  for (const n of pool) { const i = fresh.indexOf(n); expect(i, 'the proof uses a number you were not dealt').toBeGreaterThanOrEqual(0); fresh.splice(i, 1); }
+  expect(pool.length).toBeGreaterThanOrEqual(s.need);
+  const v = viewOf(p, proof);
+  for (const c of s.posted) expect(isMet(c.c, v), JSON.stringify(c.c)).toBe(true);
 }
 
 describe('a run', () => {
@@ -168,13 +187,13 @@ describe('a run', () => {
     }
   });
 
-  it('redraws loose numbers for gold, keeping the required commission possible', () => {
-    let s = newRun('REDRAW');
+  it('redraws loose numbers for gold, keeping all three commissions possible', () => {
+    let s = newRun('REDRAWA');
     expect(act(s, { type: 'redraw' }).reason).toMatch(/gold/);
     s = { ...s, gold: 10 };
     const before = dealtThisRound(s).map((t) => t.id);
     const r = act(s, { type: 'redraw' });
-    expect(r.ok).toBe(true);
+    expect(r.ok, r.reason).toBe(true);
     expect(r.state.gold).toBe(10 - TOOLS.redraw);
     expect(r.state.redraws).toBe(1);
     expect(dealtThisRound(r.state).every((t) => !before.includes(t.id))).toBe(true);
@@ -182,8 +201,25 @@ describe('a run', () => {
     // Placed numbers stay put; only loose ones are redrawn.
     let t = placeOnSolution(s, 2);
     const placed = dealtThisRound(t).filter((x) => x.cell >= 0).map((x) => x.id);
-    t = act(t, { type: 'redraw' }).state;
-    expect(dealtThisRound(t).filter((x) => placed.includes(x.id))).toHaveLength(2);
+    const again = act(t, { type: 'redraw' });
+    if (again.ok) {
+      t = again.state;
+      expect(dealtThisRound(t).filter((x) => placed.includes(x.id))).toHaveLength(2);
+      checkInvariants(t);
+    }
+  });
+
+  it('refuses a redraw that would break a promise, and charges nothing for it', () => {
+    let refused = 0;
+    for (const seed of ['RDAAAA', 'RDBBBB', 'RDCCCC', 'RDDDDD', 'RDEEEE', 'RDFFFF', 'RDGGGG', 'RDHHHH', 'RDJJJJ', 'RDKKKK', 'RDMMMM', 'RDNNNN']) {
+      const s = { ...newRun(seed), gold: 10 };
+      const r = act(s, { type: 'redraw' });
+      if (r.ok) { checkInvariants(r.state); continue; }
+      refused++;
+      expect(r.reason).toBe('No other deal would keep all three commissions possible');
+      expect(r.state).toBe(s);
+    }
+    expect(refused).toBeLessThan(6);
   });
 
   it('shows a hidden number with the Lens', () => {

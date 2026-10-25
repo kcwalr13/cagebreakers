@@ -65,7 +65,13 @@ test('a round: drag numbers in, read the commissions, ink it', async ({ page: p 
       if (bad !== undefined) return { i, id: hand[i].id, bad }; } return null; }`) as { i: number; id: number; bad: number };
   expect(pick).not.toBeNull();
   await p.locator('.hand-slot').nth(pick.i).click();
-  await expect(p.locator('.status')).toContainText(/Placing the \d/);
+  await expect(p.locator('.status')).toContainText(/Bright cells take the \d/);
+  // Holding a number lights the cells that can take it, shades the ones that can't, and rings what blocks them.
+  expect(await p.locator('svg.board .hint-open, svg.board .hint-seals').count()).toBeGreaterThan(0);
+  expect(await p.locator('svg.board .hint-blocked').count()).toBeGreaterThan(0);
+  const sameOnPage = await R(p, `(r, id) => { const s = r.state(); const pg = r.page(); const n = s.tokens.find((t) => t.id === id).n;
+    return pg.stones.filter((v) => v === n).length + s.tokens.filter((t) => t.cell >= 0 && t.n === n).length; }`, pick.id) as number;
+  await expect(p.locator('svg.board .blocker')).toHaveCount(sameOnPage);
   await p.screenshot({ path: info.outputPath('m6-02-holding.png') });
   const bp = await cellPoint(p, pick.bad);
   await p.mouse.click(bp.x, bp.y);
@@ -141,7 +147,7 @@ test('gold buys a Redraw, the Lens and the Blotter', async ({ page: p }, info) =
   await R(p, '(r) => r.load({ ...r.state(), gold: 20 })');
   const before = await R(p, '(r) => r.state().tokens.map((t) => t.id).join()');
   await p.getByRole('button', { name: /^Redraw/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('keeps the required commission possible');
+  await expect(p.getByRole('dialog')).toContainText('keep all three commissions possible together');
   await p.screenshot({ path: info.outputPath('m6-06-redraw.png') });
   await p.getByRole('button', { name: /Redraw 4 numbers for/ }).click();
   expect(await R(p, '(r) => r.state().tokens.map((t) => t.id).join()')).not.toBe(before);

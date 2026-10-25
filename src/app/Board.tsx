@@ -2,7 +2,7 @@ import { isLegal } from '../core/rules';
 import { drag, pressBoard, setBoardElement } from './input';
 import { PageView, type PieceView } from './PageView';
 import {
-  complete, hints, justPlaced, justSealed, page, placed, refused, sealed, selection, values,
+  blockers, complete, hints, justPlaced, justSealed, page, placed, refused, sealed, selection, values,
 } from './state';
 
 /** The page toy's board: bare numbers on a generated page. */
@@ -33,6 +33,7 @@ export function Board() {
         sealed={sealed.value}
         flashing={justSealed.value}
         hints={hints.value}
+        blockers={blockers.value}
         hover={hover}
         refused={refused.value}
         class={complete.value ? 'complete' : ''}

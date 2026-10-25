@@ -1,9 +1,10 @@
 import { batch, computed, effect, signal } from '@preact/signals';
 import { type Posted, isMet, viewOf } from '../../core/commission';
 import { CELLS } from '../../core/grid';
-import { type Hint, hintFor } from '../../core/rules';
+import { hintFor } from '../../core/rules';
+import type { CellHint } from '../PageView';
 import {
-  type RoundRecord, type RunAction, type RunState, act, inkBlocker, migrateRun, newRun, pageOf, scoreOf, valuesOf,
+  type RoundRecord, type RunAction, type RunState, act, inkBlocker, legalCells, migrateRun, newRun, pageOf, scoreOf, valuesOf,
 } from '../../core/run';
 import { dailySeed, normalizeSeed } from '../../core/seed';
 import { drag } from '../input';
@@ -42,7 +43,7 @@ export const justPlaced = signal(-1);
 export const justSealed = signal<Set<number>>(new Set());
 export const refused = signal<{ cell: number; id: number } | null>(null);
 /** The round just inked, for the result sheet: what was posted, what was met, what it paid. */
-export const lastInk = signal<{ record: RoundRecord; posted: Posted[]; met: boolean[] } | null>(null);
+export const lastInk = signal<{ record: RoundRecord; posted: Posted[]; met: boolean[]; spare: number[] } | null>(null);
 
 effect(() => {
   const s = run.value, key = SAVE_KEYS[slot.value];
@@ -129,13 +130,31 @@ export const holding = computed<{ id: number; n: number; origin: number } | null
   return t ? { id: t.id, n: t.n, origin: t.cell } : null;
 });
 
-/** Placement help for every empty cell while a number is in hand. */
-export const hints = computed<(Hint | null)[]>(() => {
-  const p = page.value, h = holding.value, vals = values.value;
+/** Cells the number in hand could move to, swaps included. */
+export const legal = computed(() => {
+  const s = run.value, h = holding.value;
+  return s && h ? new Set(legalCells(s, h.id)) : null;
+});
+
+/**
+ * Where the number in hand can go: open cells (gold when it would seal the cage), swaps with the
+ * number standing there, and blocked cells, shaded. The cell it's leaving is left plain.
+ */
+export const hints = computed<(CellHint | null)[]>(() => {
+  const p = page.value, h = holding.value, vals = values.value, ok = legal.value;
   return Array.from({ length: CELLS }, (_, c) => {
-    if (!p || !h || p.stones[c] || c === h.origin || vals[c]) return null;
-    return hintFor(p, vals, c, h.n, h.origin);
+    if (!p || !h || !ok || c === h.origin) return null;
+    if (!ok.has(c)) return 'blocked';
+    if (vals[c]) return 'swap';
+    return hintFor(p, vals, c, h.n, h.origin) === 'seals' ? 'seals' : 'open';
   });
+});
+
+/** The cells holding the same number as the one in hand: they're what blocks the shaded cells. */
+export const blockers = computed(() => {
+  const h = holding.value, vals = values.value;
+  if (!h) return undefined;
+  return new Set(Array.from({ length: CELLS }, (_, c) => c).filter((c) => c !== h.origin && vals[c] === h.n));
 });
 
 let messageId = 0;
@@ -165,7 +184,7 @@ export function dispatch(a: RunAction, cell = -1): boolean {
     if (a.type !== 'place') selection.value = null;
   });
   if (r.inked) {
-    lastInk.value = { record: r.inked, posted: s.posted, met: beforeMet };
+    lastInk.value = { record: r.inked, posted: s.posted, met: beforeMet, spare: s.tokens.filter((t) => t.cell < 0).map((t) => t.n).sort() };
     focus.value = null;
     if (r.state.phase === 'done') play('win');
     else if (r.state.phase === 'ruined') play('lose');

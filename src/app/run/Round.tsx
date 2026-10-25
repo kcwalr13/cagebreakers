@@ -1,8 +1,7 @@
-import { computed } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import { RUN, TOOLS, type ToolId } from '../../content/balance';
 import { cellsOf, describe, readout } from '../../core/commission';
-import { bagCount, inHand, legalCells, tokenAt } from '../../core/run';
+import { bagCount, inHand, tokenAt } from '../../core/run';
 import { dismissTip, tip } from '../coach';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
@@ -11,15 +10,9 @@ import { screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
-  blocker, dispatch, focus, hints, holding, justPlaced, justSealed, lensMode, message, met, page, placeToken, refused, revealed,
-  run, say, sealed, selection, useLens, view,
+  blocker, blockers, dispatch, focus, hints, holding, justPlaced, justSealed, legal, lensMode, message, met, page, placeToken, refused,
+  revealed, run, say, sealed, selection, useLens, view,
 } from './state';
-
-/** Cells the number in hand could move to, swaps included. */
-const legal = computed(() => {
-  const s = run.value, h = holding.value;
-  return s && h ? new Set(legalCells(s, h.id)) : null;
-});
 
 const handlers: PressHandlers = {
   lookAt(cell) {
@@ -157,7 +150,7 @@ function Board() {
       <Coach />
       <PageView
         id="run" svgRef={setBoardElement} page={p} pieces={pieces} sealed={sealed.value} flashing={justSealed.value}
-        hints={lensMode.value ? undefined : hints.value} hover={hover} refused={refused.value}
+        hints={lensMode.value ? undefined : hints.value} blockers={lensMode.value ? undefined : blockers.value} hover={hover} refused={refused.value}
         revealed={revealed.value} targets={lensTargets} marked={marked}
         label={`Your page: ${s.tokens.filter((t) => t.cell >= 0).length} numbers placed, ${sealed.value.size} of ${p.cages.length} cages sealed`}
       />
@@ -177,13 +170,16 @@ function Status() {
       </div>
     );
   }
-  const sel = selection.value;
-  const t = sel === null ? undefined : s.tokens.find((x) => x.id === sel);
-  if (t) {
+  const h = holding.value;
+  if (h) {
+    const open = legal.value?.size ?? 0;
+    const lifting = h.origin >= 0 && selection.value === h.id;
     return (
-      <div class="status">
-        <span>{t.cell >= 0 ? `Moving the ${t.n}. Tap a cell for it.` : `Placing the ${t.n}. Tap a cell for it.`}</span>
-        {t.cell >= 0 ? <button class="pill-btn" onClick={() => { placeToken(t.id, -1); selection.value = null; }}>To hand</button> : null}
+      <div class="status holding">
+        <span>{open
+          ? <>Bright cells take the <b>{h.n}</b>. Shaded ones have a {h.n} in their row or column.</>
+          : <>No cell can take the <b>{h.n}</b> right now. Move one of the ringed {h.n}s first.</>}</span>
+        {lifting ? <button class="pill-btn" onClick={() => { placeToken(h.id, -1); selection.value = null; }}>To hand</button> : null}
       </div>
     );
   }
@@ -196,8 +192,9 @@ function Hand() {
   const s = run.value!;
   const hand = inHand(s);
   const sel = selection.value;
+  const toCome = bagCount(s.bag);
   return (
-    <div class="hand" role="toolbar" aria-label="Your hand">
+    <div class="hand" role="toolbar" aria-label="Your numbers">
       <div class="hand-tokens">
         {hand.map((t) => {
           const fresh = t.round === s.round;
@@ -213,9 +210,11 @@ function Hand() {
             </button>
           );
         })}
-        {!hand.length ? <span class="hand-empty">Every number is on the page.</span> : null}
+        {!hand.length ? <span class="hand-empty">All your numbers are on the page.</span> : null}
       </div>
-      <span class="hand-bag" aria-label={`${bagCount(s.bag)} numbers left in the bag`}>{bagCount(s.bag)}<small>in bag</small></span>
+      {s.round < RUN.rounds ? (
+        <span class="hand-bag" aria-label={`${toCome} more numbers to come in later rounds`}>{toCome}<small>to come</small></span>
+      ) : null}
     </div>
   );
 }
@@ -242,7 +241,8 @@ function Controls() {
           aria-label={`${TOOL_NAME[tool]}, ${TOOLS[tool]} gold`}
           onClick={() => { lensMode.value = false; sheet.value = { kind: 'tool', tool }; }}
         >
-          <Icon name={TOOL_ICON[tool]} /><span class="tool-cost">{TOOLS[tool]}</span>
+          <span class="tool-top"><Icon name={TOOL_ICON[tool]} /><span class="tool-cost"><Icon name="gold" class="ico gold xs" />{TOOLS[tool]}</span></span>
+          <span class="tool-name">{TOOL_NAME[tool]}</span>
         </button>
       ))}
       <button class={`btn primary grow${blocker.value ? ' waiting' : ''}`} onClick={ink}>

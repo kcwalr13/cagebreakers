@@ -17,7 +17,7 @@
   --g0: #F3DC93; --g1: #C99A3B; --g2: #E2BD62; --g3: #A67826; --gold-edge: #A87A22; --on-gold: #4E3818; --on-gold-red: #7E2114;
   --tool: rgba(105, 70, 15, .3); --sheen: rgba(255, 250, 225, .85);
   --token: #33281F; --token-num: #F6EEDC; --token-ring: rgba(246, 238, 220, .45);
-  --hint-open: rgba(255, 252, 240, .6); --hint-open-edge: rgba(117, 97, 75, .5);
+  --hint-open: #FFFCF2; --hint-open-edge: rgba(117, 97, 75, .75); --hint-blocked: rgba(42, 31, 22, .26);
   --shade: rgba(42, 31, 22, .38); --lift: 0 10px 22px rgba(70, 45, 10, .28);
   --lens: #2C4A8A; --mark-wash: rgba(169, 48, 31, .1);
   color-scheme: light;
@@ -28,7 +28,7 @@
   --g0: #EBCB78; --g1: #B4862F; --g2: #D3A84D; --g3: #85601F; --gold-edge: #D9AE52; --on-gold: #3E2A10; --on-gold-red: #6E1A0E;
   --tool: rgba(60, 35, 5, .38); --sheen: rgba(255, 244, 205, .7);
   --token: #E4D6BA; --token-num: #2A1F16; --token-ring: rgba(42, 31, 22, .35);
-  --hint-open: rgba(255, 240, 210, .12); --hint-open-edge: rgba(235, 221, 194, .4);
+  --hint-open: rgba(255, 240, 210, .3); --hint-open-edge: rgba(235, 221, 194, .85); --hint-blocked: rgba(0, 0, 0, .55);
   --shade: rgba(0, 0, 0, .55); --lift: 0 10px 24px rgba(0, 0, 0, .6);
   --lens: #7F9DE0; --mark-wash: rgba(224, 106, 80, .14);
   color-scheme: dark;
@@ -80,9 +80,11 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .target.on-gold { fill: var(--on-gold-red); }
 .stone { font-family: 'Alegreya', serif; font-style: italic; font-weight: 500; font-size: 30px; fill: var(--ink-soft); text-anchor: middle; }
 .stone.on-gold { fill: var(--on-gold); }
-.hint-open { fill: var(--hint-open); stroke: var(--hint-open-edge); stroke-width: 1; stroke-dasharray: 2 3; }
-.hint-seals { fill: var(--g2); fill-opacity: .55; stroke: var(--gold-edge); stroke-width: 3; stroke-dasharray: 6 4; }
-.hint-dead { stroke: var(--rubric); stroke-width: 2; opacity: .6; stroke-linecap: round; }
+.hint-open { fill: var(--hint-open); stroke: var(--hint-open-edge); stroke-width: 1.5; }
+.hint-seals { fill: var(--g2); fill-opacity: .6; stroke: var(--gold-edge); stroke-width: 2.5; }
+.hint-swap { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 5 3; }
+.hint-blocked { fill: var(--hint-blocked); }
+.blocker { fill: none; stroke: var(--rubric); stroke-width: 2.5; }
 .hover-ok { fill: none; stroke: var(--ink); stroke-width: 3; }
 .hover-no { fill: none; stroke: var(--rubric); stroke-width: 3; }
 .flash-no { fill: var(--rubric); opacity: 0; animation: flash-no 600ms ease-out; }
@@ -243,8 +245,14 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .hand-bag small { font-family: 'Alegreya Sans', sans-serif; font-weight: 500; font-size: 11px; margin-top: 2px; }
 .run-controls { display: flex; gap: 6px; padding: 6px 0 0; flex: none; }
 .run-controls .btn { min-width: 58px; justify-content: center; padding: 0 10px; gap: 4px; }
-.run-controls .grow { flex: 1; }
-.tool-cost { font-family: 'Alegreya', serif; font-weight: 800; font-size: 17px; }
+.run-controls .btn.tool { flex-direction: column; gap: 1px; min-width: 64px; min-height: 54px; padding: 4px 6px; }
+.run-controls .grow { flex: 1; min-height: 54px; }
+.tool-top { display: flex; align-items: center; gap: 5px; }
+.tool-cost { display: flex; align-items: center; gap: 1px; font-family: 'Alegreya', serif; font-weight: 800; font-size: 16px; }
+.tool-name { font-size: 12px; font-weight: 500; color: var(--ink-soft); line-height: 1; }
+.ico.xs { width: 13px; height: 13px; }
+.status.holding { color: var(--ink); }
+.status b { font-family: 'Alegreya', serif; font-weight: 800; font-size: 17px; }
 .btn.primary.waiting { opacity: .55; }
 
 /* The round's result */

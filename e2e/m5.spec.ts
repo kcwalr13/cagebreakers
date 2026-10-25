@@ -97,7 +97,7 @@ test('a save code moves everything to another phone', async ({ page: p, context 
 test('the first rounds teach as you play, one tip at a time', async ({ page: p }, info) => {
   await fresh(p, '&coach');
   await p.getByRole('button', { name: /^New run/ }).click();
-  await expect(p.locator('.coach')).toContainText('no number may repeat');
+  await expect(p.locator('.coach')).toContainText('Bright cells can take it');
   await p.locator('.coach').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   await p.screenshot({ path: info.outputPath('m5-05-first-tip.png') });
   // The tip never covers the controls or the commissions.

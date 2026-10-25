@@ -11,13 +11,13 @@ import { readJson, writeJson } from './storage';
 interface Tip { id: string; text: string; when: (s: RunState) => boolean }
 
 const TIPS: Tip[] = [
-  { id: 'latin', when: (s) => s.round === 1 && !onPage(s).length, text: 'Drag a number onto the page. As in sudoku, no number may repeat in its row or column.' },
-  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the page are this round\'s commissions. Miss the required one and you spill a drop of ink; the others pay gold. Tap one to see where it applies.' },
+  { id: 'latin', when: (s) => s.round === 1 && !onPage(s).length, text: 'Drag a number onto the page, or tap it, then a cell. Bright cells can take it; shaded ones can\'t.' },
+  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the page are this round\'s commissions. Miss the required one and you spill a drop of ink; the other two pay gold. All three can always be met at once: finding how is the puzzle. Tap one to see where it applies.' },
   { id: 'seal', when: (s) => viewNow(s).sealed.size > 0, text: 'Sealed! A full cage that makes its red target turns gold, and pays 1 gold every round you ink it sealed.' },
-  { id: 'ink', when: (s) => s.round === 1 && dealtThisRound(s).filter((t) => t.cell >= 0).length >= s.need, text: 'Place at least all but one of your numbers, then Ink it. A spare number goes back to the bag for a later round.' },
+  { id: 'ink', when: (s) => s.round === 1 && dealtThisRound(s).filter((t) => t.cell >= 0).length >= s.need, text: 'Place at least all but one of your numbers, then Ink it. A spare number isn\'t lost: it comes back in a later round.' },
   { id: 'move', when: (s) => s.round === 2, text: 'Everything on the page can move. Drag an old number somewhere new to meet this round\'s commissions.' },
-  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= 2, text: 'Gold buys tools: Redraw swaps the numbers in your hand, the Lens shows a hidden number, and the Blotter saves your ink for a round.' },
-  { id: 'final', when: (s) => s.round === RUN.rounds, text: 'The final round: every number left in the bag is yours, and all of it goes in. Fill the page to finish the run.' },
+  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= 2, text: 'Gold buys tools: Redraw swaps the numbers in your hand for new ones, the Lens shows a hidden number, and the Blotter saves your ink for a round.' },
+  { id: 'final', when: (s) => s.round === RUN.rounds, text: 'The final round: every number still to come is dealt now, and all of them go in. Fill the page to finish the run.' },
 ];
 
 const KEY = 'cagebreakers.coach';

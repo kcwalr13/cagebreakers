@@ -175,8 +175,8 @@ function MenuSheet() {
 
       <div class="section-label">How to play</div>
       <p>No number may repeat in a row or column. Each outlined cage shows a target in red; when its numbers make that target, it seals in gold.</p>
-      <p>A run is {RUN.rounds} rounds on one page. Each round deals a few numbers from the bag, which holds exactly what the page still needs, and posts three commissions. Place at least all but one of the new numbers, then ink the round. Anything on the page can move before you do.</p>
-      <p>Miss the required commission and you spill a drop of ink; spill all {RUN.startInk} and the page is ruined. Bounties pay gold, and so does every sealed cage when you ink. Gold buys the Redraw, the Lens and the Blotter. In the final round every number left goes in, and the page is full. Your score is the gold you kept, plus {RUN.inkBonus} for each drop of ink left.</p>
+      <p>A run is {RUN.rounds} rounds on one page. Each round deals you a few numbers and posts three commissions. Place at least all but one of them, then ink the round; a spare comes back in a later round. Anything on the page can move before you ink. While you hold a number, bright cells can take it and shaded ones can't.</p>
+      <p>All three commissions can always be met at once. Miss the required one and you spill a drop of ink; spill all {RUN.startInk} and the page is ruined. The other two pay gold, and so does every sealed cage when you ink. Gold buys the Redraw, the Lens and the Blotter. The numbers dealt over a run are exactly the ones the page needs, so in the final round the last of them go in and the page is full. Your score is the gold you kept, plus {RUN.inkBonus} for each drop of ink left.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.

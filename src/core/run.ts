@@ -5,7 +5,7 @@
  */
 import { RUN, TOOLS, type ToolId } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
-import { type Holding, type Posted, type View, isMet, possible, postCommissions, viewOf } from './commission';
+import { type Holding, type Posted, type View, findLayout, isMet, planRound, possible, viewOf } from './commission';
 import { CELLS, PEERS, colOf, rowOf } from './grid';
 import { type Page, generatePage } from './page';
 import { type Rng, stream } from './rng';
@@ -53,6 +53,11 @@ export interface RunState {
   /** Redraws bought this round. */
   redraws: number;
   posted: Posted[];
+  /**
+   * A legal layout of numbers you could hold that meets every posted commission at once: the
+   * proof that all three are possible. Never shown to the player. (Absent in saves from before it existed.)
+   */
+  proof?: number[];
   /** Bought this round: missing the required commission spills no ink. */
   blotter: boolean;
   /** Cells whose hidden number the Lens has shown. */
@@ -172,12 +177,14 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   s.need = final ? drawn.length : Math.max(0, drawn.length - 1);
   s.redraws = 0;
   s.blotter = false;
-  s.posted = postCommissions({
+  const plan = planRound({
     page, round: s.round, final,
     holding: { kept, dealt: drawn, need: s.need },
     now: viewOf(page, valuesOf(s)),
     lastRequired,
   }, stream(s.seed, `commissions:${s.round}`));
+  s.posted = plan.posted;
+  s.proof = plan.proof;
   return s;
 }
 
@@ -269,23 +276,21 @@ export function act(prev: RunState, a: RunAction): ActResult {
         dealt: [...stay.filter((t) => t.round === s.round).map((t) => t.n), ...drawn],
         need: s.need,
       });
-      // A redraw never makes the required commission impossible; it also keeps the bounties possible when it can.
+      // A redraw keeps the round's promises: the required commission stays possible whichever
+      // numbers you place, and all three commissions stay possible together.
       const required = s.posted.find((p) => p.required);
-      const bounties = s.posted.filter((p) => !p.required);
-      type Deal = { drawn: number[]; bag: number[] };
-      let pick: Deal | null = null;
-      let fallback: Deal | null = null;
-      for (let attempt = 0; attempt < 12 && !pick; attempt++) {
+      const goals = s.posted.map((p) => p.c);
+      let pick: { drawn: number[]; bag: number[] } | null = null;
+      for (let attempt = 0; attempt < 16 && !pick; attempt++) {
         const tag = `${s.round}:${s.redraws}:${attempt}`;
         const d = draw(bag, loose.length, stream(s.seed, `deal:${tag}`));
         const h = holdingWith(d.drawn);
         const check = stream(s.seed, `redraw-check:${tag}`);
         if (required && !possible(page, h, required.c, check, true)) continue;
-        if (bounties.every((b) => possible(page, h, b.c, check, false))) pick = d;
-        else fallback ??= d;
+        const found = findLayout(page, h, goals, check);
+        if (found) { pick = d; s.proof = found; }
       }
-      pick ??= fallback;
-      if (!pick) return refuse(prev, 'No other deal would keep the required commission possible');
+      if (!pick) return refuse(prev, 'No other deal would keep all three commissions possible');
       s.bag = pick.bag;
       s.tokens = [...stay, ...giveTokens(s, pick.drawn)];
       return { state: s, ok: true };

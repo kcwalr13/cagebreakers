@@ -1,7 +1,8 @@
 import { batch, computed, effect, signal } from '@preact/signals';
 import { CELLS, colOf, rowOf } from '../core/grid';
 import { type Page, generatePage } from '../core/page';
-import { type Hint, boardValues, hintFor, isLegal, sealedCages } from '../core/rules';
+import { boardValues, hintFor, isLegal, sealedCages } from '../core/rules';
+import type { CellHint } from './PageView';
 import { normalizeSeed, seedFromInts } from '../core/seed';
 import { drag } from './input';
 import { sheet } from './nav';
@@ -72,14 +73,25 @@ export const holding = computed<{ n: number; origin: number } | null>(() => {
   return n ? { n, origin: sel.cell } : null;
 });
 
-/** Placement help for every cell while a number is in hand. */
-export const hints = computed<(Hint | null)[]>(() => {
+/** Where the number in hand can go: bright cells take it (gold ones seal their cage); shaded ones can't. */
+export const hints = computed<(CellHint | null)[]>(() => {
   const h = holding.value;
   const vals = values.value;
   return Array.from({ length: CELLS }, (_, cell) => {
-    if (!h || page.value.stones[cell] || cell === h.origin || placed.value[cell]) return null;
-    return hintFor(page.value, vals, cell, h.n, h.origin);
+    if (!h || cell === h.origin) return null;
+    if (page.value.stones[cell]) return 'blocked';
+    if (placed.value[cell]) return null;
+    const hint = hintFor(page.value, vals, cell, h.n, h.origin);
+    return hint === 'blocked' ? 'blocked' : hint === 'seals' ? 'seals' : 'open';
   });
+});
+
+/** The cells holding the same number as the one in hand: what blocks the shaded cells. */
+export const blockers = computed(() => {
+  const h = holding.value;
+  if (!h) return undefined;
+  const vals = values.value;
+  return new Set(Array.from({ length: CELLS }, (_, c) => c).filter((c) => c !== h.origin && vals[c] === h.n));
 });
 
 effect(() => {

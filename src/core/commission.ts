@@ -280,34 +280,62 @@ function candidates(page: Page, round: number): Candidate[] {
 /** The value a share of samples reach, counting from the best end of a sorted list. */
 const fromTop = (sorted: number[], share: number) => sorted[Math.min(sorted.length - 1, Math.floor(share * sorted.length))]!;
 
-interface Judged { c: Commission; kind: CommissionKind; worstRate: number; bestRate: number; meanRate: number; metNow: boolean }
+interface Judged {
+  c: Commission; kind: CommissionKind; worstRate: number; bestRate: number; meanRate: number; metNow: boolean;
+  /** Indexes of the sampled layouts that meet it (bounties only). */
+  meetsIn?: number[];
+}
 
-/**
- * Sets a candidate's threshold and measures how often sampled layouts meet it. `stats` holds,
- * for each set of numbers you could hold, the candidate's measure on each sampled layout.
- */
-function judge(cand: Candidate, stats: number[][], now: View, required: boolean): Judged | null {
-  let t = 0;
-  if (cand.dir !== 'bool') {
-    const share = required ? DIFFICULTY.requiredShare : DIFFICULTY.bountyShare;
-    const per = stats.map((s) => fromTop(s.slice().sort((a, b) => (cand.dir === 'min' ? b - a : a - b)), share));
-    // A required threshold must suit the worst set of numbers you could keep; a bounty, the best.
-    t = cand.dir === 'min'
-      ? (required ? Math.min(...per) : Math.max(...per))
-      : (required ? Math.max(...per) : Math.min(...per));
-    const range = THRESHOLD_RANGE[cand.kind]!;
-    const [lo, hi] = required ? range.required : range.bounty;
-    if (t < lo || t > hi) return null;
-  }
-  const meets = cand.dir === 'min' ? (m: number) => m >= t : cand.dir === 'max' ? (m: number) => m <= t : (m: number) => m === 1;
+const meetsFn = (dir: Direction, t: number) =>
+  dir === 'min' ? (m: number) => m >= t : dir === 'max' ? (m: number) => m <= t : (m: number) => m === 1;
+
+/** How often each set of numbers' sampled layouts meet a threshold. */
+function rateStats(stats: number[][], meets: (m: number) => boolean) {
   const rates = stats.map((s) => s.filter(meets).length / s.length);
-  const c = cand.make(t);
   return {
-    c, kind: cand.kind,
     worstRate: Math.min(...rates), bestRate: Math.max(...rates),
     meanRate: rates.reduce((a, b) => a + b, 0) / rates.length,
-    metNow: isMet(c, now),
   };
+}
+
+/**
+ * Sets a required commission's threshold and measures how often sampled layouts meet it.
+ * `stats` holds, for each set of numbers you could hold, the candidate's measure on each layout.
+ */
+function judgeRequired(cand: Candidate, stats: number[][], now: View): Judged | null {
+  let t = 0;
+  if (cand.dir !== 'bool') {
+    const per = stats.map((s) => fromTop(s.slice().sort((a, b) => (cand.dir === 'min' ? b - a : a - b)), DIFFICULTY.requiredShare));
+    // It must suit the worst set of numbers you could keep.
+    t = cand.dir === 'min' ? Math.min(...per) : Math.max(...per);
+    const [lo, hi] = THRESHOLD_RANGE[cand.kind]!.required;
+    if (t < lo || t > hi) return null;
+  }
+  const c = cand.make(t);
+  return { c, kind: cand.kind, ...rateStats(stats, meetsFn(cand.dir, t)), metNow: isMet(c, now) };
+}
+
+/**
+ * Sets a bounty's threshold so it's ambitious, yet met by at least one layout in `anchor`: the
+ * sampled layouts that already meet every commission chosen so far. That layout proves all of
+ * them can be met at once.
+ */
+function judgeBounty(cand: Candidate, stats: number[][], flat: (i: number) => number, anchor: readonly number[], now: View): Judged | null {
+  let t = 0;
+  if (cand.dir !== 'bool') {
+    const per = stats.map((s) => fromTop(s.slice().sort((a, b) => (cand.dir === 'min' ? b - a : a - b)), DIFFICULTY.bountyShare));
+    let best = cand.dir === 'min' ? -Infinity : Infinity;
+    for (const i of anchor) best = cand.dir === 'min' ? Math.max(best, flat(i)) : Math.min(best, flat(i));
+    // As ambitious as the best set of numbers allows, but no further than the anchor layouts reach.
+    t = cand.dir === 'min' ? Math.min(Math.max(...per), best) : Math.max(Math.min(...per), best);
+    const [lo, hi] = THRESHOLD_RANGE[cand.kind]!.bounty;
+    if (!Number.isFinite(t) || t < lo || t > hi) return null;
+  }
+  const meets = meetsFn(cand.dir, t);
+  const meetsIn = anchor.filter((i) => meets(flat(i)));
+  if (!meetsIn.length) return null;
+  const c = cand.make(t);
+  return { c, kind: cand.kind, ...rateStats(stats, meets), metNow: isMet(c, now), meetsIn };
 }
 
 export interface PostInput {
@@ -321,19 +349,40 @@ export interface PostInput {
   lastRequired?: CommissionKind;
 }
 
-/** Posts a round's commissions: one required and two bounties. Deterministic for the rng it's given. */
-export function postCommissions(input: PostInput, rng: Rng): Posted[] {
-  const { page, round, final, holding, now } = input;
+/** A round's commissions, and a legal layout of numbers you'll hold that meets all of them at once. */
+export interface RoundPlan { posted: Posted[]; proof: number[] }
+
+/**
+ * Plans a round's commissions: one required and two bounties. The required one can be met
+ * whichever dealt numbers you place; all three together can be met by placing the right ones,
+ * and `proof` is such a layout. Deterministic for the rng it's given.
+ */
+export function planRound(input: PostInput, rng: Rng): RoundPlan {
+  const { page, final } = input;
   if (final) {
     const most = Math.max(1, Math.ceil(page.cages.length * FINAL_SEALS.share));
-    return [
-      { c: { kind: 'fill-page' }, required: true, gold: 0 },
-      { c: { kind: 'seal-count', count: most }, required: false, gold: FINAL_SEALS.gold },
-      { c: { kind: 'seal-all' }, required: false, gold: BOUNTY_GOLD['seal-all'] },
-    ];
+    return {
+      posted: [
+        { c: { kind: 'fill-page' }, required: true, gold: 0 },
+        { c: { kind: 'seal-count', count: most }, required: false, gold: FINAL_SEALS.gold },
+        { c: { kind: 'seal-all' }, required: false, gold: BOUNTY_GOLD['seal-all'] },
+      ],
+      proof: page.solution.slice(),
+    };
   }
+  // A thin early page can leave too few sampled layouts to fit two bounties beside the required
+  // one; then the round is planned again from a wider sample.
+  const first = planFrom(input, rng, DIFFICULTY.samples);
+  if (first.posted.length >= 3) return first;
+  const wider = planFrom(input, rng, DIFFICULTY.samples * 5);
+  return wider.posted.length > first.posted.length ? wider : first;
+}
+
+function planFrom(input: PostInput, rng: Rng, samples: number): RoundPlan {
+  const { page, round, holding, now } = input;
   const views = choices(holding).map((set) =>
-    Array.from({ length: DIFFICULTY.samples }, () => viewOf(page, sampleLayout(page, set, rng))));
+    Array.from({ length: samples }, () => viewOf(page, sampleLayout(page, set, rng))));
+  const all = views.flat();
   const pool = candidates(page, round);
   const statsCache = new Map<Candidate, number[][]>();
   const statsOf = (cand: Candidate) => {
@@ -345,6 +394,7 @@ export function postCommissions(input: PostInput, rng: Rng): Posted[] {
     }
     return s;
   };
+  const flatOf = (cand: Candidate) => { const s = statsOf(cand); return (i: number) => s[Math.floor(i / samples)]![i % samples]!; };
 
   /**
    * Picks a kind at random among those with a usable commission, then one commission of that
@@ -352,16 +402,13 @@ export function postCommissions(input: PostInput, rng: Rng): Posted[] {
    * usable ones, without judging every candidate. A kind whose usable commissions the page
    * already meets is taken only now and then, so a round rarely asks for what's already done.
    */
-  const choose = (required: boolean, avoid: Set<CommissionKind>, last: CommissionKind | undefined,
-    usable: (j: Judged) => boolean, weight: (j: Judged) => number): Judged | null => {
-    const mine = pool.filter((c) => (required ? c.req : c.bty) && !avoid.has(c.kind));
+  const choose = (mine: Candidate[], last: CommissionKind | undefined, judgeOne: (c: Candidate) => Judged | null,
+    weight: (j: Judged) => number): Judged | null => {
     let kinds = rng.shuffle([...new Set(mine.map((c) => c.kind))]);
     if (last) kinds = [...kinds.filter((k) => k !== last), ...kinds.filter((k) => k === last)];
     let given: Judged | null = null;
     for (const kind of kinds) {
-      const ok = mine.filter((c) => c.kind === kind)
-        .map((c) => judge(c, statsOf(c), now, required))
-        .filter((j): j is Judged => !!j && usable(j));
+      const ok = mine.filter((c) => c.kind === kind).map(judgeOne).filter((j): j is Judged => !!j);
       if (!ok.length) continue;
       const fresh = ok.filter((j) => !j.metNow);
       if (fresh.length) return rng.weighted(fresh.map((j) => [j, Math.max(0.001, weight(j))] as const));
@@ -372,24 +419,51 @@ export function postCommissions(input: PostInput, rng: Rng): Posted[] {
   };
 
   // The required commission: possible whichever dealt numbers you keep, and not a given.
-  const required = choose(true, new Set(), input.lastRequired,
-    (j) => j.worstRate >= DIFFICULTY.requiredMinRate && j.worstRate <= DIFFICULTY.requiredMaxRate, () => 1);
+  const required = choose(pool.filter((c) => c.req), input.lastRequired, (cand) => {
+    const j = judgeRequired(cand, statsOf(cand), now);
+    return j && j.worstRate >= DIFFICULTY.requiredMinRate && j.worstRate <= DIFFICULTY.requiredMaxRate ? j : null;
+  }, () => 1);
+  const meetsRequired = required ? all.flatMap((v, i) => (isMet(required.c, v) ? [i] : [])) : all.map((_, i) => i);
 
-  // Two bounties of other kinds: possible for the right choice of numbers, and ambitious.
-  const used = new Set<CommissionKind>(required ? [required.kind] : []);
-  const bounties: Judged[] = [];
-  for (let i = 0; i < 2; i++) {
-    const b = choose(false, used, undefined, (j) => j.bestRate > 0 && j.meanRate <= DIFFICULTY.bountyMaxRate && !j.metNow, (j) => 0.2 + j.bestRate);
-    if (!b) break;
-    bounties.push(b);
-    used.add(b.kind);
+  // Two bounties of other kinds, each ambitious, all three met together by some sampled layout.
+  const same = (a: Commission, b: Commission) => JSON.stringify(a) === JSON.stringify(b);
+  const bountyFor = (anchor: readonly number[], taken: readonly Commission[], distinct: boolean, maxRate: number) => choose(
+    pool.filter((c) => c.bty && !(distinct && taken.some((t) => t.kind === c.kind))), undefined,
+    (cand) => {
+      const j = judgeBounty(cand, statsOf(cand), flatOf(cand), anchor, now);
+      return j && j.meanRate <= maxRate && !j.metNow && !taken.some((t) => same(t, j.c)) ? j : null;
+    },
+    (j) => 0.2 + j.bestRate,
+  );
+  // Ambitious bounties of new kinds first. A thin early page sometimes can't fit two beside the
+  // required commission; then a gentler bounty, and then a second of the same kind, will do.
+  const levels = [
+    { distinct: true, maxRate: DIFFICULTY.bountyMaxRate },
+    { distinct: true, maxRate: DIFFICULTY.bountyFallbackRate },
+    { distinct: false, maxRate: DIFFICULTY.bountyFallbackRate },
+  ];
+  const base: Commission[] = required ? [required.c] : [];
+  let bounties: Judged[] = [];
+  levels: for (const { distinct, maxRate } of levels) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const first = bountyFor(meetsRequired, base, distinct, maxRate);
+      if (!first) break;
+      const second = bountyFor(first.meetsIn!, [...base, first.c], distinct, maxRate);
+      if (second) { bounties = [first, second]; break levels; }
+      if (!bounties.length) bounties = [first];
+    }
   }
 
-  const out: Posted[] = [];
-  if (required) out.push({ c: required.c, required: true, gold: 0 });
-  for (const b of bounties) out.push({ c: b.c, required: false, gold: goldFor(b.c, page) });
-  return out;
+  const anchor = bounties.length ? bounties[bounties.length - 1]!.meetsIn! : meetsRequired;
+  const proof = (anchor.length ? all[anchor[0]!]! : all[0]!).values.slice();
+  const posted: Posted[] = [];
+  if (required) posted.push({ c: required.c, required: true, gold: 0 });
+  for (const b of bounties) posted.push({ c: b.c, required: false, gold: goldFor(b.c, page) });
+  return { posted, proof };
 }
+
+/** Posts a round's commissions; see planRound. */
+export const postCommissions = (input: PostInput, rng: Rng): Posted[] => planRound(input, rng).posted;
 
 export function goldFor(c: Commission, page: Page): number {
   const base = BOUNTY_GOLD[c.kind];
@@ -408,4 +482,48 @@ export function possible(page: Page, holding: Holding, c: Commission, rng: Rng, 
   };
   const sets = choices(holding);
   return everyChoice ? sets.every(found) : sets.some(found);
+}
+
+/** How close a layout comes to a commission: 1 when met, less the further off it is. */
+function closeness(c: Commission, v: View): number {
+  if (isMet(c, v)) return 1;
+  const m = measure(c, v);
+  switch (c.kind) {
+    case 'line-min': return m / c.min;
+    case 'diagonal-min': return m / c.min;
+    case 'seal-count': return m / c.count;
+    case 'line-max': return c.max / Math.max(1, m);
+    case 'line-count-max': return c.max / Math.max(1, m);
+    default: return 0;
+  }
+}
+
+/**
+ * Searches for one legal layout of numbers you could hold that meets every commission at once:
+ * random layouts on the hidden solution's cells, improved by moving one number at a time to
+ * another cell where the solution has it. Returns the layout, or null if none turned up.
+ */
+export function findLayout(page: Page, holding: Holding, cs: readonly Commission[], rng: Rng, restarts = 6, steps = 120): number[] | null {
+  const byValue = Array.from({ length: 7 }, () => [] as number[]);
+  for (let c = 0; c < CELLS; c++) if (!page.stones[c]) byValue[page.solution[c]!]!.push(c);
+  const score = (values: number[]) => { const v = viewOf(page, values); return cs.reduce((s, c) => s + closeness(c, v), 0); };
+  for (const set of rng.shuffle(choices(holding))) {
+    for (let r = 0; r < restarts; r++) {
+      const values = sampleLayout(page, set, rng);
+      let best = score(values);
+      if (best >= cs.length) return values;
+      for (let k = 0; k < steps; k++) {
+        const n = rng.pick(set);
+        const from = byValue[n]!.filter((c) => values[c] === n);
+        const to = byValue[n]!.filter((c) => values[c] !== n);
+        if (!from.length || !to.length) continue;
+        const a = rng.pick(from), b = rng.pick(to);
+        values[a] = 0; values[b] = n;
+        const s = score(values);
+        if (s >= best) { best = s; if (best >= cs.length) return values; }
+        else { values[b] = 0; values[a] = n; }
+      }
+    }
+  }
+  return null;
 }

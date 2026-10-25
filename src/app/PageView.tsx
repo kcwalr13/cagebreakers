@@ -2,12 +2,17 @@ import type { Ref } from 'preact';
 import { useMemo } from 'preact/hooks';
 import { CELLS, SIZE, colOf, rowOf } from '../core/grid';
 import type { Page } from '../core/page';
-import type { Hint } from '../core/rules';
 import { BOARD_PX, CELL_PX, INSET_PX } from './input';
 import { TokenShape } from './Token';
 
 export const cellX = (cell: number) => INSET_PX + colOf(cell) * CELL_PX;
 export const cellY = (cell: number) => INSET_PX + rowOf(cell) * CELL_PX;
+
+/**
+ * Where the number in hand can go, cell by cell: open (bright), open and sealing its cage (gold),
+ * a swap with the number standing there, or blocked by the Latin rule (shaded).
+ */
+export type CellHint = 'open' | 'seals' | 'swap' | 'blocked';
 
 export interface PieceView {
   key: string;
@@ -42,7 +47,9 @@ export interface PageViewProps {
   pieces: (PieceView | null)[];
   sealed: ReadonlySet<number>;
   flashing?: ReadonlySet<number>;
-  hints?: readonly (Hint | null)[];
+  hints?: readonly (CellHint | null)[];
+  /** Cells holding the same number as the one in hand: the reason the shaded cells are blocked. */
+  blockers?: ReadonlySet<number>;
   hover?: { cell: number; ok: boolean } | null;
   refused?: { cell: number; id: number } | null;
   label: string;
@@ -98,16 +105,14 @@ export function PageView(props: PageViewProps) {
         </g>
       ))}
 
+
+      {hints?.map((h, c) => (h === 'open' || h === 'seals' ? (
+        <rect key={`h${c}`} class={h === 'seals' ? 'hint-seals' : 'hint-open'} x={cellX(c) + 3} y={y(c) + 3} width={CELL_PX - 6} height={CELL_PX - 6} rx="6" />
+      ) : null))}
+
       {props.marked?.size ? [...props.marked].map((c) => (
         <rect key={`mo${c}`} class="marked-edge" x={cellX(c) + 2} y={y(c) + 2} width={CELL_PX - 4} height={CELL_PX - 4} rx="4" />
       )) : null}
-
-      {hints?.map((h, c) => {
-        if (!h || h === 'blocked') return null;
-        const x = cellX(c), yy = y(c);
-        if (h === 'dead') return <line key={c} class="hint-dead" x1={x + 12} y1={yy + CELL_PX - 12} x2={x + CELL_PX - 12} y2={yy + 12} />;
-        return <rect key={c} class={h === 'seals' ? 'hint-seals' : 'hint-open'} x={x + 3} y={yy + 3} width={CELL_PX - 6} height={CELL_PX - 6} rx="6" />;
-      })}
 
       <path d={rules.thin} class="rule-thin" />
       <path d={rules.heavy} class="rule-heavy" />
@@ -137,6 +142,16 @@ export function PageView(props: PageViewProps) {
           x={cellX(c) + CELL_PX / 2 + 2} y={y(c) + CELL_PX / 2 + 4} r={pieceRadius} class={piece.cls ?? ''}
         />
       ) : null)}
+
+      {hints?.map((h, c) => (h === 'blocked' ? (
+        <rect key={`b${c}`} class="hint-blocked" x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} />
+      ) : h === 'swap' ? (
+        <rect key={`s${c}`} class="hint-swap" x={cellX(c) + 3} y={y(c) + 3} width={CELL_PX - 6} height={CELL_PX - 6} rx="6" />
+      ) : null))}
+
+      {props.blockers ? [...props.blockers].map((c) => (
+        <circle key={`x${c}`} class="blocker" cx={cellX(c) + CELL_PX / 2 + (p.stones[c] ? 0 : 2)} cy={y(c) + CELL_PX / 2 + (p.stones[c] ? 0 : 4)} r={pieceRadius + 3} />
+      )) : null}
 
       {hover ? (
         <rect class={hover.ok ? 'hover-ok' : 'hover-no'} x={cellX(hover.cell) + 1.5} y={y(hover.cell) + 1.5} width={CELL_PX - 3} height={CELL_PX - 3} rx="5" />

@@ -36,6 +36,6 @@ test('a run can be started and played with the network off', async ({ page, cont
   await expect(page.locator('.commission')).toHaveCount(3);
   await expect(page.locator('.hand-slot')).toHaveCount(4);
   await page.locator('.hand-slot').first().click();
-  await expect(page.locator('.status')).toContainText(/Placing the \d/);
+  await expect(page.locator('.status')).toContainText(/Bright cells take the \d/);
   await context.setOffline(false);
 });

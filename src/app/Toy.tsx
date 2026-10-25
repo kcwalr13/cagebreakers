@@ -74,7 +74,7 @@ function Status() {
       </div>
     );
   }
-  if (sel?.kind === 'tray') return <div class="status">Placing {sel.n}s. Gold cells seal a cage.</div>;
+  if (sel?.kind === 'tray') return <div class="status">Placing {sel.n}s. Bright cells take it; gold ones seal a cage.</div>;
   return <div class="status" role="status" />;
 }
 

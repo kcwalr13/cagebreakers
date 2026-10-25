@@ -1,7 +1,7 @@
 import { RUN, TOOLS, type ToolId } from '../../content/balance';
 import { describe } from '../../core/commission';
 import { CELLS } from '../../core/grid';
-import { dealtThisRound, scoreOf, tokenAt } from '../../core/run';
+import { act, dealtThisRound, scoreOf, tokenAt } from '../../core/run';
 import { Icon } from '../Icon';
 import { screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
@@ -13,7 +13,7 @@ function Close() {
 }
 
 const TOOL_TEXT: Record<ToolId, { name: string; text: string }> = {
-  redraw: { name: 'Redraw', text: "Every number in your hand that was dealt this round goes back to the bag, and as many new ones are dealt. Numbers already on the page stay. The new deal always keeps the required commission possible." },
+  redraw: { name: 'Redraw', text: "Swaps the numbers in your hand that were dealt this round for different ones from those still to come. Numbers on the page stay put. Your new numbers always keep all three commissions possible together." },
   lens: { name: 'Lens', text: "Shows the number the hidden solution has in one empty cell. It stays shown for the rest of the run." },
   blotter: { name: 'Blotter', text: "For this round only: missing the required commission spills no ink." },
 };
@@ -23,11 +23,14 @@ export function ToolSheet({ tool }: { tool: ToolId }) {
   if (!s || !p) return null;
   const cost = TOOLS[tool];
   const loose = dealtThisRound(s).filter((t) => t.cell < 0).length;
+  // A redraw is refused when no new numbers would keep the commissions' promises; find out before offering it.
+  const trial = tool === 'redraw' && loose && s.gold >= cost ? act(s, { type: 'redraw' }) : null;
   const empty = Array.from({ length: CELLS }, (_, c) => c).filter((c) => !p.stones[c] && !tokenAt(s, c) && !s.revealed.includes(c)).length;
   const why = s.gold < cost ? `You have ${s.gold} gold.`
     : tool === 'redraw' && !loose ? 'Every number dealt this round is on the page. Lift some into your hand to redraw them.'
       : tool === 'blotter' && s.blotter ? 'The Blotter is already down this round.'
-        : tool === 'lens' && !empty ? 'There is no empty cell left to look at.' : null;
+        : tool === 'lens' && !empty ? 'There is no empty cell left to look at.'
+          : trial && !trial.ok ? `${trial.reason}, so this round's numbers stay.` : null;
   const buy = () => {
     if (tool === 'lens') { lensMode.value = true; sheet.value = null; return; }
     if (dispatch({ type: tool })) sheet.value = null;
@@ -74,6 +77,7 @@ export function RoundSheet() {
           <span class="il-text"><span>{r.seals} {r.seals === 1 ? 'cage' : 'cages'} sealed</span><span class="il-out">{r.seals ? `+${r.sealGold} gold` : 'No seals this round'}</span></span>
         </li>
       </ul>
+      {li.spare.length ? <p class="muted-sm">{li.spare.length === 1 ? `Your spare ${li.spare[0]} comes back in a later round.` : `Your spare ${li.spare.join(' and ')} come back in later rounds.`}</p> : null}
       <p class="ink-total">
         {gained ? <>+{gained} gold this round. </> : null}
         {s.phase === 'ruined' ? 'No ink left.' : `${s.ink} ${s.ink === 1 ? 'drop' : 'drops'} of ink left.`}

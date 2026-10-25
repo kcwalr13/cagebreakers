@@ -139,10 +139,26 @@ group('proving commissions possible', () => {
           expect(b.gold).toBeGreaterThan(0);
         }
         expect(new Set(s.posted.map((x) => x.c.kind)).size).toBe(s.posted.length);
+        // All three can be met at once: the round's proof layout does it.
+        const v = viewOf(p, s.proof!);
+        expect(boardIsLatin(s.proof!)).toBe(true);
+        for (const c of s.posted) expect(isMet(c.c, v), describe(c.c, p)).toBe(true);
+        expect(s.posted.filter((x) => !x.required)).toHaveLength(2);
         checked++;
       }
     }
     expect(checked).toBe(6 * RUN.rounds);
+  });
+
+  it('posts three commissions even on a thin first page, all met at once by the proof', () => {
+    for (let i = 0; i < 80; i++) {
+      const seed = `THN${'23456789ABCDEFGHJKMNPQRSTUVWXYZ'[i % 31]}${'ABCDEFGHJK'[Math.floor(i / 31)]}Q`;
+      const s = newRun(seed);
+      const p = pageOf(seed);
+      expect(s.posted, seed).toHaveLength(3);
+      const v = viewOf(p, s.proof!);
+      for (const c of s.posted) expect(isMet(c.c, v), `${seed}: ${describe(c.c, p)}`).toBe(true);
+    }
   });
 
   it('asks the final round to fill the page, with seal bounties', () => {
