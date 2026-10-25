@@ -329,33 +329,32 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 /* Save codes */
 .code-box { width: 100%; min-height: 72px; margin: 6px 0 8px; padding: 10px; border-radius: 10px; border: 1px solid var(--rule); background: var(--paper-hi); color: var(--ink); font: 13px/1.3 ui-monospace, Menlo, monospace; word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
 
-/* A new week: a card over the garden while the week's requests and numbers arrive */
+/* A new week: a card over the garden while the week's requests and numbers arrive. It eases in,
+   lingers until the player does anything (or a few seconds pass), then eases out. */
 .week-card {
   position: absolute; left: 50%; top: 50%; z-index: 4; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   min-width: min(64cqw, 260px); padding: 14px 26px 16px; border-radius: 18px;
   background: var(--paper-hi); border: 1.5px solid var(--accent); box-shadow: var(--lift); color: var(--ink);
-  animation: week-card 1400ms cubic-bezier(.2, .8, .2, 1) both;
+  transform: translate(-50%, -50%);
+  animation: week-card-in 750ms cubic-bezier(.2, .8, .2, 1) both;
 }
-.week-card .week-sun { width: 34px; height: 34px; color: var(--coin); animation: week-sun 1400ms cubic-bezier(.2, .8, .2, 1) both; }
+.week-card.leaving { animation: week-card-out 450ms ease-in both; }
+.week-card .week-sun { width: 34px; height: 34px; color: var(--coin); animation: week-sun 1600ms cubic-bezier(.2, .8, .2, 1) both; }
 .week-card .week-title { font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 9.5cqw, 34px); line-height: 1.1; white-space: nowrap; text-align: center; }
 .week-card .week-line { font-size: 15px; color: var(--ink-soft); text-align: center; text-wrap: balance; }
-@keyframes week-card {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
-  16% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  76% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -56%) scale(.98); }
-}
-@keyframes week-sun { 0% { transform: translateY(10px) rotate(-30deg); opacity: 0; } 30% { transform: none; opacity: 1; } }
-.commissions.arrive li { animation: request-in 420ms cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(220ms + var(--i, 0) * 80ms); }
-@keyframes request-in { from { opacity: 0; transform: translateX(28px); } }
-.hand-slot.dealt { animation: deal-in 380ms cubic-bezier(.3, 1.4, .5, 1) both; animation-delay: calc(480ms + var(--i, 0) * 70ms); }
-@keyframes deal-in { from { opacity: 0; transform: translateY(26px) scale(.6); } }
-.hud-round.turned b { display: inline-block; animation: week-pulse 800ms ease-out; }
-@keyframes week-pulse { 0%, 30% { transform: scale(1.5); color: var(--accent); } }
+@keyframes week-card-in { from { opacity: 0; transform: translate(-50%, -46%) scale(.9); } }
+@keyframes week-card-out { to { opacity: 0; transform: translate(-50%, -56%) scale(.98); } }
+@keyframes week-sun { 0% { transform: translateY(12px) rotate(-40deg); opacity: 0; } 50% { transform: none; opacity: 1; } }
+.commissions.arrive li { animation: request-in 650ms cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(450ms + var(--i, 0) * 160ms); }
+@keyframes request-in { from { opacity: 0; transform: translateX(32px); } }
+.hand-slot.dealt { animation: deal-in 560ms cubic-bezier(.3, 1.4, .5, 1) both; animation-delay: calc(950ms + var(--i, 0) * 130ms); }
+@keyframes deal-in { from { opacity: 0; transform: translateY(28px) scale(.6); } }
+.hud-round.turned b { display: inline-block; animation: week-pulse 1300ms ease-out; }
+@keyframes week-pulse { 0%, 35% { transform: scale(1.5); color: var(--accent); } }
 /* With less motion the card simply shows, still, until it's gone. */
-[data-motion='reduced'] .week-card, [data-motion='reduced'] .week-card .week-sun { animation: none !important; transform: translate(-50%, -50%); }
-[data-motion='reduced'] .week-card .week-sun { transform: none; }
+[data-motion='reduced'] .week-card, [data-motion='reduced'] .week-card .week-sun { animation: none !important; }
+[data-motion='reduced'] .week-card.leaving { display: none; }
 
 /* Teaching tips: a slip of vellum over the bottom rows of the page */
 .coach {

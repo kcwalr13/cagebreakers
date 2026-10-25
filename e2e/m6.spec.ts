@@ -195,22 +195,30 @@ test('a garden resumes after the game is closed', async ({ page: p }) => {
   await expect(p.locator('.hud-round')).toContainText('Week 3 of 6');
 });
 
-test('a new week is announced over the garden, then gets out of the way', async ({ page: p }, info) => {
+test('a new week is announced over the garden, lingers, and goes at the first tap', async ({ page: p }, info) => {
   await runOn(p, 'WKTRN4');
   await R(p, `(r) => { r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.getByRole('button', { name: 'On to week 2' }).click();
   const card = p.locator('.week-card');
   await expect(card).toContainText('Week 2');
   await expect(card).toContainText(/\d new numbers?, 3 new requests/);
+  await p.waitForTimeout(1600);
   await p.screenshot({ path: info.outputPath('m6-12-new-week.png') });
-  // It never blocks the garden, and it's gone in a moment.
+  // It never blocks the garden, lingers while nothing happens, then leaves by itself.
   expect(await card.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
-  await expect(card).toHaveCount(0, { timeout: 3000 });
+  await p.waitForTimeout(1500);
+  await expect(card).toHaveCount(1);
+  await expect(card).toHaveCount(0, { timeout: 4000 });
   await expect(p.locator('.hud-round')).toContainText('Week 2 of 6');
-  // Closing the summary any other way announces the week too.
+  // Closing the summary any other way announces the week too, and the first tap sends the card
+  // away while still doing what it does: here, picking up a number.
   await R(p, `(r) => { r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.keyboard.press('Escape');
   await expect(card).toContainText('Week 3');
+  await p.waitForTimeout(1600);
+  await p.locator('.hand-slot').first().click();
+  await expect(card).toHaveCount(0, { timeout: 1000 });
+  await expect(p.locator('.hand-slot.selected')).toHaveCount(1);
 });
 
 test('a whole garden fills, then is harvested and scored', async ({ page: p }, info) => {

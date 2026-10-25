@@ -11,11 +11,8 @@ import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
   blocker, blockers, canPutBack, clearPage, dispatch, focus, hints, holding, justPlaced, justSealed, legal, aim, message, met, page,
-  placeToken, putBack, refused, revealed, run, say, sealed, selection, useAim, view, weekTurn,
+  placeToken, putBack, refused, revealed, run, say, sealed, selection, useAim, view, weekCard, weekTurn, dismissWeekCard,
 } from './state';
-
-/** How long the new week's card shows over the garden. */
-const WEEK_CARD_MS = 1500;
 
 /** The last tap that picked up a number on the page, so a second tap on it can send it home. */
 let lastPick = { cell: -1, at: 0 };
@@ -129,23 +126,29 @@ function Commissions() {
 /**
  * The new week, announced over the garden once the last week's summary closes: the board looks
  * the same from one week to the next, so this card (with the requests and numbers arriving behind
- * it) is what says a week has passed.
+ * it) is what says a week has passed. It lingers a few seconds, and the first tap or key sends it
+ * away; the tap still does whatever it would have done.
  */
 function WeekCard() {
-  const t = weekTurn.value;
+  const c = weekCard.value;
+  const up = !!c && !c.leaving;
   useEffect(() => {
-    if (!t) return;
-    const timer = setTimeout(() => { if (weekTurn.value?.id === t.id) weekTurn.value = null; }, WEEK_CARD_MS);
-    return () => clearTimeout(timer);
-  }, [t?.id]);
+    if (!up) return;
+    const away = () => dismissWeekCard();
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', away, true);
+    return () => { document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', away, true); };
+  }, [up, c?.id]);
+  // Leaving the garden takes the card with it.
+  useEffect(() => () => { weekCard.value = null; }, []);
   const s = run.value!;
-  if (!t || t.round !== s.round) return null;
+  if (!c || c.round !== s.round) return null;
   const final = s.round === s.setup.rounds;
   const n = dealtThisRound(s).length;
   const numbers = `${n} ${n === 1 ? 'number' : 'numbers'}`;
   const requests = s.posted.length;
   return (
-    <div class="week-card" key={t.id} role="status" aria-live="polite">
+    <div class={`week-card${c.leaving ? ' leaving' : ''}`} key={c.id} role="status" aria-live="polite">
       <Icon name="sun" class="ico week-sun" />
       <span class="week-title">{final ? 'Harvest week' : `Week ${s.round}`}</span>
       <span class="week-line">{final ? `The last ${numbers}: fill the garden.` : `${n} new ${n === 1 ? 'number' : 'numbers'}, ${requests} new ${requests === 1 ? 'request' : 'requests'}`}</span>

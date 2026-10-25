@@ -47,16 +47,39 @@ export const justSealed = signal<Set<number>>(new Set());
 export const refused = signal<{ cell: number; id: number } | null>(null);
 /** The round just inked, for the result sheet: what was posted, what was met, what it paid. */
 /**
- * Set when the week's summary closes and the garden moves on to a new week, so the round screen
- * can show the change: the board itself looks the same, so the new week needs announcing.
+ * Set when the week's summary closes and the garden moves on to a new week: the board looks the
+ * same from week to week, so the new one is announced. `weekTurn` drives the requests and numbers
+ * arriving; `weekCard` is the card over the garden, which lingers until the player does anything.
  */
 export const weekTurn = signal<{ id: number; round: number } | null>(null);
+export const weekCard = signal<{ id: number; round: number; leaving: boolean } | null>(null);
+/** How long the card stays up untouched, how long it takes to leave, and how long the arrivals run. */
+export const WEEK_CARD = { lingerMs: 5000, leaveMs: 450, arriveMs: 2600 } as const;
 let turns = 0;
+let cardTimer: ReturnType<typeof setTimeout> | undefined;
+
+function announceWeek(round: number) {
+  const id = ++turns;
+  batch(() => { weekTurn.value = { id, round }; weekCard.value = { id, round, leaving: false }; });
+  clearTimeout(cardTimer);
+  cardTimer = setTimeout(dismissWeekCard, WEEK_CARD.lingerMs);
+  setTimeout(() => { if (weekTurn.value?.id === id) weekTurn.value = null; }, WEEK_CARD.arriveMs);
+}
+
+/** Sends the week's card away: after its time is up, or as soon as the player does anything. */
+export function dismissWeekCard() {
+  const c = weekCard.value;
+  if (!c || c.leaving) return;
+  clearTimeout(cardTimer);
+  weekCard.value = { ...c, leaving: true };
+  setTimeout(() => { if (weekCard.value?.id === c.id) weekCard.value = null; }, WEEK_CARD.leaveMs);
+}
+
 let shownSheet = sheet.peek();
 effect(() => {
   const now = sheet.value;
   const s = run.peek();
-  if (shownSheet?.kind === 'round' && now?.kind !== 'round' && s?.phase === 'arrange') weekTurn.value = { id: ++turns, round: s.round };
+  if (shownSheet?.kind === 'round' && now?.kind !== 'round' && s?.phase === 'arrange') announceWeek(s.round);
   shownSheet = now;
 });
 
