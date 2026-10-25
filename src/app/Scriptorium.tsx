@@ -139,7 +139,7 @@ export function StationSheet({ id }: { id: StationId }) {
       {st.brings || forSale.length ? (
         <p class="muted-sm">
           {st.brings ? <>Brings a new commission: “{describe(BRINGS_EXAMPLE[st.brings as keyof typeof BRINGS_EXAMPLE] as never, pageOf('ANYPGE'))}”. </> : null}
-          {forSale.length ? <>Filling it puts {forSale.map((i) => `the ${i.name}`).join(' and ')} on sale.</> : null}
+          {forSale.length ? <>Filling it puts {forSale.map((i) => (i.kind === 'tool' ? i.name : `the ${i.name}`)).join(' and ')} on sale.</> : null}
         </p>
       ) : null}
       <ul class="star-marks">
@@ -192,7 +192,7 @@ function ItemRow({ item }: { item: Item }) {
           <button class="pill-btn" aria-pressed={theme.value === style} onClick={() => (theme.value = theme.value === style ? 'system' : style)}>{theme.value === style ? 'In use' : 'Use'}</button>
         ) : <span class="shop-owned"><Icon name="check" class="ico" />Yours</span>
       ) : (
-        <button class="pill-btn buy" disabled={!!why} aria-label={`Buy the ${item.name} for ${item.price} leaf`} onClick={() => buy(item.id)}>
+        <button class="pill-btn buy" disabled={!!why} aria-label={`Buy ${item.name} for ${item.price} leaf`} onClick={() => buy(item.id)}>
           <Icon name="leaf" class="ico leaf xs" />{item.price}
         </button>
       )}

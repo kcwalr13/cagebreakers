@@ -384,9 +384,10 @@ export interface PostInput {
 export interface RoundPlan { posted: Posted[]; proof: number[] }
 
 /**
- * Plans a round's commissions: one required and two bounties. The required one can be met
- * whichever dealt numbers you place; all three together can be met by placing the right ones,
- * and `proof` is such a layout. Deterministic for the rng it's given.
+ * Plans a round's commissions: one required and two bounties. The run asks for a perfect round
+ * (a holding whose `need` is every dealt number): all three can be met at once with every number
+ * placed, and `proof` is such a layout. With a smaller `need`, the required one is planned to be
+ * possible whichever dealt numbers you place. Deterministic for the rng it's given.
  */
 export function planRound(input: PostInput, rng: Rng): RoundPlan {
   const { page, final } = input;

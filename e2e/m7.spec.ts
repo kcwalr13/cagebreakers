@@ -3,6 +3,8 @@ import { type Page as PWPage, expect, test } from '@playwright/test';
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const R = (p: PWPage, fn: string, ...args: unknown[]) =>
   p.evaluate(({ fn, args }) => new Function('r', 'args', `return (${fn})(r, ...args)`)((window as Any).__run, args), { fn, args });
+/** How many numbers are in the hand, counting every stack. */
+const handCount = (p: PWPage) => p.evaluate(() => [...document.querySelectorAll('.hand-slot')].reduce((n, el) => n + Number((el as HTMLElement).dataset.count ?? 1), 0));
 
 async function fresh(p: PWPage, screen = 'title') {
   await p.goto(`./?test&nosw&screen=${screen}`);
@@ -62,29 +64,29 @@ test('the scriptorium sells tools, upgrades and styles; the satchel carries tool
   await p.waitForFunction(() => !!(window as Any).__run);
   await noSmallButtons(p);
   await p.screenshot({ path: info.outputPath('m7-04-shop.png'), fullPage: true });
-  await p.getByRole('button', { name: /Buy the Quill/ }).click();
-  await p.getByRole('button', { name: /Buy the Patron's Purse for/ }).click();
-  await p.getByRole('button', { name: /Buy the Newsprint/ }).click();
+  await p.getByRole('button', { name: /Buy Extra/ }).click();
+  await p.getByRole('button', { name: /Buy Patron's Purse for/ }).click();
+  await p.getByRole('button', { name: /Buy Newsprint/ }).click();
   expect(await R(p, '(r) => r.profile().leaf')).toBe(200 - 20 - 20 - 30);
   await expect(p.locator('.shop-item.owned')).toHaveCount(3);
   // A style, once bought, can be worn.
   await p.locator('.shop-item', { hasText: 'Newsprint' }).getByRole('button', { name: 'Use' }).click();
   await expect.poll(() => p.evaluate(() => document.documentElement.className)).toContain('theme-newsprint');
-  // Swap the Blotter for the Quill in the satchel, then begin.
+  // Trade Shield for Extra in the satchel, then begin.
   await p.goto('./?test&nosw&screen=map');
   await p.waitForFunction(() => !!(window as Any).__run);
   await p.getByRole('button', { name: /The Cloister/ }).click();
-  await p.locator('.satchel-tool', { hasText: 'Blotter' }).click();
-  await p.locator('.satchel-tool', { hasText: 'Quill' }).click();
+  await p.locator('.satchel-tool', { hasText: 'Shield' }).click();
+  await p.locator('.satchel-tool', { hasText: 'Extra' }).click();
   await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(3);
   await p.getByRole('button', { name: 'Begin' }).click();
   expect(await R(p, '(r) => r.state().gold')).toBe(3);
-  await expect(p.getByRole('button', { name: /^Quill/ })).toBeVisible();
-  await expect(p.getByRole('button', { name: /^Blotter/ })).toHaveCount(0);
-  const before = await p.locator('.hand-slot').count();
-  await p.getByRole('button', { name: /^Quill/ }).click();
+  await expect(p.getByRole('button', { name: /^Extra/ })).toBeVisible();
+  await expect(p.getByRole('button', { name: /^Shield/ })).toHaveCount(0);
+  const before = await handCount(p);
+  await p.getByRole('button', { name: /^Extra/ }).click();
   await p.getByRole('button', { name: /Draw a number for/ }).click();
-  await expect(p.locator('.hand-slot')).toHaveCount(before + 1);
+  await expect.poll(() => handCount(p)).toBe(before + 1);
   await p.screenshot({ path: info.outputPath('m7-05-newsprint-quill.png') });
 });
 
@@ -114,12 +116,12 @@ test('the Daily Page ignores upgrades and the satchel', async ({ page: p }) => {
   expect(s).toEqual({ gold: 0, ink: 3, tools: ['redraw', 'lens', 'blotter'], station: null });
 });
 
-test('the Eraser lifts a printed number into your hand', async ({ page: p }) => {
+test('Erase turns a printed number into one of yours', async ({ page: p }) => {
   await fresh(p);
   await R(p, `(r) => { r.setProfile({ ...r.profile(), owned: ['eraser'], satchel: ['eraser', 'lens', 'redraw'], filled: ['copy-desk', 'cloister'] }); r.startStation('cloister'); r.load({ ...r.state(), gold: 20 }); }`);
   await p.goto('./?test&nosw&screen=run');
   await p.waitForFunction(() => !!(window as Any).__run);
-  await p.getByRole('button', { name: /^Eraser/ }).click();
+  await p.getByRole('button', { name: /^Erase/ }).click();
   await p.getByRole('button', { name: /Choose a printed number for/ }).click();
   await expect(p.locator('svg.board .tool-target').first()).toBeVisible();
   // Try printed numbers until one may be lifted (a lift that would break a commission is refused).

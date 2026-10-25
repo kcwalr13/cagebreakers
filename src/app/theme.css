@@ -90,14 +90,11 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .flash-no { fill: var(--rubric); opacity: 0; animation: flash-no 600ms ease-out; }
 @keyframes flash-no { 0% { opacity: .35; } 100% { opacity: 0; } }
 
-/* Tokens: inked numbers are solid; this round's new numbers are pencilled (outlined) until you ink them */
+/* Tokens: every number is a round ink token */
 .token { transform-box: fill-box; transform-origin: center; }
-.token .tok-bg { fill: var(--token); transition: fill .4s ease, stroke .4s ease; }
+.token .tok-bg { fill: var(--token); }
 .token .tok-ring { fill: none; stroke: var(--token-ring); stroke-width: 1.2; }
-.token .tok-num { font-family: 'Alegreya', serif; font-weight: 800; fill: var(--token-num); text-anchor: middle; transition: fill .4s ease; }
-.token.fresh .tok-bg { fill: var(--fresh-face, var(--paper-hi)); stroke: var(--fresh-edge, var(--token)); stroke-width: 2.5; }
-.token.fresh .tok-ring { stroke: var(--fresh-edge, var(--token)); stroke-dasharray: 2.5 3; opacity: .55; }
-.token.fresh .tok-num { fill: var(--fresh-edge, var(--token)); }
+.token .tok-num { font-family: 'Alegreya', serif; font-weight: 800; fill: var(--token-num); text-anchor: middle; }
 .token.stamp { animation: stamp 180ms cubic-bezier(.2, .9, .3, 1.3); }
 @keyframes stamp { from { transform: scale(1.22); } to { transform: scale(1); } }
 .token.lifted .tok-bg { stroke: var(--gold-edge); stroke-width: 3; }
@@ -239,12 +236,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .hand { display: flex; align-items: center; gap: 6px; min-height: 58px; padding: 4px 0; border-top: 1px solid var(--rule); touch-action: none; flex: none; }
 .hand-tokens { flex: 1; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; min-width: 0; align-items: center; padding: 3px; }
 .hand-tokens::-webkit-scrollbar { display: none; }
-.hand-slot { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 50%; flex: none; }
+.hand-slot { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 50%; flex: none; position: relative; }
+.hand-count { position: absolute; right: -4px; bottom: -3px; min-width: 24px; height: 20px; padding: 0 4px; border-radius: 10px; background: var(--paper-hi); border: 1.5px solid var(--ink); color: var(--ink); font-weight: 700; font-size: 12px; line-height: 17px; text-align: center; }
 .hand-slot.selected { background: var(--paper); box-shadow: 0 0 0 2px var(--gold-edge); }
-.hand-slot.stray { outline: 2px dashed var(--rubric); outline-offset: -2px; }
 .hand-empty { color: var(--ink-soft); font-size: 14px; padding-left: 6px; }
-.hand-bag { flex: none; min-width: 48px; display: flex; flex-direction: column; align-items: center; font-family: 'Alegreya', serif; font-weight: 800; font-size: 20px; line-height: 1; color: var(--ink-soft); }
-.hand-bag small { font-family: 'Alegreya Sans', sans-serif; font-weight: 500; font-size: 11px; margin-top: 2px; }
+.hand-all { flex: none; height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--rule); background: var(--paper-hi); color: var(--ink); font-weight: 500; white-space: nowrap; }
+.hand-all[disabled] { opacity: .45; }
 .run-controls { display: flex; gap: 6px; padding: 6px 0 0; flex: none; }
 .run-controls .btn { min-width: 58px; justify-content: center; padding: 0 10px; gap: 4px; }
 .run-controls .btn.tool { flex-direction: column; gap: 1px; min-width: 64px; min-height: 54px; padding: 4px 6px; }
@@ -254,17 +251,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
 .tool-name { font-size: 12px; font-weight: 500; color: var(--ink-soft); line-height: 1; }
 .ico.xs { width: 13px; height: 13px; }
 .status.holding { color: var(--ink); }
-.status.with-meter { justify-content: space-between; text-align: left; }
-.deal-meter { flex: none; min-height: 44px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 22px; border: 1px solid var(--rule); background: var(--paper-hi); color: var(--ink-soft); }
-.deal-meter.full { border-color: var(--gold-edge); color: var(--ink); box-shadow: 0 0 0 1px var(--gold-edge) inset; }
-.dm-pips { display: flex; gap: 4px; align-items: center; }
-.dm-pips i { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid var(--ink-soft); box-sizing: border-box; }
-.dm-pips i.on { background: var(--ink); border-color: var(--ink); }
-.dm-pips i.extra { border-color: var(--gold-edge); }
-.dm-pips i.extra.on { background: var(--gold-edge); }
-.dm-pips i.gap { margin-left: 5px; }
-.dm-bonus { display: inline-flex; align-items: center; gap: 2px; font-family: 'Alegreya', serif; font-weight: 800; font-size: 16px; }
-[data-hand='left'] .status.with-meter { text-align: right; }
+
 .status b { font-family: 'Alegreya', serif; font-weight: 800; font-size: 17px; }
 .btn.primary.waiting { opacity: .55; }
 
@@ -431,7 +418,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-e
   --rubric: #FF4FA3; --button: #FF4FA3; --argent: #0B0B14;
   --g0: #A6FFE9; --g1: #2CE8C1; --g2: #6BFFE0; --g3: #13B892; --gold-edge: #2CE8C1; --on-gold: #062A22; --on-gold-red: #7A0040;
   --tool: rgba(0, 0, 0, .3); --sheen: rgba(255, 255, 255, .5);
-  --token: #1E1E44; --token-num: #FFE14F; --token-ring: rgba(255, 225, 79, .55); --fresh-edge: #FFE14F;
+  --token: #1E1E44; --token-num: #FFE14F; --token-ring: rgba(255, 225, 79, .55);
   --hint-open: rgba(255, 255, 255, .14); --hint-open-edge: rgba(166, 255, 233, .8); --hint-blocked: rgba(0, 0, 0, .6);
   --lens: #4FC3FF; --mark-wash: rgba(255, 79, 163, .14);
 }

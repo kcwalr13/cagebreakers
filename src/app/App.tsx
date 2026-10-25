@@ -18,7 +18,7 @@ function Ghost() {
   if (!d) return null;
   return (
     <div class="ghost" style={{ transform: `translate(${d.x - 28}px, ${d.y - LIFT_PX - 28}px)` }}>
-      <TokenSvg n={d.look.n} fresh={d.look.fresh} size={56} />
+      <TokenSvg n={d.look.n} size={56} />
     </div>
   );
 }

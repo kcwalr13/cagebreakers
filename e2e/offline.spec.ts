@@ -36,7 +36,8 @@ test('a run can be started and played with the network off', async ({ page, cont
   await page.getByRole('button', { name: /The Copy Desk/ }).click();
   await page.getByRole('button', { name: 'Begin' }).click();
   await expect(page.locator('.commission')).toHaveCount(3);
-  await expect(page.locator('.hand-slot')).toHaveCount(4);
+  // Equal numbers stack, so count every number in every stack.
+  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('.hand-slot')].reduce((n, el) => n + Number((el as HTMLElement).dataset.count ?? 1), 0))).toBe(4);
   await page.locator('.hand-slot').first().click();
   await expect(page.locator('.status')).toContainText(/Bright cells take the \d/);
   await context.setOffline(false);

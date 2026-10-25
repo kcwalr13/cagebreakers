@@ -25,10 +25,10 @@ export interface Item {
 }
 
 export const ITEMS: readonly Item[] = [
-  { id: 'quill', kind: 'tool', name: 'Quill', price: 20, text: 'Draw one extra number this round.' },
-  { id: 'gilder', kind: 'tool', name: 'Gilder', price: 25, text: 'This round, sealed cages pay double.' },
-  { id: 'eraser', kind: 'tool', name: 'Eraser', price: 30, after: 'cloister', text: 'Lift a printed number into your hand. From then on it moves like your own.' },
-  { id: 'inkwell', kind: 'tool', name: 'Inkwell', price: 40, after: 'long-night', text: 'Refill a drop of ink.' },
+  { id: 'quill', kind: 'tool', name: 'Extra', price: 20, text: 'Draw one extra number this round.' },
+  { id: 'gilder', kind: 'tool', name: 'Double', price: 25, text: 'This round, sealed cages pay double.' },
+  { id: 'eraser', kind: 'tool', name: 'Erase', price: 30, after: 'cloister', text: 'Turn a printed number into one of yours, free to move like any other.' },
+  { id: 'inkwell', kind: 'tool', name: 'Refill', price: 40, after: 'long-night', text: 'Refill a drop of ink.' },
   { id: 'purse-1', kind: 'upgrade', name: "Patron's Purse", price: 20, text: 'Start every map run with 3 gold.' },
   { id: 'purse-2', kind: 'upgrade', name: "Patron's Purse II", price: 40, needs: 'purse-1', text: 'Start every map run with 6 gold.' },
   { id: 'bounty-hunter', kind: 'upgrade', name: 'Bounty Hunter', price: 40, after: 'counting-house', text: 'Each bounty pays 1 more gold.' },

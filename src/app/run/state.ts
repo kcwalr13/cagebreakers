@@ -226,6 +226,28 @@ export function placeToken(id: number, cell: number): boolean {
   return dispatch({ type: 'place', id, cell }, cell);
 }
 
+/** The layout before All to hand, so it can be put back until anything else changes. */
+const cleared = signal<{ from: RunState; cells: [number, number][] } | null>(null);
+export const canPutBack = computed(() => !!cleared.value && cleared.value.from === run.value);
+
+/** Takes every number off the page into your hand. */
+export function clearPage() {
+  const s = run.value;
+  if (!s) return;
+  const cells = s.tokens.filter((t) => t.cell >= 0).map((t) => [t.id, t.cell] as [number, number]);
+  if (dispatch({ type: 'clear' })) cleared.value = { from: run.value!, cells };
+}
+
+/** Puts every number back where it stood before All to hand. */
+export function putBack() {
+  const c = cleared.value;
+  let s = run.value;
+  if (!c || !s || s !== c.from) return;
+  for (const [id, cell] of c.cells) { const r = act(s, { type: 'place', id, cell }); if (r.ok) s = r.state; }
+  batch(() => { run.value = s; cleared.value = null; selection.value = null; });
+  play('place');
+}
+
 /** A tap on the page while a tool waits for its target. */
 export function useAim(cell: number) {
   const tool = aim.value;
@@ -233,7 +255,7 @@ export function useAim(cell: number) {
   if (dispatch({ type: tool, cell }, cell)) {
     aim.value = null;
     const p = page.value!;
-    if (tool === 'lens') say(`The Lens shows a ${p.solution[cell]} belongs there.`, false, 3600);
-    else say('The number is yours now: move it like any other, but keep it on the page.', false, 3600);
+    if (tool === 'lens') say(`Hint: a ${p.solution[cell]} belongs there.`, false, 3600);
+    else say('That number is yours now: move it like any other.', false, 3600);
   }
 }

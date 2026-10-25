@@ -9,7 +9,7 @@ import {
   setupFor, starsFor, stationOpen,
 } from './meta';
 import { pageOf } from './run';
-import { type RunSetup, type RunState, STANDARD_SETUP, act, dealtThisRound, newRun, runPage, scoreOf, valuesOf } from './run';
+import { type RunSetup, type RunState, STANDARD_SETUP, act, dealtThisRound, newRun, placementOf, runPage, scoreOf, valuesOf } from './run';
 
 const fresh = (): Profile => migrateProfile(null);
 
@@ -95,13 +95,13 @@ describe('tools', () => {
 
   it('refuse tools you are not carrying', () => {
     const s = { ...newRun('CARRYQ'), gold: 50 };
-    expect(act(s, { type: 'quill' }).reason).toMatch(/aren't carrying the Quill/);
+    expect(act(s, { type: 'quill' }).reason).toMatch(/aren't carrying Extra/);
   });
 
-  it('the Quill draws one extra, optional number', () => {
+  it('the Quill draws one extra number, keeping a perfect round possible', () => {
     const s = newRun('QUILLA', { setup: all });
     const r = act(s, { type: 'quill' });
-    expect(r.ok).toBe(true);
+    expect(r.ok, r.reason).toBe(true);
     expect(dealtThisRound(r.state)).toHaveLength(dealtThisRound(s).length + 1);
     expect(r.state.need).toBe(s.need);
     expect(r.state.gold).toBe(50 - TOOLS.quill);
@@ -137,9 +137,9 @@ describe('tools', () => {
     const t = r.state.tokens.find((x) => x.round === 0)!;
     expect(t).toMatchObject({ n: p.stones[stone], cell: stone });
     expect(runPage(r.state).stones[stone]).toBe(0);
-    // It can move, and it must stay on the page.
+    // It's one of your numbers now: it can move, and counts like any other.
     const lifted = act(r.state, { type: 'place', id: t.id, cell: -1 }).state;
-    expect(act(lifted, { type: 'ink' }).reason).toMatch(/Put your inked \d back on the page/);
+    expect(placementOf(lifted).hand).toContain(t.n);
     expect(act(s, { type: 'eraser', cell: p.stones.findIndex((n) => n === 0) }).reason).toMatch(/printed number/);
   });
 });

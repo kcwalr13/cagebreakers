@@ -3,7 +3,8 @@
  * once; the player can turn tips off or bring them back.
  */
 import { computed, effect, signal } from '@preact/signals';
-import { type RunState, dealtThisRound, onPage, viewNow } from '../core/run';
+import { RUN } from '../content/balance';
+import { type RunState, inkBlocker, onPage, viewNow } from '../core/run';
 import { run } from './run/state';
 import { readJson, writeJson } from './storage';
 
@@ -11,11 +12,11 @@ interface Tip { id: string; text: string; when: (s: RunState) => boolean }
 
 const TIPS: Tip[] = [
   { id: 'latin', when: (s) => s.round === 1 && !onPage(s).length, text: 'Drag a number onto the page, or tap it, then a cell. Bright cells can take it; shaded ones can\'t.' },
-  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the page are this round\'s commissions. Miss the required one and you spill a drop of ink; the other two pay gold. All three can always be met at once: finding how is the puzzle. Tap one to see where it applies.' },
+  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the page are this round\'s commissions. Miss the required one and you spill a drop of ink; the other two pay gold. All three can always be met at once, with every number placed: finding how is the puzzle. Tap one to see where it applies.' },
   { id: 'seal', when: (s) => viewNow(s).sealed.size > 0, text: 'Sealed! A full cage that makes its red target turns gold, and pays 1 gold every round you ink it sealed.' },
-  { id: 'ink', when: (s) => s.round === 1 && dealtThisRound(s).filter((t) => t.cell >= 0).length >= s.need, text: 'New numbers are pencilled in until you ink them. Place all but one, then Ink it. Place every one and the round pays a bonus gold (the counter beside the message); a number you keep goes back for later.' },
-  { id: 'move', when: (s) => s.round === 2, text: 'Last round\'s numbers are inked now. They can still move, but they must stay on the page: drag one somewhere new to meet this round\'s commissions.' },
-  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= 2, text: 'Gold buys tools: Redraw swaps the numbers in your hand for new ones, the Lens shows a hidden number, and the Blotter saves your ink for a round.' },
+  { id: 'ink', when: (s) => s.round === 1 && inkBlocker(s) === null, text: `Place all your numbers, or all but one, then Ink it. Placing every one pays ${RUN.fullHandGold} bonus gold; a number you keep is dealt again later.` },
+  { id: 'move', when: (s) => s.round === 2, text: 'Everything on the page can move. Drag numbers around to meet this round\'s commissions, or tap All to hand to start the page over.' },
+  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= 2, text: 'Gold buys tools. Swap trades the numbers in your hand for others, Hint shows the right number for a cell, and Shield keeps your ink if you miss the required commission. Tap one to see what it costs.' },
   { id: 'final', when: (s) => s.round === s.setup.rounds, text: 'The final round: every number still to come is dealt now, and all of them go in. Fill the page to finish the run.' },
 ];
 

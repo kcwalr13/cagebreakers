@@ -51,20 +51,15 @@ function checkInvariants(s: RunState) {
   if (s.phase === 'arrange') checkProof(s);
 }
 
-/** The round's proof is a legal layout of numbers you could end the round with, meeting all three commissions. */
+/** The round's proof is a perfect round: a legal layout of every number you hold, meeting all three commissions. */
 function checkProof(s: RunState) {
   const p = runPage(s);
   const proof = s.proof!;
   expect(proof).toHaveLength(CELLS);
   expect(boardIsLatin(proof)).toBe(true);
   for (let c = 0; c < CELLS; c++) if (p.stones[c]) expect(proof[c]).toBe(p.stones[c]);
-  const placed = proof.filter((n, c) => n && !p.stones[c]);
-  const pool = placed.slice();
-  const take = (n: number) => { const i = pool.indexOf(n); if (i < 0) return false; pool.splice(i, 1); return true; };
-  for (const t of s.tokens.filter((x) => x.round < s.round)) expect(take(t.n), 'an earlier number is missing from the proof').toBe(true);
-  const fresh = dealtThisRound(s).map((t) => t.n);
-  for (const n of pool) { const i = fresh.indexOf(n); expect(i, 'the proof uses a number you were not dealt').toBeGreaterThanOrEqual(0); fresh.splice(i, 1); }
-  expect(pool.length).toBeGreaterThanOrEqual(s.need);
+  const placed = proof.filter((n, c) => n && !p.stones[c]).sort();
+  expect(placed, 'the proof places every number you hold, and no others').toEqual(s.tokens.map((t) => t.n).sort());
   const v = viewOf(p, proof);
   for (const c of s.posted) expect(isMet(c.c, v), JSON.stringify(c.c)).toBe(true);
 }
@@ -121,10 +116,22 @@ describe('a run', () => {
     expect(s.round).toBe(2);
     // The unplaced number went back to the bag; the placed ones stay.
     expect(s.tokens.filter((t) => t.round === 1)).toHaveLength(RUN.deal[0]! - 1);
-    const old = s.tokens.find((t) => t.round === 1)!;
+    // Every number counts alike: one may stay in your hand, whenever it was dealt, but not two.
+    const [old, other] = s.tokens.filter((t) => t.round === 1);
     s = placeOnSolution(s);
-    s = act(s, { type: 'place', id: old.id, cell: -1 }).state;
-    expect(inkBlocker(s)).toMatch(/Put your inked \d back on the page/);
+    s = act(s, { type: 'place', id: old!.id, cell: -1 }).state;
+    expect(inkBlocker(s)).toBeNull();
+    s = act(s, { type: 'place', id: other!.id, cell: -1 }).state;
+    expect(inkBlocker(s)).toBe('Place 1 more number');
+    checkInvariants(s);
+  });
+
+  it('takes every number off the page into your hand at once', () => {
+    let s = placeOnSolution(newRun('CLEARS'));
+    expect(act(newRun('CLEARS'), { type: 'clear' }).ok).toBe(false);
+    s = act(s, { type: 'clear' }).state;
+    expect(s.tokens.every((t) => t.cell === -1)).toBe(true);
+    expect(valuesOf(s)).toEqual(runPage(s).stones);
     checkInvariants(s);
   });
 
@@ -165,7 +172,7 @@ describe('a run', () => {
     expect(some.inked!.fullHandGold).toBe(0);
     expect(placementOf(placeOnSolution(s, s.need)).full).toBe(false);
     const every = placeOnSolution(s);
-    expect(placementOf(every)).toMatchObject({ placed: s.need + 1, need: s.need, bonus: RUN.fullHandGold, full: true });
+    expect(placementOf(every)).toMatchObject({ placed: s.tokens.length, hand: [], spare: 1, bonus: RUN.fullHandGold, full: true });
     const all = act(every, { type: 'ink' });
     expect(all.inked!.fullHand).toBe(true);
     expect(all.state.gold).toBe(all.inked!.bountyGold + all.inked!.sealGold + RUN.fullHandGold);
@@ -208,7 +215,7 @@ describe('a run', () => {
     }
   });
 
-  it('redraws loose numbers for gold, keeping all three commissions possible', () => {
+  it('swaps the numbers in your hand for gold, keeping a perfect round possible', () => {
     let s = newRun('REDRAWA');
     expect(act(s, { type: 'redraw' }).reason).toMatch(/gold/);
     s = { ...s, gold: 10 };
@@ -228,6 +235,17 @@ describe('a run', () => {
       expect(dealtThisRound(t).filter((x) => placed.includes(x.id))).toHaveLength(2);
       checkInvariants(t);
     }
+    // A number from an earlier round in your hand is swapped like any other.
+    let later = act({ ...placeOnSolution(newRun('REDRAWB')), ink: RUN.startInk }, { type: 'ink' }).state;
+    later = { ...placeOnSolution(later), gold: 10 };
+    const old = later.tokens.find((x) => x.round === 1)!;
+    later = act(later, { type: 'place', id: old.id, cell: -1 }).state;
+    const swapped = act(later, { type: 'redraw' });
+    if (swapped.ok) {
+      expect(swapped.state.tokens.some((x) => x.id === old.id)).toBe(false);
+      checkInvariants(swapped.state);
+    } else expect(swapped.reason).toMatch(/possible/);
+    expect(act({ ...placeOnSolution(newRun('REDRAWB')), gold: 10 }, { type: 'redraw' }).reason).toMatch(/hand is empty/);
   });
 
   it('refuses a redraw that would break a promise, and charges nothing for it', () => {
@@ -237,7 +255,7 @@ describe('a run', () => {
       const r = act(s, { type: 'redraw' });
       if (r.ok) { checkInvariants(r.state); continue; }
       refused++;
-      expect(r.reason).toBe('No other deal would keep all three commissions possible');
+      expect(r.reason).toBe('No other numbers would keep all three commissions possible');
       expect(r.state).toBe(s);
     }
     expect(refused).toBeLessThan(6);

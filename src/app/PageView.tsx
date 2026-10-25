@@ -18,7 +18,6 @@ export interface PieceView {
   key: string;
   n: number;
   /** Dealt this round, so marked in red until inked. */
-  fresh?: boolean;
   cls?: string;
 }
 
@@ -138,7 +137,7 @@ export function PageView(props: PageViewProps) {
 
       {props.pieces.map((piece, c) => piece ? (
         <TokenShape
-          key={piece.key} n={piece.n} fresh={piece.fresh}
+          key={piece.key} n={piece.n}
           x={cellX(c) + CELL_PX / 2 + 2} y={y(c) + CELL_PX / 2 + 4} r={pieceRadius} class={piece.cls ?? ''}
         />
       ) : null)}

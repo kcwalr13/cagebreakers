@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { TOOLS, type ToolId } from '../../content/balance';
 import { cellsOf, describe, readout } from '../../core/commission';
-import { type RunState, TOOL_NAMES, bagCount, inHand, placementOf, tokenAt } from '../../core/run';
+import { type RunState, type Token, TOOL_NAMES, inHand, placementOf, tokenAt } from '../../core/run';
 import { dismissTip, tip } from '../coach';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
@@ -10,8 +10,8 @@ import { screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { TokenSvg } from '../Token';
 import {
-  blocker, blockers, dispatch, focus, hints, holding, justPlaced, justSealed, legal, aim, message, met, page, placeToken, refused,
-  revealed, run, say, sealed, selection, useAim, view,
+  blocker, blockers, canPutBack, clearPage, dispatch, focus, hints, holding, justPlaced, justSealed, legal, aim, message, met, page,
+  placeToken, putBack, refused, revealed, run, say, sealed, selection, useAim, view,
 } from './state';
 
 const handlers: PressHandlers = {
@@ -19,12 +19,12 @@ const handlers: PressHandlers = {
     const s = run.value;
     if (!s || aim.value) return null;
     const t = tokenAt(s, cell);
-    return t ? { n: t.n, fresh: t.round === s.round } : null;
+    return t ? { n: t.n } : null;
   },
   lookOf(key) {
     const s = run.value;
     const t = s?.tokens.find((x) => x.id === Number(key));
-    return s && t && !aim.value ? { n: t.n, fresh: t.round === s.round } : null;
+    return s && t && !aim.value ? { n: t.n } : null;
   },
   drop(from, cell) {
     const s = run.value;
@@ -102,7 +102,7 @@ function Commissions() {
               </span>
               <span class="cm-tag">
                 {c.required
-                  ? (s.blotter ? <><Icon name="blotter" class="ico sm" />Blotted</> : <><Icon name="ink" class="ico sm ink" />Required</>)
+                  ? (s.blotter ? <><Icon name="blotter" class="ico sm" />Shielded</> : <><Icon name="ink" class="ico sm ink" />Required</>)
                   : <><Icon name="gold" class="ico sm gold" />{c.gold}</>}
               </span>
             </button>
@@ -134,7 +134,7 @@ function Board() {
   for (const t of s.tokens) {
     if (t.cell < 0) continue;
     pieces[t.cell] = {
-      key: `t${t.id}`, n: t.n, fresh: t.round === s.round,
+      key: `t${t.id}`, n: t.n,
       cls: [justPlaced.value === t.id ? 'stamp' : '', sel === t.id ? 'lifted' : '', movingCell === t.cell ? 'ghosted' : ''].join(' ').trim(),
     };
   }
@@ -183,76 +183,56 @@ function Status() {
       </div>
     );
   }
-  const meter = placementOf(s).bonus > 0;
-  return (
-    <div class={`status${meter ? ' with-meter' : ''}`} role="status">
-      <span>{roundStatus(s, blocker.value)}</span>
-      {meter ? <DealMeter /> : null}
-    </div>
-  );
+  return <div class="status" role="status">{roundStatus(s, blocker.value)}</div>;
 }
-
-const listOf = (ns: readonly number[]) => (ns.length < 2 ? `${ns[0]}` : `${ns.slice(0, -1).join(', ')} and ${ns[ns.length - 1]}`);
 
 /** What the round still needs before it can be inked, in plain words. */
 function roundStatus(s: RunState, why: string | null): string {
   const p = placementOf(s);
   if (s.round === s.setup.rounds) return why ? `${why} to fill the page.` : 'The page is full. Finish the run.';
-  if (p.strays.length) return `${why}.${p.placed > p.need ? ` Only ${p.need} of your ${p.dealt} new ones must stay.` : ''}`;
-  if (why) return `${why}.`;
-  if (p.full || !p.bonus) return 'Ready to ink, with every new number placed.';
-  const spare = inHand(s).filter((t) => t.round === s.round).map((t) => t.n).sort((a, b) => a - b);
-  return `Ready to ink. Your spare ${listOf(spare)} ${spare.length === 1 ? 'goes' : 'go'} back for later.`;
+  const bonus = `${p.bonus} bonus gold`;
+  if (why) return `${why}, or all ${p.hand.length} for ${bonus}.`;
+  if (p.full) return `Every number is placed: ${bonus} when you ink.`;
+  return `Ready to ink. Keep the ${p.hand[0]} for later, or place it for ${bonus}.`;
 }
 
-/** New numbers placed this round: the first ones are needed, the rest earn the full-hand bonus. */
-function DealMeter() {
-  const s = run.value!;
-  const p = placementOf(s);
-  const explain = () => say(`Place at least ${p.need} of your ${p.dealt} new numbers to ink. Place all ${p.dealt} and the round pays ${p.bonus} more gold. Any you keep go back for a later round.`, false, 5000);
-  return (
-    <button
-      class={`deal-meter${p.full ? ' full' : ''}`}
-      aria-label={`${p.placed} of ${p.dealt} new numbers placed. Placing all ${p.dealt} pays ${p.bonus} more gold.`}
-      onClick={explain}
-    >
-      <span class="dm-pips" aria-hidden="true">
-        {Array.from({ length: p.dealt }, (_, i) => (
-          <i key={i} class={[i < p.placed ? 'on' : '', i >= p.need ? 'extra' : '', i === p.need ? 'gap' : ''].join(' ').trim()} />
-        ))}
-      </span>
-      <span class="dm-bonus" aria-hidden="true"><Icon name="gold" class="ico gold xs" />+{p.bonus}</span>
-    </button>
-  );
+/** Numbers in hand grouped by value, smallest first. */
+function stacks(hand: readonly Token[]): [number, Token[]][] {
+  const by = new Map<number, Token[]>();
+  for (const t of hand) by.set(t.n, [...(by.get(t.n) ?? []), t]);
+  return [...by].sort((a, b) => a[0] - b[0]);
 }
 
 function Hand() {
   const s = run.value!;
   const hand = inHand(s);
   const sel = selection.value;
-  const toCome = bagCount(s.bag);
+  const onPage = s.tokens.length - hand.length;
   return (
     <div class="hand" role="toolbar" aria-label="Your numbers">
       <div class="hand-tokens">
-        {hand.map((t) => {
-          const fresh = t.round === s.round;
+        {stacks(hand).map(([n, ts]) => {
+          // Equal numbers share one stack; pressing it takes one of them.
+          const t = ts.find((x) => x.id === sel) ?? ts[0]!;
           return (
             <button
-              key={t.id}
-              class={`hand-slot${sel === t.id ? ' selected' : ''}${fresh ? '' : ' stray'}`}
-              aria-label={fresh ? `New number ${t.n}` : `Inked number ${t.n}: it must go back on the page`}
+              key={n}
+              class={`hand-slot${sel === t.id ? ' selected' : ''}`}
+              data-count={ts.length}
+              aria-label={ts.length > 1 ? `Number ${n}, ${ts.length} in your hand` : `Number ${n}`}
               aria-pressed={sel === t.id}
               onPointerDown={(e) => pressItem(e as unknown as PointerEvent, String(t.id))}
             >
-              <TokenSvg n={t.n} size={46} fresh={fresh} />
+              <TokenSvg n={n} size={46} />
+              {ts.length > 1 ? <span class="hand-count" aria-hidden="true">×{ts.length}</span> : null}
             </button>
           );
         })}
         {!hand.length ? <span class="hand-empty">All your numbers are on the page.</span> : null}
       </div>
-      {s.round < s.setup.rounds ? (
-        <span class="hand-bag" aria-label={`${toCome} more numbers to come in later rounds`}>{toCome}<small>to come</small></span>
-      ) : null}
+      {canPutBack.value
+        ? <button class="pill-btn hand-all" onClick={putBack}>Put back</button>
+        : <button class="pill-btn hand-all" disabled={!onPage} onClick={clearPage}>All to hand</button>}
     </div>
   );
 }

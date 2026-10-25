@@ -7,7 +7,7 @@
 import { BASE_TOOLS, RUN, TOOLS, type ToolId } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
 import { PAGE_VARIANTS, type PageVariant } from '../content/stations';
-import { type Holding, type Posted, type View, findLayout, isMet, planRound, possible, viewOf } from './commission';
+import { type Holding, type Posted, type View, findLayout, isMet, planRound, viewOf } from './commission';
 import { CELLS, PEERS, colOf, rowOf } from './grid';
 import { type Page, generatePage } from './page';
 import { type Rng, stream } from './rng';
@@ -16,7 +16,7 @@ import { boardValues, isLegal } from './rules';
 export interface Token {
   id: number;
   n: number;
-  /** The round it was dealt in. Numbers from earlier rounds must all be on the page to ink. */
+  /** The round it was dealt in (0 for a printed number the Eraser lifted). The rules treat every number alike. */
   round: number;
   /** -1 while in your hand. */
   cell: number;
@@ -89,7 +89,10 @@ export interface RunState {
   bag: number[];
   tokens: Token[];
   nextId: number;
-  /** How many of this round's numbers must be on the page to ink. */
+  /**
+   * The fewest of this round's new numbers to place if every earlier number stays: all but one, or
+   * all in the final round. The rule itself counts every number alike; see placementOf.
+   */
   need: number;
   /** Redraws bought this round. */
   redraws: number;
@@ -116,6 +119,8 @@ export type RunAction =
   | { type: 'gilder' }
   | { type: 'eraser'; cell: number }
   | { type: 'inkwell' }
+  /** Takes every number off the page into your hand. */
+  | { type: 'clear' }
   | { type: 'ink' };
 
 export interface ActResult {
@@ -189,43 +194,46 @@ export function legalCells(s: RunState, id: number): number[] {
 }
 
 /**
- * Where this round's numbers stand. New numbers are the ones dealt this round: at least `need` of
- * them go on the page, and placing all of them earns the full-hand bonus. Inked numbers (from
- * earlier rounds) must all be back on the page to ink.
+ * Where your numbers stand. Every number is alike, whenever it was dealt: to ink, all of them go
+ * on the page, or all but one. Placing every one earns the full-hand bonus. In the final round
+ * all of them must go in.
  */
 export interface Placement {
-  dealt: number;
+  /** Every number you hold, on the page or in your hand. */
+  total: number;
   placed: number;
-  need: number;
-  /** Inked numbers in your hand, which must go back on the page. */
-  strays: number[];
-  /** Gold for placing every new number; 0 when there's no choice (the final round). */
+  /** Numbers in your hand, sorted. */
+  hand: number[];
+  /** How many may stay in your hand when you ink: 1, or 0 in the final round. */
+  spare: number;
+  /** Gold for placing every number; 0 in the final round, where there's no choice. */
   bonus: number;
-  /** Every new number is on the page and the bonus will be paid. */
+  /** Every number is on the page and the bonus will be paid. */
   full: boolean;
 }
 
 export function placementOf(s: RunState): Placement {
-  const fresh = dealtThisRound(s);
-  const placed = fresh.filter((t) => t.cell >= 0).length;
   const final = s.round >= s.setup.rounds;
-  const bonus = !final && fresh.length > s.need ? RUN.fullHandGold : 0;
-  const strays = s.tokens.filter((t) => t.round < s.round && t.cell < 0).map((t) => t.n).sort((a, b) => a - b);
-  return { dealt: fresh.length, placed, need: s.need, strays, bonus, full: bonus > 0 && placed === fresh.length };
+  const hand = s.tokens.filter((t) => t.cell < 0).map((t) => t.n).sort((a, b) => a - b);
+  const bonus = final ? 0 : RUN.fullHandGold;
+  return {
+    total: s.tokens.length, placed: s.tokens.length - hand.length, hand, spare: final ? 0 : 1,
+    bonus, full: bonus > 0 && hand.length === 0,
+  };
 }
 
 /** Why the round can't be inked yet, or null when it can. */
 export function inkBlocker(s: RunState): string | null {
   if (s.phase !== 'arrange') return 'The run is over';
   const p = placementOf(s);
-  if (p.strays.length) {
-    return p.strays.length === 1 ? `Put your inked ${p.strays[0]} back on the page` : `Put your ${p.strays.length} inked numbers back on the page`;
-  }
-  const short = p.need - p.placed;
-  const final = s.round >= s.setup.rounds;
-  if (short > 0) return short === 1 ? `Place 1 more${final ? '' : ' new'} number` : `Place ${short} more${final ? '' : ' new'} numbers`;
+  const short = p.hand.length - p.spare;
+  if (short > 0) return short === 1 ? 'Place 1 more number' : `Place ${short} more numbers`;
   return null;
 }
+
+/** Every number you hold, all placed: what a perfect round puts on the page. */
+const everything = (tokens: readonly Token[], extra: readonly number[] = []): Holding =>
+  ({ kept: [...tokens.map((t) => t.n), ...extra], dealt: [], need: 0 });
 
 export function scoreOf(s: RunState): { gold: number; ink: number; inkBonus: number; total: number } {
   const inkBonus = s.phase === 'done' ? s.ink * s.setup.inkBonus : 0;
@@ -265,12 +273,13 @@ function startRound(s: RunState, lastRequired: CommissionKind | undefined): RunS
   const kept = s.tokens.map((t) => t.n);
   s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
   s.need = final ? drawn.length : Math.max(0, drawn.length - 1);
+  // The plan proves a perfect round: every number placed, all three commissions met.
   s.redraws = 0;
   s.blotter = false;
   s.gilded = false;
   const plan = planRound({
     page, round: s.round, final,
-    holding: { kept, dealt: drawn, need: s.need },
+    holding: { kept, dealt: drawn, need: drawn.length },
     now: viewOf(page, valuesOf(s)),
     lastRequired,
     kinds: s.setup.kinds,
@@ -331,12 +340,13 @@ function conflictLine(page: Page, values: readonly number[], cell: number, n: nu
   return `A ${n} can't go there`;
 }
 
+/** Tools are named for what they do. */
 export const TOOL_NAMES: Record<ToolId, string> = {
-  redraw: 'Redraw', lens: 'Lens', blotter: 'Blotter', quill: 'Quill', gilder: 'Gilder', eraser: 'Eraser', inkwell: 'Inkwell',
+  redraw: 'Swap', lens: 'Hint', blotter: 'Shield', quill: 'Extra', gilder: 'Double', eraser: 'Erase', inkwell: 'Refill',
 };
 
 function spend(s: RunState, tool: ToolId): string | null {
-  if (!s.setup.tools.includes(tool)) return `You aren't carrying the ${TOOL_NAMES[tool]}`;
+  if (!s.setup.tools.includes(tool)) return `You aren't carrying ${TOOL_NAMES[tool]}`;
   if (s.gold < TOOLS[tool]) return `Not enough gold: it costs ${TOOLS[tool]}`;
   s.gold -= TOOLS[tool];
   return null;
@@ -367,35 +377,27 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'redraw': {
-      const loose = s.tokens.filter((t) => t.round === s.round && t.cell < 0);
-      if (!loose.length) return refuse(prev, 'Every number dealt this round is on the page');
+      // Swaps the numbers in your hand, whenever they were dealt, for others still to come.
+      const loose = s.tokens.filter((t) => t.cell < 0);
+      if (!loose.length) return refuse(prev, 'Your hand is empty: take numbers off the page to swap them');
+      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has no other numbers to deal');
       const bag = s.bag.slice();
       for (const t of loose) bag[t.n]!++;
       if (bagCount(bag) <= loose.length) return refuse(prev, 'There are no other numbers left to deal');
       const why = spend(s, 'redraw');
       if (why) return refuse(prev, why);
       s.redraws++;
-      const stay = s.tokens.filter((t) => !loose.includes(t));
-      const holdingWith = (drawn: number[]): Holding => ({
-        kept: stay.filter((t) => t.round < s.round).map((t) => t.n),
-        dealt: [...stay.filter((t) => t.round === s.round).map((t) => t.n), ...drawn],
-        need: s.need,
-      });
-      // A redraw keeps the round's promises: the required commission stays possible whichever
-      // numbers you place, and all three commissions stay possible together.
-      const required = s.posted.find((p) => p.required);
+      const stay = s.tokens.filter((t) => t.cell >= 0);
+      // The new numbers keep the round's promise: a layout of every number that meets all three.
       const goals = s.posted.map((p) => p.c);
       let pick: { drawn: number[]; bag: number[] } | null = null;
       for (let attempt = 0; attempt < 16 && !pick; attempt++) {
         const tag = `${s.round}:${s.redraws}:${attempt}`;
         const d = draw(bag, loose.length, stream(s.seed, `deal:${tag}`));
-        const h = holdingWith(d.drawn);
-        const check = stream(s.seed, `redraw-check:${tag}`);
-        if (required && !possible(page, h, required.c, check, true)) continue;
-        const found = findLayout(page, h, goals, check);
+        const found = findLayout(page, everything(stay, d.drawn), goals, stream(s.seed, `redraw-check:${tag}`));
         if (found) { pick = d; s.proof = found; }
       }
-      if (!pick) return refuse(prev, 'No other deal would keep all three commissions possible');
+      if (!pick) return refuse(prev, 'No other numbers would keep all three commissions possible');
       s.bag = pick.bag;
       s.tokens = [...stay, ...giveTokens(s, pick.drawn)];
       return { state: s, ok: true };
@@ -404,7 +406,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     case 'lens': {
       if (a.cell < 0 || a.cell >= CELLS || page.stones[a.cell]) return refuse(prev, 'Choose an empty cell');
       if (tokenAt(s, a.cell)) return refuse(prev, 'Choose an empty cell');
-      if (s.revealed.includes(a.cell)) return refuse(prev, 'The Lens has already shown that cell');
+      if (s.revealed.includes(a.cell)) return refuse(prev, 'Hint has already shown that cell');
       const why = spend(s, 'lens');
       if (why) return refuse(prev, why);
       s.revealed.push(a.cell);
@@ -412,8 +414,8 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'blotter': {
-      if (s.blotter) return refuse(prev, 'The Blotter is already down this round');
-      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has nothing to blot');
+      if (s.blotter) return refuse(prev, 'Shield is already up this round');
+      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has nothing to shield');
       const why = spend(s, 'blotter');
       if (why) return refuse(prev, why);
       s.blotter = true;
@@ -425,15 +427,23 @@ export function act(prev: RunState, a: RunAction): ActResult {
       if (bagCount(s.bag) <= RUN.finalReserve) return refuse(prev, 'No spare numbers are left to draw');
       const why = spend(s, 'quill');
       if (why) return refuse(prev, why);
-      // An extra number is optional, so every commission stays possible as it was.
-      const { drawn, bag } = draw(s.bag, 1, stream(s.seed, `quill:${s.round}:${s.nextId}`));
-      s.bag = bag;
-      s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
-      return { state: s, ok: true };
+      // The extra number keeps the round's promise too: some layout of every number meets all three.
+      const goals = s.posted.map((p) => p.c);
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const tag = `${s.round}:${s.nextId}:${attempt}`;
+        const { drawn, bag } = draw(s.bag, 1, stream(s.seed, `quill:${tag}`));
+        const found = findLayout(page, everything(s.tokens, drawn), goals, stream(s.seed, `quill-check:${tag}`));
+        if (!found) continue;
+        s.bag = bag;
+        s.proof = found;
+        s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
+        return { state: s, ok: true };
+      }
+      return refuse(prev, 'No extra number would keep all three commissions possible');
     }
 
     case 'gilder': {
-      if (s.gilded) return refuse(prev, 'The Gilder is already at work this round');
+      if (s.gilded) return refuse(prev, 'Double is already on this round');
       const why = spend(s, 'gilder');
       if (why) return refuse(prev, why);
       s.gilded = true;
@@ -452,26 +462,27 @@ export function act(prev: RunState, a: RunAction): ActResult {
       if (a.cell < 0 || a.cell >= CELLS || !page.stones[a.cell]) return refuse(prev, 'Choose a printed number');
       const why = spend(s, 'eraser');
       if (why) return refuse(prev, why);
-      // The lifted number becomes yours: it stays where it was, can move, and must stay on the page.
+      // The printed number becomes one of yours: it stays where it was, and can move like any other.
       const n = page.stones[a.cell]!;
       s.erased.push(a.cell);
       s.tokens = [...s.tokens, { id: s.nextId++, n, round: 0, cell: a.cell }];
       // Keep the round's promises on the changed page, or refuse.
       const next = runPage(s);
-      const holding: Holding = {
-        kept: s.tokens.filter((t) => t.round < s.round).map((t) => t.n),
-        dealt: dealtThisRound(s).map((t) => t.n),
-        need: s.need,
-      };
+      const holding = everything(s.tokens);
       const check = stream(s.seed, `eraser-check:${s.round}:${a.cell}`);
-      const required = s.posted.find((p) => p.required);
-      if (required && !possible(next, holding, required.c, check, true)) return refuse(prev, 'Lifting that number would make the required commission impossible');
+      // The proof still stands if it already has this number in this cell.
       const v = viewOf(next, s.proof ?? []);
       if (!s.proof || !s.posted.every((p) => isMet(p.c, v))) {
         const found = findLayout(next, holding, s.posted.map((p) => p.c), check);
-        if (!found) return refuse(prev, 'Lifting that number would make a commission impossible');
+        if (!found) return refuse(prev, 'Erasing that number would make a commission impossible');
         s.proof = found;
       }
+      return { state: s, ok: true };
+    }
+
+    case 'clear': {
+      if (!s.tokens.some((t) => t.cell >= 0)) return refuse(prev, 'None of your numbers are on the page');
+      for (const t of s.tokens) t.cell = -1;
       return { state: s, ok: true };
     }
 

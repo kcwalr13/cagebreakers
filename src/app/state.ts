@@ -237,7 +237,7 @@ export function exposeTestHooks() {
       benchPost(times = 10) {
         const st = r.run.value!;
         const p = core.runPage(st);
-        const holding = { kept: st.tokens.filter((t) => t.round < st.round).map((t) => t.n), dealt: core.dealtThisRound(st).map((t) => t.n), need: st.need };
+        const holding = { kept: st.tokens.filter((t) => t.round < st.round).map((t) => t.n), dealt: core.dealtThisRound(st).map((t) => t.n), need: core.dealtThisRound(st).length };
         const now = cm.viewOf(p, core.valuesOf({ ...st, tokens: st.tokens.filter((t) => t.round < st.round) }));
         const t0 = performance.now();
         for (let i = 0; i < times; i++) cm.postCommissions({ page: p, round: Math.max(3, st.round), final: false, holding, now }, rng.createRng(`bench${i}`));

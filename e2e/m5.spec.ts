@@ -57,7 +57,7 @@ test('settings: sound, vibration, less motion and left-thumb controls', async ({
   await p.keyboard.press('Escape');
   // Ink it now sits at the left edge, under the left thumb.
   const ink = (await p.getByRole('button', { name: /Ink it/ }).boundingBox())!;
-  const redraw = (await p.getByRole('button', { name: /^Redraw/ }).boundingBox())!;
+  const redraw = (await p.getByRole('button', { name: /^Swap/ }).boundingBox())!;
   expect(ink.x).toBeLessThan(redraw.x);
   await p.screenshot({ path: info.outputPath('m5-04-left-thumb.png') });
   // Settings survive a reload.

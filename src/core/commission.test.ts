@@ -119,16 +119,13 @@ group('proving commissions possible', () => {
     }
   }
 
-  it('posts one required commission and two bounties, each provably possible', () => {
+  it('posts one required commission and two bounties, all possible with every number placed', () => {
     let checked = 0;
     for (const seed of ['PRVAAA', 'PRVBBB', 'PRVCCC', 'PRVDDD', 'PRVEEE', 'PRVFFF']) {
       for (const s of rounds(seed)) {
         const p = pageOf(seed);
-        const holding: Holding = {
-          kept: s.tokens.filter((t) => t.round < s.round).map((t) => t.n),
-          dealt: dealtThisRound(s).map((t) => t.n),
-          need: s.need,
-        };
+        // A perfect round: every number you hold goes on the page.
+        const holding: Holding = { kept: s.tokens.map((t) => t.n), dealt: [], need: 0 };
         const required = s.posted.filter((x) => x.required);
         expect(required).toHaveLength(1);
         expect(s.posted.filter((x) => !x.required).length).toBeGreaterThanOrEqual(1);
@@ -138,7 +135,8 @@ group('proving commissions possible', () => {
           expect(possible(p, holding, b.c, rng, false, 600), describe(b.c, p)).toBe(true);
           expect(b.gold).toBeGreaterThan(0);
         }
-        expect(new Set(s.posted.map((x) => x.c.kind)).size).toBe(s.posted.length);
+        // Never the same commission twice (two of a kind is a rare fallback on a tight page).
+        expect(new Set(s.posted.map((x) => JSON.stringify(x.c))).size).toBe(s.posted.length);
         // All three can be met at once: the round's proof layout does it.
         const v = viewOf(p, s.proof!);
         expect(boardIsLatin(s.proof!)).toBe(true);
@@ -175,7 +173,7 @@ group('proving commissions possible', () => {
   it('posts a round in well under 50 ms', () => {
     const s = newRun('QUICKA');
     const p = pageOf(s.seed);
-    const holding = { kept: [], dealt: dealtThisRound(s).map((t) => t.n), need: s.need };
+    const holding = { kept: [], dealt: dealtThisRound(s).map((t) => t.n), need: dealtThisRound(s).length };
     const t0 = performance.now();
     for (let i = 0; i < 20; i++) postCommissions({ page: p, round: 3, final: false, holding, now: viewOf(p, p.stones.slice()) }, createRng(`q${i}`));
     expect((performance.now() - t0) / 20).toBeLessThan(50);

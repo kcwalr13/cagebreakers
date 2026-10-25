@@ -3,6 +3,8 @@ import { type Page as PWPage, expect, test } from '@playwright/test';
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const R = (p: PWPage, fn: string, ...args: unknown[]) =>
   p.evaluate(({ fn, args }) => new Function('r', 'args', `return (${fn})(r, ...args)`)((window as Any).__run, args), { fn, args });
+/** How many numbers are in the hand, counting every stack. */
+const handCount = (p: PWPage) => p.evaluate(() => [...document.querySelectorAll('.hand-slot')].reduce((n, el) => n + Number((el as HTMLElement).dataset.count ?? 1), 0));
 
 async function fresh(p: PWPage, extra = '') {
   await p.goto(`./?test&nosw${extra}&screen=title`);
@@ -48,7 +50,7 @@ test('a round: drag numbers in, read the commissions, ink it', async ({ page: p 
   await expect(p.locator('.hud-round')).toContainText('Round 1 of 8');
   await expect(p.locator('.commission')).toHaveCount(3);
   await expect(p.locator('.commission.required')).toHaveCount(1);
-  await expect(p.locator('.hand-slot')).toHaveCount(4);
+  await expect.poll(() => handCount(p)).toBe(4);
   await p.screenshot({ path: info.outputPath('m6-01-round-1.png') });
 
   // Drag the first dealt number onto a cell where it fits.
@@ -105,27 +107,23 @@ test('a round: drag numbers in, read the commissions, ink it', async ({ page: p 
 
   // Inking waits until enough numbers are placed, then shows what the round earned.
   await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.locator('.status.warn')).toContainText('Place 1 more new number');
-  // New numbers are pencilled; the meter counts them, and placing every one earns the bonus.
-  await expect(p.locator('svg.board .token.fresh')).toHaveCount(2);
-  await expect(p.locator('.deal-meter .dm-pips i.on')).toHaveCount(2);
+  await expect(p.locator('.status.warn')).toContainText('Place 1 more number');
+  await expect(p.locator('.status')).toContainText(/Place 1 more number, or all 2 for \d bonus gold\./);
   await R(p, '(r) => r.solveHand()');
-  await expect(p.locator('.deal-meter.full')).toBeVisible();
-  await expect(p.locator('.status')).toContainText('Ready to ink, with every new number placed');
+  await expect(p.locator('.status')).toContainText(/Every number is placed: \d bonus gold when you ink\./);
   await p.getByRole('button', { name: /Ink it/ }).click();
   await expect(p.getByRole('dialog')).toContainText('Round 1 inked');
-  await expect(p.getByRole('dialog')).toContainText('Every new number placed');
+  await expect(p.getByRole('dialog')).toContainText('Every number placed');
   await expect(p.getByRole('dialog')).toContainText(/cages? sealed|No seals/);
   await p.screenshot({ path: info.outputPath('m6-04-inked.png') });
   await p.getByRole('button', { name: 'On to round 2' }).click();
   await expect(p.locator('.hud-round')).toContainText('Round 2 of 8');
-  // Last round's numbers are inked now (solid); this round's new ones are still in hand.
-  expect(await p.locator('svg.board .token.fresh').count()).toBe(0);
-  await expect(p.locator('svg.board .token:not(.fresh)')).toHaveCount(4);
-  await expect(p.locator('.hand-slot')).toHaveCount(4);
+  // Last round's numbers stay on the page; this round's are in hand. They all look the same.
+  await expect(p.locator('svg.board .token')).toHaveCount(4);
+  await expect.poll(() => handCount(p)).toBe(4);
 });
 
-test('anything on the page can move, but earlier numbers must go back before inking', async ({ page: p }, info) => {
+test('anything on the page can move, All to hand clears it, and any one number may stay out', async ({ page: p }, info) => {
   await runOn(p, 'MQVERS');
   await R(p, `(r) => { r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.keyboard.press('Escape');
@@ -135,46 +133,48 @@ test('anything on the page can move, but earlier numbers must go back before ink
   const hand = await center(p, '.hand');
   await dragTo(p, from, { x: hand.x, y: hand.y - 56 + 10 });
   expect(await R(p, '(r, id) => r.state().tokens.find((t) => t.id === id).cell', old.id)).toBe(-1);
-  await expect(p.locator('.hand-slot.stray')).toHaveCount(1);
-  await R(p, '(r) => { const s = r.state(); const p = r.page(); for (const t of s.tokens.filter((t) => t.round === s.round)) { const c = [...Array(36).keys()].find((c) => !p.stones[c] && p.solution[c] === t.n && !r.state().tokens.some((o) => o.cell === c)); if (c !== undefined) r.dispatch({ type: "place", id: t.id, cell: c }); } }');
-  // Every new number is down, so the status says one of them could come off instead.
-  await expect(p.locator('.status')).toContainText(/Put your inked \d back on the page\. Only 3 of your 4 new ones must stay\./);
-  await p.screenshot({ path: info.outputPath('m6-05-lifted.png') });
-  await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.locator('.status.warn')).toContainText(/Put your inked \d back on the page/);
-  // Put it back with a tap, then tap a cell.
-  await p.locator('.hand-slot.stray').click();
-  const back = await R(p, SOLUTION_CELL, old.id) as number;
-  const bp = await cellPoint(p, back);
-  await p.mouse.click(bp.x, bp.y);
+  await expect(p.locator('.status')).toContainText(/Place 4 more numbers, or all 5 for \d bonus gold\./);
+  // Everything off the page at once, and back again.
+  await p.getByRole('button', { name: 'All to hand' }).click();
+  await expect(p.locator('svg.board .token')).toHaveCount(0);
+  await expect.poll(() => handCount(p)).toBe(8);
+  await p.screenshot({ path: info.outputPath('m6-05-all-to-hand.png') });
+  await p.getByRole('button', { name: 'Put back' }).click();
+  await expect(p.locator('svg.board .token')).toHaveCount(3);
+  await expect(p.getByRole('button', { name: 'All to hand' })).toBeEnabled();
+  // Any one number may stay in hand, whenever it was dealt.
+  await R(p, '(r) => r.solveHand()');
+  await R(p, '(r, id) => r.dispatch({ type: "place", id, cell: -1 })', old.id);
+  await expect(p.locator('.status')).toContainText(/Ready to ink\. Keep the \d for later, or place it for \d bonus gold\./);
   await p.getByRole('button', { name: /Ink it/ }).click();
   await expect(p.getByRole('dialog')).toContainText('Round 2 inked');
+  await expect(p.getByRole('dialog')).toContainText('Kept back');
 });
 
-test('gold buys a Redraw, the Lens and the Blotter', async ({ page: p }, info) => {
+test('gold buys a Swap, a Hint and a Shield', async ({ page: p }, info) => {
   await runOn(p, 'TQQKSA');
   await R(p, '(r) => r.load({ ...r.state(), gold: 20 })');
   const before = await R(p, '(r) => r.state().tokens.map((t) => t.id).join()');
-  await p.getByRole('button', { name: /^Redraw/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('keep all three commissions possible together');
+  await p.getByRole('button', { name: /^Swap/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('meet all three commissions with every number placed');
   await p.screenshot({ path: info.outputPath('m6-06-redraw.png') });
-  await p.getByRole('button', { name: /Redraw 4 numbers for/ }).click();
+  await p.getByRole('button', { name: /Swap 4 numbers for/ }).click();
   expect(await R(p, '(r) => r.state().tokens.map((t) => t.id).join()')).not.toBe(before);
   await expect(p.locator('.hud-stat')).toContainText('18');
 
-  await p.getByRole('button', { name: /^Lens/ }).click();
+  await p.getByRole('button', { name: /^Hint/ }).click();
   await p.getByRole('button', { name: 'Choose a cell' }).click();
   await expect(p.locator('svg.board .tool-target').first()).toBeVisible();
   const empty = await R(p, '(r) => [...Array(36).keys()].find((c) => !r.page().stones[c] && !r.state().tokens.some((t) => t.cell === c))') as number;
   const ep = await cellPoint(p, empty);
   await p.mouse.click(ep.x, ep.y);
-  await expect(p.locator('.status')).toContainText(/The Lens shows a \d/);
+  await expect(p.locator('.status')).toContainText(/Hint: a \d belongs there/);
   await expect(p.locator('svg.board .revealed')).toHaveCount(1);
   await p.screenshot({ path: info.outputPath('m6-07-lens.png') });
 
-  await p.getByRole('button', { name: /^Blotter/ }).click();
-  await p.getByRole('button', { name: /Put the Blotter down/ }).click();
-  await expect(p.locator('.commission.required')).toContainText('Blotted');
+  await p.getByRole('button', { name: /^Shield/ }).click();
+  await p.getByRole('button', { name: /Shield this round/ }).click();
+  await expect(p.locator('.commission.required')).toContainText('Shielded');
   expect(await R(p, '(r) => r.state().gold')).toBe(10);
 });
 
