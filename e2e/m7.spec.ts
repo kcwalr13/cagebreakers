@@ -180,11 +180,11 @@ test('gardens of other sizes: the Window Box from the start, the Allotment and t
       const c = [...pg.stones.keys()].reverse().find((c) => !pg.stones[c] && pg.solution[c] === t.n);
       if (c !== undefined) return { n: t.n, cell: c };
     } }`) as { n: number; cell: number };
-  await p.locator('.hand-slot', { hasText: String(target.n) }).first().click();
+  await p.getByRole('button', { name: new RegExp(`^Number ${target.n}(,|$)`) }).click();
   const box = (await p.locator('.board-wrap svg.board').boundingBox())!;
   const scale = box.width / (8 + 59 * 8);
   await p.mouse.click(box.x + (4 + (target.cell % 8) * 59 + 29.5) * scale, box.y + (4 + Math.floor(target.cell / 8) * 59 + 29.5) * scale);
-  expect(await R(p, '(r, c) => r.state().tokens.some((t) => t.cell === c)', target.cell)).toBe(true);
+  expect(await R(p, '(r, c) => r.state().tokens.find((t) => t.cell === c)?.n', target.cell)).toBe(target.n);
   await p.screenshot({ path: info.outputPath('m7-08-walled-garden.png') });
   expect(await R(p, FINISH)).toBe('done');
   await p.keyboard.press('Escape');
