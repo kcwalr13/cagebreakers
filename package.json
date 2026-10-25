@@ -1,7 +1,7 @@
 {
   "name": "cagebreakers",
   "version": "0.1.0",
-  "description": "An offline auto-battler played on a KenKen page",
+  "description": "An offline number puzzle: one KenKen page, filled in over eight rounds",
   "scripts": {
     "test": "vitest run",
     "dev": "vite",

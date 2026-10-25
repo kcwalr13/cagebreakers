@@ -1,5 +1,5 @@
 /**
- * One controller for every press on a page and its tray or bench. A press that moves more
+ * One controller for every press on a page and its tray or hand. A press that moves more
  * than a few pixels becomes a drag; one held still becomes a long-press; otherwise it's a tap.
  * While dragging, the piece floats above the finger and the cell under the floating piece is
  * the drop target, so the finger never hides where it will land.
@@ -17,11 +17,11 @@ export const LIFT_PX = 56;
 const DRAG_THRESHOLD = 8;
 const LONG_PRESS_MS = 450;
 
-/** Where a press started: a tray or bench item (by key), or a cell on the page. */
+/** Where a press started: a tray or hand item (by key), or a cell on the page. */
 export type Source = { kind: 'item'; key: string } | { kind: 'cell'; cell: number };
 
 /** What the floating ghost shows while dragging. */
-export interface DragLook { n: number; n2?: number; species?: string; stars?: number; relic?: import('../content/types').RelicId }
+export interface DragLook { n: number; fresh?: boolean }
 
 export interface DragState { from: Source; look: DragLook; x: number; y: number; over: number }
 

@@ -1,25 +1,21 @@
 import { useEffect } from 'preact/hooks';
-import { ClashScreen } from './fight/Clash';
-import { PlanScreen } from './fight/Plan';
-import { phase } from './fight/state';
+import { RUN } from '../content/balance';
 import { Icon } from './Icon';
 import { LIFT_PX, drag } from './input';
 import { screen, sheet, updateReady } from './nav';
+import { RunScreen } from './run/Screens';
+import { dailyBest, lensMode, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, startRun, today } from './run/state';
 import { Sheets } from './Sheets';
 import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
 import { ToyScreen } from './Toy';
-import { RunScreen } from './run/Screens';
-import { dailyBest, loadSlot, openSlot, run, slot, startDaily, startRun, today } from './run/state';
-import { CodexScreen } from './Codex';
-import { RUN } from '../content/balance';
 
 function Ghost() {
   const d = drag.value;
   if (!d) return null;
   return (
     <div class="ghost" style={{ transform: `translate(${d.x - 28}px, ${d.y - LIFT_PX - 28}px)` }}>
-      <TokenSvg n={d.look.n} n2={d.look.n2} species={d.look.species} stars={d.look.stars} relic={d.look.relic} size={56} />
+      <TokenSvg n={d.look.n} fresh={d.look.fresh} size={56} />
     </div>
   );
 }
@@ -42,16 +38,16 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 function dailyLine(): string {
   const day = today();
   const best = dailyBest.value[day];
-  const saved = loadSlot('daily');
-  if (best) return best.won ? `Today's page is beaten, with ${best.life} Life left. Play it again?` : `Your best today: clash ${best.reached}. Try again?`;
-  if (saved?.daily === day && saved.phase !== 'won' && saved.phase !== 'lost') return `In progress: clash ${saved.clash}, ${saved.life} Life.`;
-  return 'The same page and shops for everyone today.';
+  const saved = slot.value === 'daily' ? run.value : loadSlot('daily');
+  if (saved?.daily === day && saved.phase === 'arrange') return `In progress: round ${saved.round}, ${saved.gold} gold.`;
+  if (best) return `Your best today: ${best.score} points${best.done ? '' : ', ruined'}. Play it again?`;
+  return 'The same page, deals and commissions for everyone today.';
 }
 
 function Title() {
   const d = new Date();
   const main = slot.value === 'main' ? run.value : loadSlot('main');
-  const live = main && main.phase !== 'won' && main.phase !== 'lost' ? main : null;
+  const live = main && main.phase === 'arrange' ? main : null;
   return (
     <div class="column title-screen">
       <header class="header">
@@ -68,18 +64,18 @@ function Title() {
         <path class="fl-diamond" d="M120 3l9 9-9 9-9-9z" />
         <circle class="fl-dot" cx="10" cy="12" r="2.5" /><circle class="fl-dot" cx="230" cy="12" r="2.5" />
       </svg>
-      <p class="tagline">An auto-battler played on a KenKen page.</p>
+      <p class="tagline">One KenKen page, filled in over {RUN.rounds} rounds.</p>
       <div class="spacer" />
       <nav class="title-menu">
         {live ? (
           <button class="menu-card primary" onClick={() => { openSlot('main'); screen.value = 'run'; }}>
             <span class="mc-title">Continue run</span>
-            <span class="mc-sub">Clash {live.clash} of {RUN.clashes}, {live.life} Life, {live.gold} gold.</span>
+            <span class="mc-sub">Round {live.round} of {RUN.rounds}, {live.ink} ink, {live.gold} gold.</span>
           </button>
         ) : (
           <button class="menu-card primary" onClick={() => { startRun(); screen.value = 'run'; }}>
             <span class="mc-title">New run</span>
-            <span class="mc-sub">Fifteen clashes on one page. Draft units, claim cages, seal them in gold.</span>
+            <span class="mc-sub">Each round deals more numbers and three commissions. Rearrange to meet them, until the page is full.</span>
           </button>
         )}
         <button class="menu-card" onClick={() => { startDaily(); screen.value = 'run'; }}>
@@ -88,9 +84,7 @@ function Title() {
         </button>
         <div class="title-minor">
           {live ? <button class="minor-card" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>New run</button> : null}
-          <button class="minor-card" onClick={() => (screen.value = 'fight')}>First Blood</button>
           <button class="minor-card" onClick={() => (screen.value = 'toy')}>Page toy</button>
-          <button class="minor-card" onClick={() => (screen.value = 'codex')}>Codex</button>
         </div>
       </nav>
       <div class="bottom-pad" />
@@ -101,7 +95,10 @@ function Title() {
 export function App() {
   // Escape closes sheets and drops whatever is in hand.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { sheet.value = null; toySelection.value = null; } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      sheet.value = null; toySelection.value = null; runSelection.value = null; lensMode.value = false;
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -109,8 +106,7 @@ export function App() {
   const s = screen.value;
   return (
     <div class="app">
-      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'run' ? <RunScreen /> : s === 'codex' ? <CodexScreen />
-        : phase.value === 'plan' ? <PlanScreen /> : <ClashScreen />}
+      {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

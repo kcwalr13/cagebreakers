@@ -1,304 +1,200 @@
 /**
- * Bots play the real run rules headlessly. They are not clever; they are consistent, so
- * changes to balance show up as changes in their results.
- *  - random:  legal moves at random
- *  - greedy:  buys the strongest unit it can afford and places it anywhere legal
- *  - planner: claims toward the front, hunts seals and traits, saves for interest, uses items
- *  - oracle:  shops like the planner, then test-fights layouts against the scouted enemy
+ * Bots that play whole runs through the same core the phone uses. They stand in for three kinds
+ * of player, so the balance report can say whether commissions reward rearranging:
+ *  - Hasty places dealt numbers anywhere legal and never moves the old ones.
+ *  - Tidy keeps its layout and places new numbers where they help this round's commissions.
+ *  - Careful searches whole layouts: the required commission first, then bounties, then seals.
+ * When a bot paints itself into a corner it falls back to a layout taken from the hidden
+ * solution, which is always legal; a person would find their own way out.
  */
-import { RUN, unitValue } from '../src/content/balance';
-import { ITEMS, isRelic } from '../src/content/items';
-import { speciesById } from '../src/content/species';
-import { CALLINGS, KINS } from '../src/content/traits';
-import type { ItemId } from '../src/content/types';
-import { PLAYER, simulateClash } from '../src/core/clash';
-import { rowOf } from '../src/core/grid';
-import { pieceKind } from '../src/core/pieces';
-import { type Rng, createRng } from '../src/core/rng';
-import { completions } from '../src/core/rules';
+import { RUN, TOOLS } from '../src/content/balance';
+import { choices, isMet, viewOf } from '../src/core/commission';
+import { CELLS } from '../src/core/grid';
+import { type Rng, stream } from '../src/core/rng';
+import { isLegal } from '../src/core/rules';
 import {
-  type OwnedUnit, type RunAction, type RunState, act, claimCost, dominoSpots, emptyHeld, newRun, offerFits, onBench, onBoard,
-  openCells, reach, runPage, scout, sealedNow, toSpecs, unitAtCell, values,
+  type RunAction, type RunState, type Token, act, dealtThisRound, inkBlocker, legalCells, newRun, pageOf, valuesOf,
 } from '../src/core/run';
 
-export type BotName = 'random' | 'greedy' | 'planner' | 'oracle';
+export type BotName = 'hasty' | 'tidy' | 'careful';
+export const BOTS: BotName[] = ['hasty', 'tidy', 'careful'];
 
-interface Ctx { rng: Rng; bot: BotName }
-const smart = (ctx: Ctx) => ctx.bot === 'planner' || ctx.bot === 'oracle';
+/** A run's state plus every action taken, so a run can be replayed. */
+export interface Played { state: RunState; actions: RunAction[] }
 
-function tryAct(s: RunState, a: RunAction): RunState | null {
-  const r = act(s, a);
-  return r.ok && r.state !== s ? r.state : null;
-}
-
-/** Cells a unit could be placed on right now (for a Domino, cells for its first half). */
-function legalCells(s: RunState, u: OwnedUnit): number[] {
-  const empty = emptyHeld(s);
-  const kind = pieceKind(u.species);
-  if (kind === 'domino') return empty.filter((c) => dominoSpots(s, u, c).length > 0);
-  return empty.filter((c) => tryAct(s, { type: 'place', uid: u.uid, cell: c }) !== null);
-}
-
-/** Claimed cages that can no longer be completed with what stands in them. */
-function deadCages(s: RunState): number {
-  const page = runPage(s), vals = values(s);
-  return s.claimed.filter((id) => completions(page, vals, page.cages[id]!).length === 0).length;
-}
-
-function placementScore(before: RunState, after: RunState, u: OwnedUnit, ctx: Ctx): number {
-  if (!smart(ctx)) return ctx.rng.next();
-  const page = runPage(after);
-  const sp = speciesById(u.species);
-  const placed = after.units.find((x) => x.uid === u.uid)!;
-  let score = 12 * (sealedNow(after).size - sealedNow(before).size) - 6 * (deadCages(after) - deadCages(before));
-  const row = rowOf(placed.cell);
-  if (sp.calling === 'warden') score += (5 - row) * 1.2;
-  if (sp.calling === 'marksman' || sp.calling === 'mender') score += row * 0.8;
-  if (sp.kin === 'snail' && [placed.cell - 6, placed.cell + 6, placed.cell - 1, placed.cell + 1].some((n) => n >= 0 && n < 36 && page.stones[n])) score += 2;
-  return score + ctx.rng.next() * 0.5;
-}
-
-/** How much an offer would add to the army's Kins and Callings. */
-function traitGain(s: RunState, species: string): number {
-  const sp = speciesById(species);
-  const owned = new Set(s.units.map((u) => u.species));
-  if (owned.has(species)) return 0;
-  const count = (pred: (id: string) => boolean) => [...owned].filter(pred).length;
-  let g = 0;
-  if (sp.kin) {
-    const have = count((id) => speciesById(id).kin === sp.kin);
-    g += KINS[sp.kin].thresholds.includes(have + 1) ? 4 : have > 0 ? 1.5 : 0.5;
+class Player {
+  actions: RunAction[] = [];
+  constructor(public s: RunState) {}
+  do(a: RunAction): boolean {
+    const r = act(this.s, a);
+    if (r.ok) { this.s = r.state; this.actions.push(a); }
+    return r.ok;
   }
-  const haveC = count((id) => speciesById(id).calling === sp.calling);
-  g += CALLINGS[sp.calling].thresholds.includes(haveC + 1) ? 3 : haveC > 0 ? 1 : 0.3;
-  return g;
-}
-
-function choosePick(s: RunState, ctx: Ctx): number {
-  const opts = s.pick!;
-  if (!smart(ctx)) return ctx.rng.int(0, opts.length - 1);
-  const worth: Record<ItemId, number> = { blade: 6, hourglass: 6, bulwark: 5, quill: 4, thorn: 4, chisel: 3, flip: 3, eraser: 3.5, inkpot: 2, lens: 0.5 };
-  return opts.map((id, i) => ({ i, v: worth[id] + ctx.rng.next() * 0.1 })).sort((a, b) => b.v - a.v)[0]!.i;
-}
-
-/** Spends items the way a sensible player would: relics on the strongest, tools where they help. */
-function useItems(s: RunState, ctx: Ctx): RunState {
-  if (ctx.bot === 'greedy' || ctx.bot === 'random') {
-    // Simple bots only hand out relics.
-    for (let slot = s.satchel.length - 1; slot >= 0; slot--) {
-      const item = s.satchel[slot]!;
-      if (!isRelic(item)) continue;
-      const bearer = ctx.bot === 'random' ? ctx.rng.pick(s.units.length ? s.units : [null as unknown as OwnedUnit]) : onBoard(s).filter((u) => !u.relic).sort((a, b) => strength(b) - strength(a))[0];
-      if (bearer) s = tryAct(s, { type: 'use', slot, uid: bearer.uid }) ?? s;
-    }
-    return s;
-  }
-  for (let guard = 0; guard < 8; guard++) {
-    let used = false;
-    for (let slot = s.satchel.length - 1; slot >= 0 && !used; slot--) {
-      const item = s.satchel[slot]!;
-      let next: RunState | null = null;
-      if (isRelic(item)) {
-        const bearer = onBoard(s).filter((u) => !u.relic).sort((a, b) => strength(b) - strength(a))[0];
-        if (bearer && onBoard(s).length >= Math.min(3, reach(s))) next = tryAct(s, { type: 'use', slot, uid: bearer.uid });
-      } else if (item === 'eraser') {
-        const page = runPage(s);
-        const stone = s.claimed.flatMap((id) => page.cages[id]!.cells).find((c) => page.stones[c]);
-        if (stone !== undefined) next = tryAct(s, { type: 'use', slot, cell: stone });
-      } else if (item === 'chisel' || item === 'flip') {
-        // Make a stranded bench unit fit somewhere.
-        for (const u of onBench(s)) {
-          if (legalCells(s, u).length) continue;
-          for (const dir of [1, -1] as const) {
-            const t = tryAct(s, { type: 'use', slot, uid: u.uid, dir });
-            if (t && legalCells(t, t.units.find((x) => x.uid === u.uid)!).length) { next = t; break; }
-          }
-          if (next) break;
-        }
-      } else if (item === 'inkpot') {
-        const page = runPage(s);
-        for (const id of s.claimed) {
-          const t = tryAct(s, { type: 'use', slot, cage: id });
-          if (t && sealedNow(t).size > sealedNow(s).size) { next = t; break; }
-          void page;
-        }
-      }
-      if (next) { s = next; used = true; }
-    }
-    if (!used) break;
-  }
-  return s;
-}
-
-const strength = (u: OwnedUnit) => unitValue(speciesById(u.species).tier, u.stars);
-
-/** Puts the strongest bench unit in place of weaker units on the page, if that's a clear gain. */
-function upgrade(s: RunState): RunState | null {
-  const bench = onBench(s).sort((a, b) => strength(b) - strength(a));
-  const board = onBoard(s).sort((a, b) => strength(a) - strength(b));
-  for (const u of bench) {
-    if (pieceKind(u.species) === 'domino') {
-      // Clear two weak neighbors and lay the Domino across them.
-      for (const a of board) for (const b of board) {
-        if (a === b || strength(a) + strength(b) >= strength(u)) continue;
-        if (!a.cell2 && !b.cell2 && [1, -1, 6, -6].includes(b.cell - a.cell)) {
-          let t: RunState | null = tryAct(s, { type: 'place', uid: a.uid, cell: -1 });
-          t = t && tryAct(t, { type: 'place', uid: b.uid, cell: -1 });
-          t = t && tryAct(t, { type: 'place', uid: u.uid, cell: a.cell, cell2: b.cell });
-          if (t) return t;
-        }
-      }
-      continue;
-    }
-    for (const w of board) {
-      if (strength(w) * 1.5 > strength(u) || w.cell2 !== undefined) continue;
-      const t = tryAct(s, { type: 'place', uid: u.uid, cell: w.cell });
-      if (t) return t;
+  /** Moves tokens into a target layout (token id → cell; ids left out go to the hand). */
+  layout(target: Map<number, number>) {
+    for (const t of this.s.tokens) if (t.cell >= 0 && target.get(t.id) !== t.cell) this.do({ type: 'place', id: t.id, cell: -1 });
+    for (const [id, cell] of target) {
+      const t = this.s.tokens.find((x) => x.id === id)!;
+      if (t.cell !== cell && !this.do({ type: 'place', id, cell })) throw new Error(`layout move refused: ${id}→${cell}`);
     }
   }
-  return null;
 }
 
-/** Plays one planning phase, then clashes. Returns the state after the clash. */
-function playRound(s: RunState, ctx: Ctx): RunState {
-  const { rng, bot } = ctx;
-  for (let step = 0; step < 80; step++) {
-    if (s.phase === 'pick') { s = act(s, { type: 'pick', choice: choosePick(s, ctx) }).state; continue; }
-    if (s.phase === 'merge') {
-      const keep = smart(ctx)
-        ? s.merge!.uids.slice().sort((a, b) => Number((s.units.find((u) => u.uid === b)!.cell >= 0)) - Number((s.units.find((u) => u.uid === a)!.cell >= 0)))[0]!
-        : rng.pick(s.merge!.uids);
-      s = act(s, { type: 'merge', keep }).state;
-      continue;
-    }
-    // Place bench units while the army has room, strongest first.
-    let placed = false;
-    const benchOrder = smart(ctx) || bot === 'greedy' ? onBench(s).sort((a, b) => strength(b) - strength(a)) : onBench(s);
-    for (const u of benchOrder) {
-      if (onBoard(s).length >= reach(s)) break;
-      const cells = legalCells(s, u);
-      if (!cells.length) continue;
-      const options = cells.map((c) => tryAct(s, { type: 'place', uid: u.uid, cell: c })).filter((x): x is RunState => !!x);
-      if (!options.length) continue;
-      const best = options.map((n) => ({ n, v: placementScore(s, n, u, ctx) })).sort((a, b) => b.v - a.v)[0]!;
-      s = best.n; placed = true;
-    }
-    if (placed) continue;
-    // Smart bots swap a stronger bench unit in for the weakest on the page.
-    if (smart(ctx)) {
-      const up = upgrade(s);
-      if (up) { s = up; continue; }
-    }
+/** A layout of these tokens on the hidden solution's cells: always legal. */
+function witness(s: RunState, tokens: readonly Token[], rng: Rng): Map<number, number> {
+  const page = pageOf(s.seed);
+  const out = new Map<number, number>();
+  for (let n = 1; n <= 6; n++) {
+    const mine = tokens.filter((t) => t.n === n);
+    if (!mine.length) continue;
+    const cells = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !page.stones[c] && page.solution[c] === n));
+    mine.forEach((t, i) => out.set(t.id, cells[i]!));
+  }
+  return out;
+}
 
-    // Buy.
-    const keep = smart(ctx) && s.clash >= 4 && onBoard(s).length >= reach(s) ? Math.min(10, s.gold) : 0;
-    const affordable = s.offers.map((o, i) => ({ o, i })).filter(({ o }) => !o.sold && speciesById(o.species).tier <= s.gold - keep);
-    if (affordable.length && onBench(s).length < RUN.benchSize) {
-      let pick = affordable[0]!;
-      if (bot === 'random') pick = rng.pick(affordable);
-      else {
-        const owned = new Map<string, number>();
-        for (const u of s.units) owned.set(u.species, (owned.get(u.species) ?? 0) + 1);
-        pick = affordable.map((a) => ({
-          a,
-          v: speciesById(a.o.species).tier * 2 + (owned.get(a.o.species) ?? 0) * 3 + (offerFits(s, a.o) ? 2 : 0)
-            + (smart(ctx) ? traitGain(s, a.o.species) : 0) + rng.next(),
-        })).sort((x, y) => y.v - x.v)[0]!.a;
-        const misprint = speciesById(pick.o.species).tier === 5;
-        if (smart(ctx) && !misprint && !offerFits(s, pick.o) && onBoard(s).length < reach(s) && onBench(s).length >= 2) pick = { o: pick.o, i: -1 };
-      }
-      if (pick.i >= 0) { const next = tryAct(s, { type: 'buy', offer: pick.i }); if (next) { s = next; continue; } }
+/** What a layout earns this round, as a bot weighs it: required ≫ bounties > seals. */
+function worth(s: RunState, values: number[]): number {
+  const v = viewOf(pageOf(s.seed), values);
+  let score = v.sealed.size * RUN.sealGold * 2;
+  for (const p of s.posted) if (isMet(p.c, v)) score += p.required ? 1000 : p.gold * 10;
+  return score;
+}
+
+const valuesWith = (s: RunState, target: Map<number, number>) => {
+  const page = pageOf(s.seed);
+  const values = page.stones.slice();
+  for (const t of s.tokens) { const c = target.get(t.id); if (c !== undefined) values[c] = t.n; }
+  return values;
+};
+
+const metRequired = (s: RunState) => {
+  const req = s.posted.find((p) => p.required);
+  return !req || isMet(req.c, viewOf(pageOf(s.seed), valuesOf(s)));
+};
+
+/** Fills the rest of the page by backtracking on the Latin rule alone, as a player who ignores cages would. */
+function latinFill(p: Player, rng: Rng): boolean {
+  const s = p.s;
+  const page = pageOf(s.seed);
+  const values = valuesOf(s);
+  const loose = s.tokens.filter((t) => t.cell < 0);
+  const empty = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !values[c]));
+  const used = new Array<boolean>(loose.length).fill(false);
+  const plan: [number, number][] = [];
+  let budget = 20000;
+  const walk = (k: number): boolean => {
+    if (k === empty.length) return true;
+    if (--budget < 0) return false;
+    const cell = empty[k]!;
+    const tried = new Set<number>();
+    for (let i = 0; i < loose.length; i++) {
+      const t = loose[i]!;
+      if (used[i] || tried.has(t.n) || !isLegal(page, values, cell, t.n)) continue;
+      tried.add(t.n);
+      used[i] = true; values[cell] = t.n; plan.push([t.id, cell]);
+      if (walk(k + 1)) return true;
+      used[i] = false; values[cell] = 0; plan.pop();
     }
-    // A waiting Domino with nowhere to lie: claim a cage that gives it room, as a player would.
-    const page = runPage(s);
-    const strandedDomino = smart(ctx) ? onBench(s).find((u) => pieceKind(u.species) === 'domino' && !legalCells(s, u).length) : undefined;
-    if (strandedDomino) {
-      const room = page.cages.filter((c) => !s.claimed.includes(c.id) && claimCost(s, c.id) <= s.gold)
-        .map((c) => ({ id: c.id, t: tryAct(s, { type: 'claim', cage: c.id }) }))
-        .filter((x): x is { id: number; t: RunState } => !!x.t && legalCells(x.t, strandedDomino).length > 0)
-        .sort((a, b) => claimCost(s, a.id) - claimCost(s, b.id))[0];
-      if (room) { s = room.t; continue; }
-    }
-    // Claim a cage when the army is full and something is waiting.
-    const wantClaim = onBench(s).length > 0 && onBoard(s).length >= reach(s);
-    if (wantClaim) {
-      const options = page.cages.filter((c) => !s.claimed.includes(c.id)).map((c) => c.id)
-        .filter((id) => claimCost(s, id) <= s.gold - (smart(ctx) && s.clash > 3 ? 2 : 0));
-      if (options.length) {
-        const pick = smart(ctx)
-          ? options.sort((a, b) => Math.min(...openCells(page, a).map(rowOf)) - Math.min(...openCells(page, b).map(rowOf)) || claimCost(s, a) - claimCost(s, b))[0]!
-          : bot === 'greedy' ? options.sort((a, b) => claimCost(s, a) - claimCost(s, b))[0]! : rng.pick(options);
-        const next = tryAct(s, { type: 'claim', cage: pick });
-        if (next) { s = next; continue; }
+    return false;
+  };
+  if (!walk(0)) return false;
+  for (const [id, cell] of plan) p.do({ type: 'place', id, cell });
+  return true;
+}
+
+/** Puts every number on the solution's cells: the way out of any corner. */
+function rescue(p: Player, rng: Rng, which: readonly Token[]) {
+  p.layout(witness(p.s, which, rng));
+}
+
+function hastyRound(p: Player, rng: Rng) {
+  const s = p.s;
+  const final = s.round === RUN.rounds;
+  const fresh = rng.shuffle(dealtThisRound(s)).slice(0, final ? undefined : s.need);
+  if (final && latinFill(p, rng)) return;
+  for (const t of fresh) {
+    const cells = legalCells(p.s, t.id).filter((c) => !p.s.tokens.some((o) => o.cell === c));
+    if (!cells.length) { rescue(p, rng, [...p.s.tokens.filter((x) => x.round < p.s.round), ...fresh]); return; }
+    p.do({ type: 'place', id: t.id, cell: rng.pick(cells) });
+  }
+}
+
+function tidyRound(p: Player, rng: Rng) {
+  const final = p.s.round === RUN.rounds;
+  if (final) { if (!latinFill(p, rng)) rescue(p, rng, p.s.tokens); return; }
+  const fresh = dealtThisRound(p.s);
+  for (let k = 0; k < p.s.need; k++) {
+    let best: { id: number; cell: number; w: number } | null = null;
+    for (const t of fresh) {
+      if (p.s.tokens.find((x) => x.id === t.id)!.cell >= 0) continue;
+      for (const cell of legalCells(p.s, t.id)) {
+        if (p.s.tokens.some((o) => o.cell === cell)) continue;
+        const values = valuesOf(p.s);
+        values[cell] = t.n;
+        const w = worth(p.s, values) + rng.next();
+        if (!best || w > best.w) best = { id: t.id, cell, w };
       }
     }
+    if (!best) { rescue(p, rng, [...p.s.tokens.filter((x) => x.round < p.s.round), ...fresh.slice(0, p.s.need)]); return; }
+    p.do({ type: 'place', id: best.id, cell: best.cell });
+  }
+}
 
-    // Smart bots reroll with spare gold when their army has open places.
-    if (smart(ctx) && s.gold > 12 && onBoard(s).length < reach(s)) { const next = tryAct(s, { type: 'reroll' }); if (next) { s = next; continue; } }
-    // Sell bench clutter that can't fit, to make room.
-    if (bot !== 'random' && onBench(s).length >= RUN.benchSize) {
-      const junk = onBench(s).sort((a, b) => speciesById(a.species).tier - speciesById(b.species).tier)[0]!;
-      s = act(s, { type: 'sell', uid: junk.uid }).state;
-      continue;
+function carefulRound(p: Player, rng: Rng) {
+  const s = p.s;
+  const page = pageOf(s.seed);
+  const kept = s.tokens.filter((t) => t.round < s.round);
+  const fresh = dealtThisRound(s);
+  if (s.round === RUN.rounds) { rescue(p, rng, s.tokens); return; }
+  // Every distinct choice of dealt numbers to place, as token lists.
+  const sets = choices({ kept: [], dealt: fresh.map((t) => t.n), need: s.need }).map((nums) => {
+    const pool = fresh.slice();
+    return nums.map((n) => pool.splice(pool.findIndex((t) => t.n === n), 1)[0]!);
+  });
+  let best: { target: Map<number, number>; w: number } | null = null;
+  for (const set of sets) {
+    const tokens = [...kept, ...set];
+    for (let i = 0; i < 40; i++) {
+      const target = witness(s, tokens, rng);
+      const w = worth(s, valuesWith(s, target));
+      if (!best || w > best.w) best = { target, w };
     }
-    break;
   }
-  if (s.phase === 'plan') s = useItems(s, ctx);
-  if (!onBoard(s).length) {
-    // Nothing placed: force any legal placement so the run can go on.
-    for (const u of onBench(s)) { const cells = legalCells(s, u); if (cells.length) { s = act(s, { type: 'place', uid: u.uid, cell: cells[0]! }).state; break; } }
-  }
-  if (bot === 'oracle') s = optimizeLayout(s, ctx);
-  const r = act(s, { type: 'clash' });
-  return r.ok ? r.state : { ...s, phase: 'lost' };
-}
-
-/** Score of fighting the scouted enemy with the current layout: winning big is best. */
-function fightScore(s: RunState): number {
-  const units = toSpecs(onBoard(s));
-  if (!units.length) return -1e9;
-  const op = scout(s);
-  const r = simulateClash({ page: runPage(s), units, rules: op.playerRules }, { page: op.page, units: op.units, rules: op.rules });
-  const mine = r.survivors.filter((u) => r.fighters.find((f) => f.uid === u)?.team === PLAYER).length;
-  const theirs = r.survivors.length - mine;
-  return (r.winner === PLAYER ? 100 : r.winner === 'draw' ? 0 : -100) + 10 * (mine - theirs) - r.beats / 50;
-}
-
-/** Hill-climbs the layout with moves, swaps and Domino turns, judged by test fights against the scouted enemy. */
-function optimizeLayout(s: RunState, ctx: Ctx): RunState {
-  let best = s, bestScore = fightScore(s);
-  for (let i = 0; i < 60; i++) {
-    if (!best.units.length) break;
-    const u = ctx.rng.pick(best.units);
-    let next: RunState | null;
-    if (pieceKind(u.species) === 'domino' && u.cell >= 0 && ctx.rng.next() < 0.3) next = tryAct(best, { type: 'turn', uid: u.uid });
-    else {
-      const cells = legalCells(best, u).concat(onBoard(best).flatMap((x) => [x.cell]));
-      if (!cells.length) continue;
-      const cell = ctx.rng.pick(cells);
-      next = unitAtCell(best, cell)?.uid === u.uid ? null : tryAct(best, { type: 'place', uid: u.uid, cell });
+  // Polish the best layout: single moves to any legal empty cell that earn more.
+  const target = best!.target;
+  for (let pass = 0; pass < 2; pass++) {
+    let improved = false;
+    for (const [id, from] of [...target]) {
+      const n = s.tokens.find((t) => t.id === id)!.n;
+      const values = valuesWith(s, target);
+      const base = worth(s, values);
+      values[from] = 0;
+      let move: { cell: number; w: number } | null = null;
+      for (let c = 0; c < CELLS; c++) {
+        if (values[c] || page.stones[c] || !isLegal(page, values, c, n)) continue;
+        values[c] = n;
+        const w = worth(s, values);
+        values[c] = 0;
+        if (w > base && (!move || w > move.w)) move = { cell: c, w };
+      }
+      if (move) { target.set(id, move.cell); improved = true; }
     }
-    if (!next) continue;
-    const sc = fightScore(next);
-    if (sc >= bestScore) { best = next; bestScore = sc; }
+    if (!improved) break;
   }
-  return best;
+  p.layout(target);
+  if (!metRequired(p.s) && p.s.gold >= TOOLS.blotter) p.do({ type: 'blotter' });
 }
 
-export interface PlayOptions { banned?: readonly string[] }
+const ROUND: Record<BotName, (p: Player, rng: Rng) => void> = { hasty: hastyRound, tidy: tidyRound, careful: carefulRound };
 
-export function playRun(seed: string, bot: BotName, opts: PlayOptions = {}): RunState {
-  const ctx: Ctx = { rng: createRng(`${bot}:${seed}`), bot };
-  let s = newRun(seed);
-  if (opts.banned?.length) s = { ...s, mods: { banned: opts.banned } };
-  const page = runPage(s);
-  const twos = page.cages.filter((c) => c.cells.length === 2);
-  const first = smart(ctx)
-    ? twos.slice().sort((a, b) => Math.min(...a.cells.map(rowOf)) - Math.min(...b.cells.map(rowOf)) || openCells(page, b.id).length - openCells(page, a.id).length)[0]!
-    : ctx.rng.pick(twos);
-  s = act(s, { type: 'first-claim', cage: first.id }).state;
-  for (let guard = 0; guard < 20 && s.phase !== 'won' && s.phase !== 'lost'; guard++) s = playRound(s, ctx);
-  return s;
+export function playRun(seed: string, bot: BotName): Played {
+  const p = new Player(newRun(seed));
+  const rng = stream(seed, `bot:${bot}`);
+  while (p.s.phase === 'arrange') {
+    ROUND[bot](p, rng);
+    if (inkBlocker(p.s)) rescue(p, rng, [...p.s.tokens.filter((t) => t.round < p.s.round), ...dealtThisRound(p.s).slice(0, p.s.need)]);
+    if (!p.do({ type: 'ink' })) throw new Error(`ink refused: ${inkBlocker(p.s)}`);
+  }
+  return { state: p.s, actions: p.actions };
 }
-
-export const itemName = (id: ItemId) => ITEMS[id].name;

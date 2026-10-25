@@ -1,24 +1,18 @@
 import { useState } from 'preact/hooks';
+import { RUN } from '../content/balance';
 import type { Op, Page } from '../core/page';
 import { combinationSets } from '../core/rules';
 import { normalizeSeed } from '../core/seed';
-import { UnitCardBody } from './cards';
-import { EnemySheet, ResultSheet, SEAL_LINES, TraitSheet, UnitCard } from './fight/Sheets';
-import { MergeSheet, PickSheet, RunResultSheet, RunTraitsSheet, SatchelSheet, ScoutSheet, ToolSheet } from './run/Screens';
-import * as runState from './run/state';
-import { claimCost, openCells, values } from '../core/run';
-import { abandonRun, startRun } from './run/state';
-import * as fight from './fight/state';
+import { coachOff, resetTips } from './coach';
 import { Icon } from './Icon';
 import { screen, sheet } from './nav';
-import * as toy from './state';
-import { type HandChoice, type MotionChoice, buzz, setSetting, settings } from './settings';
-import { coachOff, resetTips } from './coach';
+import { RoundSheet, ToolSheet } from './run/Screens';
+import * as runState from './run/state';
 import { exportCode, importCode } from './savecode';
+import { type HandChoice, type MotionChoice, buzz, setSetting, settings } from './settings';
 import { play, unlockAudio } from './sound';
+import * as toy from './state';
 import { type ThemeChoice, theme } from './state';
-
-const SIZE_NOTE: Record<number, string> = { 2: '', 3: ' Three-cell cages give each member a quarter more.', 4: ' Four-cell cages give each member half again as much.' };
 
 const join = (op: Op, nums: number[]) => nums.join(op === '+' ? ' + ' : op === '×' ? ' × ' : op === '−' ? ' − ' : ' ÷ ');
 const orderFor = (op: Op, nums: number[]) => (op === '−' || op === '÷' ? nums.slice().sort((a, b) => b - a) : nums);
@@ -32,65 +26,34 @@ function Close() {
 }
 
 function CageSheet({ cageId }: { cageId: number }) {
-  const where = screen.value;
-  const rs = runState.run.value;
-  const inRun = where === 'run' && !!rs;
-  const p: Page = inRun ? runState.page.value! : where === 'fight' ? fight.playerPage : toy.page.value;
-  const vals = inRun ? values(rs!) : where === 'fight' ? fight.values.value : toy.values.value;
-  const sealedSet = inRun ? runState.sealed.value : where === 'fight' ? fight.sealed.value : toy.sealed.value;
+  const inRun = screen.value === 'run' && !!runState.run.value;
+  const p: Page = inRun ? runState.page.value! : toy.page.value;
+  const vals = inRun ? runState.values.value : toy.values.value;
+  const sealedSet = inRun ? runState.sealed.value : toy.sealed.value;
   const cage = p.cages[cageId];
   if (!cage) return null;
   const isSealed = sealedSet.has(cageId);
   const sets = isSealed ? [] : combinationSets(p, vals, cage);
-  const size = cage.cells.length;
-  const reward = SEAL_LINES[cage.op] + (SIZE_NOTE[size] ?? '');
   return (
     <>
       <div class="sheet-head">
-        <h2><span class="cage-target">{cage.target}{cage.op}</span> <span class="muted">in {size} cells</span></h2>
+        <h2><span class="cage-target">{cage.target}{cage.op}</span> <span class="muted">in {cage.cells.length} cells</span></h2>
         <Close />
       </div>
-      {inRun ? <ClaimRow cageId={cageId} /> : null}
       {isSealed ? (
-        <p><strong>Sealed.</strong> {reward}</p>
+        <p><strong>Sealed.</strong> {inRun ? `It pays ${RUN.sealGold} gold each round you ink it sealed.` : 'Its numbers make the target.'}</p>
       ) : sets.length ? (
         <>
           <p class="muted">Numbers that still fit, given the rows and columns around this cage:</p>
           <div class="combos">
             {sets.map((s) => <span class="combo" key={s.join()}>{join(cage.op, orderFor(cage.op, s))}</span>)}
           </div>
-          <p class="muted">When it seals: {reward.charAt(0).toLowerCase() + reward.slice(1)}</p>
+          {inRun ? <p class="muted">Sealed, it pays {RUN.sealGold} gold each round you ink it.</p> : null}
         </>
       ) : (
-        <p>Nothing fits here with the numbers around it. Move or remove one of them.</p>
+        <p>Nothing fits here with the numbers around it. Move one of them.</p>
       )}
     </>
-  );
-}
-
-function ClaimRow({ cageId }: { cageId: number }) {
-  const s = runState.run.value!;
-  const p = runState.page.value!;
-  const cage = p.cages[cageId]!;
-  const open = openCells(p, cageId).length;
-  if (s.claimed.includes(cageId)) return <p class="muted-sm">You hold this cage: {open} open {open === 1 ? 'cell' : 'cells'} for your army.</p>;
-  if (s.phase === 'first-claim') {
-    if (cage.cells.length !== 2) return <p class="muted-sm">Your free first claim must be a cage of two cells (the gold-outlined ones).</p>;
-    return (
-      <div class="row-btns">
-        <button class="btn primary" onClick={() => { runState.dispatch({ type: 'first-claim', cage: cageId }); sheet.value = null; }}>Claim it free</button>
-        <span class="muted-sm">Adds {open} {open === 1 ? 'place' : 'places'} to your army.</span>
-      </div>
-    );
-  }
-  const cost = claimCost(s, cageId);
-  return (
-    <div class="row-btns">
-      <button class="btn primary" disabled={s.gold < cost} onClick={() => { if (runState.dispatch({ type: 'claim', cage: cageId })) sheet.value = null; }}>
-        <Icon name="gold" />Claim for {cost}
-      </button>
-      <span class="muted-sm">Adds {open} {open === 1 ? 'place' : 'places'} to your army. Each cage you hold makes the next claim cost 1 more.</span>
-    </div>
   );
 }
 
@@ -99,9 +62,9 @@ function ConfirmNewRun() {
   return (
     <>
       <div class="sheet-head"><h2>Start a new run?</h2><Close /></div>
-      <p>Your run at clash {s?.clash ?? 1} with {s?.life ?? 0} Life will be abandoned.</p>
+      <p>Your run in round {s?.round ?? 1} with {s?.gold ?? 0} gold will be abandoned.</p>
       <div class="row-btns">
-        <button class="btn primary" onClick={() => { runState.openSlot('main'); abandonRun(); startRun(); sheet.value = null; screen.value = 'run'; }}>Start fresh</button>
+        <button class="btn primary" onClick={() => { runState.openSlot('main'); runState.abandonRun(); runState.startRun(); sheet.value = null; screen.value = 'run'; }}>Start fresh</button>
         <button class="btn" onClick={() => (sheet.value = null)}>Keep playing</button>
       </div>
     </>
@@ -161,18 +124,11 @@ function MenuSheet() {
         <>
           <div class="section-label">This run</div>
           <p>Code <strong class="code">{runState.run.value.seed}</strong>. Your run is saved after every move, so you can close the game anytime.</p>
-          <div class="row-btns">
-            <button class="btn" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>Abandon and start over</button>
-          </div>
-        </>
-      ) : null}
-
-      {s === 'fight' ? (
-        <>
-          <div class="section-label">This fight</div>
-          <div class="row-btns">
-            <button class="btn" onClick={() => { fight.clearLayout(); fight.backToPlan(); sheet.value = null; }}><Icon name="remove" />Bench every unit</button>
-          </div>
+          {runState.slot.value === 'main' ? (
+            <div class="row-btns">
+              <button class="btn" onClick={() => (sheet.value = { kind: 'confirm-new-run' })}>Abandon and start over</button>
+            </div>
+          ) : null}
         </>
       ) : null}
 
@@ -218,9 +174,9 @@ function MenuSheet() {
       </div>
 
       <div class="section-label">How to play</div>
-      <p>No number may repeat in a row or column. Each outlined cage shows a target in red; fill it so its numbers make that target and it seals in gold, empowering what stands inside. The operation is the reward: + makes units sturdier, × makes them hit harder, − makes them faster, and ÷ starts their ability half charged.</p>
-      <p>In a fight, the two pages face each other and units never move. Each hits the front-most enemy in its own column unless its Calling says otherwise. A sealed cage holds until one of its members falls.</p>
-      <p>The three Misprints at the top of the shop bend the rules: the Blank has no number and counts as whatever completes its cage, the Smudge ignores the Latin rule but stops its cage sealing, and the Domino fills two cells at once. Each chapter opens with a pick of items: tools that change the page once, and relics that strengthen one unit.</p>
+      <p>No number may repeat in a row or column. Each outlined cage shows a target in red; when its numbers make that target, it seals in gold.</p>
+      <p>A run is {RUN.rounds} rounds on one page. Each round deals a few numbers from the bag, which holds exactly what the page still needs, and posts three commissions. Place at least all but one of the new numbers, then ink the round. Anything on the page can move before you do.</p>
+      <p>Miss the required commission and you spill a drop of ink; spill all {RUN.startInk} and the page is ruined. Bounties pay gold, and so does every sealed cage when you ink. Gold buys the Redraw, the Lens and the Blotter. In the final round every number left goes in, and the page is full. Your score is the gold you kept, plus {RUN.inkBonus} for each drop of ink left.</p>
 
       <p class="credits">
         Icons by Lorc, Delapouite and contributors at <a href="https://game-icons.net" target="_blank" rel="noreferrer">game-icons.net</a>, CC BY 3.0.
@@ -248,7 +204,7 @@ function TransferSheet() {
   return (
     <>
       <div class="sheet-head"><h2>Move to another phone</h2><Close /></div>
-      <p class="muted-sm">A save code carries your run, today's Daily Page, the Codex and your settings. No account, no connection needed.</p>
+      <p class="muted-sm">A save code carries your run, today's Daily Page, your best scores and your settings. No account, no connection needed.</p>
       <div class="section-label">From this phone</div>
       <div class="row-btns"><button class="btn" onClick={() => void copy()}>Copy my save code</button></div>
       {mine ? <textarea class="code-box" readOnly value={mine} aria-label="Your save code" onFocus={(e) => (e.currentTarget as HTMLTextAreaElement).select()} /> : null}
@@ -265,23 +221,13 @@ export function Sheets() {
   if (!s) return null;
   return (
     <>
-      <div class="scrim" onClick={() => { if (s.kind !== 'merge' && s.kind !== 'pick') sheet.value = null; }} />
+      <div class="scrim" onClick={() => (sheet.value = null)} />
       <div class="sheet" role="dialog" aria-modal="true">
         {s.kind === 'cage' ? <CageSheet cageId={s.cage} />
           : s.kind === 'menu' ? <MenuSheet />
-          : s.kind === 'unit' ? <UnitCard uid={s.uid} side={s.side} />
-          : s.kind === 'trait' ? <TraitSheet id={s.id} side={s.side} />
-          : s.kind === 'enemy' ? <EnemySheet />
-          : s.kind === 'result' ? <ResultSheet />
-          : s.kind === 'card' ? <UnitCardBody species={s.species} n={s.n} n2={s.n2} stars={s.stars} relic={s.relic} />
-          : s.kind === 'pick' ? <PickSheet />
-          : s.kind === 'satchel' ? <SatchelSheet />
-          : s.kind === 'tool' ? <ToolSheet slot={s.slot} uid={s.uid} />
+          : s.kind === 'tool' ? <ToolSheet tool={s.tool} />
+          : s.kind === 'round' ? <RoundSheet />
           : s.kind === 'transfer' ? <TransferSheet />
-          : s.kind === 'scout' ? <ScoutSheet />
-          : s.kind === 'traits' ? <RunTraitsSheet />
-          : s.kind === 'merge' ? <MergeSheet />
-          : s.kind === 'run-result' ? <RunResultSheet />
           : s.kind === 'confirm-new-run' ? <ConfirmNewRun /> : null}
       </div>
     </>

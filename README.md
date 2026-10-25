@@ -1,8 +1,8 @@
 # Cagebreakers
 
-An offline auto-battler played on a KenKen page, for phones on airplanes.
+An offline number puzzle for phones on airplanes: one KenKen page, filled in over eight rounds.
 
-Every unit carries a number from 1 to 6. No number may repeat in a row or column, and an outlined cage pays off only when its numbers hit the printed target. Fill a cage correctly and it seals in gold, empowering every unit inside; then the armies fight on their own, and a cage holds only until one of its members falls.
+No number may repeat in a row or column, and an outlined cage seals in gold only when its numbers hit the printed target. Each round deals a few more numbers and posts three commissions ("Row 3 adds to 12 or more", "Seal a × cage", "No 6 in column 2"). Anything on the page can move, so each round's commissions pull last round's page apart. Miss the required one and you spill a drop of ink; bounties and seals pay gold. In the final round the last numbers go in, and the page is full.
 
 **Play:** https://kcwalr13.github.io/cagebreakers/ — open it once with a connection, add it to your home screen, and it works in airplane mode from then on.
 
@@ -17,6 +17,7 @@ The design lives in the [Cagebreakers design doc](https://claude.ai/artifact/NJV
 | M3 · The Run | Shop, gold, claims, merges, 15 clashes, opponents, three Keepers, save and resume | Built |
 | M4 · The Roster | 30 species, Kins, Callings, the Misprints (Blank, Smudge, Domino), tools and relics, bot balancing | Built |
 | M5 · Flight-Ready | Settings and quiet sound, the Daily Page, the Codex, save codes, a first chapter that teaches by playing, an art pass | Built |
+| M6 · Commissions | The battle is retired: numbers are the only pieces, each round deals more of them under three commissions, and the final round fills the page | Built |
 
 ## Working on it
 
@@ -26,9 +27,7 @@ npm run dev         # local server
 npm test            # core unit and property tests
 npm run e2e         # phone-sized end-to-end tests against the production build (run npm run build first)
 npm run lab -- 2000 # page generator statistics
-npx tsx lab/encounter.ts  # how a fixed fight plays for random and thoughtful layouts
-npx tsx lab/runs.ts 400   # bots play full runs: the balance report, checked against the design targets
-npx tsx lab/ablate.ts 200 2  # each species removed from the Oracle's shop in turn: how far its win rate shifts
+npx tsx lab/runs.ts 400   # three bots play full runs: the balance report, checked against the design targets
 npm run assets      # re-copy fonts and regenerate the icon module
 node scripts/app-icons.mjs  # re-render home-screen icons
 ```
@@ -37,8 +36,8 @@ Every push to `main` runs the tests and deploys to GitHub Pages.
 
 ## Layout
 
-- `src/core` — the rules: seeded randomness, page generation, legality and sealing, the combat simulator, opponents, and the run as a pure state machine. Pure TypeScript; no screen, no clock, no randomness except from the seed.
-- `src/content` — game data as typed data: species, Kins, Callings, items, seal rewards, balance constants, encounters.
+- `src/core` — the rules: seeded randomness, page generation, legality and sealing, commissions (and the proof that each is possible before it's posted), and the run as a pure state machine. Pure TypeScript; no screen, no clock, no randomness except from the seed.
+- `src/content` — game data: the shape of a run, tool prices, commission pay and difficulty.
 - `src/app` — the interface: Preact, SVG board, pointer input, storage behind one adapter.
 - `lab` — headless tools that run on a developer machine and never ship.
 - `e2e` — Playwright tests at iPhone and Android sizes, including an offline reload.

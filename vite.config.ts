@@ -25,7 +25,7 @@ export default defineConfig({
         id: './',
         name: 'Cagebreakers',
         short_name: 'Cagebreakers',
-        description: 'An offline auto-battler played on a KenKen page.',
+        description: 'An offline number puzzle: one KenKen page, filled in over eight rounds.',
         start_url: './',
         scope: './',
         display: 'standalone',

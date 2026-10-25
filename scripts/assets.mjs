@@ -28,21 +28,11 @@ copyFileSync(require.resolve('@fontsource/alegreya-sans/LICENSE'), join(fontsOut
 // Icon silhouettes from game-icons.net (CC BY 3.0), keyed by the name the game uses.
 const icons = require('@iconify-json/game-icons/icons.json').icons;
 const used = {
-  // Kins
-  snail: 'snail', hare: 'rabbit', owl: 'barn-owl', boar: 'boar', serpent: 'sea-serpent', stag: 'stag-head',
-  // Callings
-  warden: 'checked-shield', lancer: 'spear-feather', sweeper: 'scythe', marksman: 'bow-arrow', mender: 'healing', breaker: 'hammer-break',
-  // Interface
-  undo: 'anticlockwise-rotation', newPage: 'scroll-unfurled', menu: 'hamburger-menu', close: 'cancel',
-  sun: 'sun', moon: 'moon', life: 'hearts', gold: 'two-coins', lock: 'padlock', reroll: 'cycle', clash: 'crossed-swords',
-  remove: 'trash-can', help: 'help',
-  back: 'return-arrow', play: 'play-button', pause: 'pause-button', fast: 'fast-forward-button', skip: 'next-button',
-  info: 'info', trophy: 'laurels-trophy', skull: 'death-skull', cracked: 'cracked-glass', page: 'scroll-unfurled',
-  // Misprints
-  smudge: 'ink-swirl', domino: 'domino-tiles', blank: 'uncertainty', turn: 'clockwise-rotation',
-  // Tools and relics
-  satchel: 'hand-bag', chisel: 'chisel', flip: 'perspective-dice-six', eraser: 'broom', inkpot: 'drop', lens: 'magnifying-glass',
-  blade: 'broadsword', bulwark: 'round-shield', quill: 'quill', hourglass: 'hourglass', thorn: 'thorny-vine',
+  undo: 'anticlockwise-rotation', newPage: 'scroll-unfurled', menu: 'hamburger-menu', close: 'cancel', sun: 'sun', moon: 'moon',
+  back: 'return-arrow', info: 'info', help: 'help', remove: 'trash-can', page: 'scroll-unfurled',
+  // The run: gold, ink and what they buy
+  gold: 'two-coins', ink: 'drop', spill: 'droplet-splash', check: 'check-mark', seal: 'wax-seal', trophy: 'laurels-trophy',
+  redraw: 'cycle', lens: 'magnifying-glass', blotter: 'stamper',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

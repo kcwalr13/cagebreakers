@@ -1,26 +1,23 @@
 /**
- * The first chapter teaches by playing: one short tip at the moment it matters, one rule per
- * clash. Each tip shows once; the player can turn tips off or bring them back.
+ * The first rounds teach by playing: one short tip at the moment it matters. Each tip shows
+ * once; the player can turn tips off or bring them back.
  */
 import { computed, effect, signal } from '@preact/signals';
-import { onBoard, sealedNow, type RunState } from '../core/run';
-import { pieceKind } from '../core/pieces';
+import { RUN } from '../content/balance';
+import { type RunState, dealtThisRound, onPage, viewNow } from '../core/run';
 import { run } from './run/state';
 import { readJson, writeJson } from './storage';
 
 interface Tip { id: string; text: string; when: (s: RunState) => boolean }
 
 const TIPS: Tip[] = [
-  { id: 'latin', when: (s) => s.phase === 'plan' && s.clash === 1 && !onBoard(s).length, text: 'Drag a unit from the shop onto your cage. As in sudoku, no number may repeat in its row or column.' },
-  { id: 'seal', when: (s) => s.phase === 'plan' && sealedNow(s).size > 0, text: "Sealed! A full cage that makes its red target turns gold and empowers everyone in it: + sturdier, × harder hitting, − faster, ÷ quicker to cast." },
-  { id: 'fight', when: (s) => s.phase === 'plan' && s.clash === 1 && onBoard(s).length > 0, text: 'Units never move. Each hits the enemy facing it in its column. Press Clash when you are ready.' },
-  { id: 'scout', when: (s) => s.phase === 'plan' && s.clash === 2, text: 'The strip above the page is your next enemy. Tap it to study their page before you fight.' },
-  { id: 'claims', when: (s) => s.phase === 'plan' && s.clash === 3, text: 'You can field one unit per open cell you hold. Tap a hatched cage to claim it; holding more also brings stronger units to the shop.' },
-  { id: 'callings', when: (s) => s.phase === 'plan' && s.clash === 4, text: "A unit's badge is its Calling: how it fights. Two different species of one Calling unlock a bonus. Tap the trait row under the page." },
-  { id: 'kins', when: (s) => s.phase === 'plan' && s.clash === 5, text: "The emblem is its Kin, and each Kin cares about the page: Snails like stones, Hares share rows, Boars stack in columns, Owls love seals, Serpents want space, Stags fill lines. This clash is a Keeper: tap the strip to read its twist." },
-  { id: 'merge', when: (s) => s.phase === 'merge', text: 'Three copies of one species combine into a stronger unit with a star. You choose which number it keeps.' },
-  { id: 'items', when: (s) => s.phase === 'plan' && s.satchel.length > 0 && s.clash >= 2, text: 'Your satchel holds items. Tools change the page once; relics strengthen one unit for the rest of the run.' },
-  { id: 'misprint', when: (s) => s.phase === 'plan' && s.offers.some((o) => !o.sold && pieceKind(o.species) !== 'number'), text: 'A Misprint is in the shop. These top-tier units are printed wrong, and each bends one puzzle rule. Hold it to read its card.' },
+  { id: 'latin', when: (s) => s.round === 1 && !onPage(s).length, text: 'Drag a number onto the page. As in sudoku, no number may repeat in its row or column.' },
+  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the page are this round\'s commissions. Miss the required one and you spill a drop of ink; the others pay gold. Tap one to see where it applies.' },
+  { id: 'seal', when: (s) => viewNow(s).sealed.size > 0, text: 'Sealed! A full cage that makes its red target turns gold, and pays 1 gold every round you ink it sealed.' },
+  { id: 'ink', when: (s) => s.round === 1 && dealtThisRound(s).filter((t) => t.cell >= 0).length >= s.need, text: 'Place at least all but one of your numbers, then Ink it. A spare number goes back to the bag for a later round.' },
+  { id: 'move', when: (s) => s.round === 2, text: 'Everything on the page can move. Drag an old number somewhere new to meet this round\'s commissions.' },
+  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= 2, text: 'Gold buys tools: Redraw swaps the numbers in your hand, the Lens shows a hidden number, and the Blotter saves your ink for a round.' },
+  { id: 'final', when: (s) => s.round === RUN.rounds, text: 'The final round: every number left in the bag is yours, and all of it goes in. Fill the page to finish the run.' },
 ];
 
 const KEY = 'cagebreakers.coach';
@@ -34,7 +31,7 @@ effect(() => writeJson(KEY, { seen: coachSeen.value, off: coachOff.value }));
 /** The tip to show now, if any. */
 export const tip = computed<Tip | null>(() => {
   const s = run.value;
-  if (!s || coachOff.value) return null;
+  if (!s || s.phase !== 'arrange' || coachOff.value) return null;
   return TIPS.find((t) => !coachSeen.value.includes(t.id) && t.when(s)) ?? null;
 });
 

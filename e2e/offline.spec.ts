@@ -25,7 +25,7 @@ test('loads and plays with the network off after one visit', async ({ page, cont
   await context.setOffline(false);
 });
 
-test('a run can be started and fought with the network off', async ({ page, context }) => {
+test('a run can be started and played with the network off', async ({ page, context }) => {
   await page.goto('./?screen=title');
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.reload();
@@ -33,8 +33,9 @@ test('a run can be started and fought with the network off', async ({ page, cont
   await context.setOffline(true);
   await page.reload();
   await page.getByRole('button', { name: /New run/ }).click();
-  const cage = await page.evaluate(() => [...document.querySelectorAll('.claimable')].length);
-  expect(cage).toBeGreaterThan(0);
-  await expect(page.locator('.hud-row')).toBeVisible();
+  await expect(page.locator('.commission')).toHaveCount(3);
+  await expect(page.locator('.hand-slot')).toHaveCount(4);
+  await page.locator('.hand-slot').first().click();
+  await expect(page.locator('.status')).toContainText(/Placing the \d/);
   await context.setOffline(false);
 });

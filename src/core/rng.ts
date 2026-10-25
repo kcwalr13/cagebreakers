@@ -1,6 +1,6 @@
 /**
  * Seeded randomness. Every random choice in the game comes from a named stream derived
- * from the run seed, so the same seed always produces the same page, shops and enemies.
+ * from the run seed, so the same seed always produces the same page, deals and commissions.
  */
 export interface Rng {
   /** Float in [0, 1). */

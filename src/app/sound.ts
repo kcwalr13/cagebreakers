@@ -4,13 +4,13 @@
  */
 import { settings } from './settings';
 
-export type Cue = 'place' | 'buy' | 'seal' | 'shatter' | 'refuse' | 'hit' | 'cast' | 'fall' | 'win' | 'lose' | 'pick';
+export type Cue = 'place' | 'buy' | 'seal' | 'shatter' | 'refuse' | 'fall' | 'win' | 'lose' | 'pick';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 const lastPlayed = new Map<Cue, number>();
-/** The fewest milliseconds between two plays of a cue, so a busy clash stays a murmur. */
-const SPACING: Partial<Record<Cue, number>> = { hit: 90, cast: 120, fall: 60, place: 40 };
+/** The fewest milliseconds between two plays of a cue, so quick moves stay a murmur. */
+const SPACING: Partial<Record<Cue, number>> = { place: 40, shatter: 80 };
 
 function audio(): AudioContext | null {
   if (ctx) return ctx;
@@ -73,8 +73,6 @@ export function play(cue: Cue) {
     case 'seal': tone(a, 784, t, 0.5, 'sine', 0.22); tone(a, 1175, t + 0.06, 0.55, 'sine', 0.16); tone(a, 1568, t + 0.12, 0.6, 'sine', 0.1); break;
     case 'shatter': noise(a, t, 0.22, 0.6, 'highpass', 2500); tone(a, 1900, t, 0.12, 'square', 0.04, 900); break;
     case 'refuse': tone(a, 196, t, 0.12, 'triangle', 0.18); tone(a, 185, t + 0.09, 0.12, 'triangle', 0.14); break;
-    case 'hit': noise(a, t, 0.04, 0.25, 'lowpass', 900); break;
-    case 'cast': tone(a, 440, t, 0.18, 'sine', 0.1, 880); break;
     case 'fall': tone(a, 220, t, 0.25, 'sine', 0.16, 110); break;
     case 'pick': tone(a, 988, t, 0.12, 'sine', 0.16); tone(a, 1319, t + 0.07, 0.18, 'sine', 0.12); break;
     case 'win': [523, 659, 784, 1047].forEach((f, i) => tone(a, f, t + i * 0.11, 0.35, 'sine', 0.18)); break;

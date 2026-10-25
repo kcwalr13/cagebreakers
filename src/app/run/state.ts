@@ -1,21 +1,15 @@
 import { batch, computed, effect, signal } from '@preact/signals';
-import { ITEMS } from '../../content/items';
-import { speciesById } from '../../content/species';
-import type { ItemId } from '../../content/types';
-import { type ClashResult, tallyTraits } from '../../core/clash';
+import { type Posted, isMet, viewOf } from '../../core/commission';
 import { CELLS } from '../../core/grid';
-import type { Opponent } from '../../core/opponent';
-import { cellsOf, pieceKind } from '../../core/pieces';
-import { BLANK, type Hint, SMUDGE, blankValues, hintFor, isLegal, isSealed } from '../../core/rules';
+import { type Hint, hintFor } from '../../core/rules';
 import {
-  type ClashRecord, type OwnedUnit, type RunAction, type RunState, act, dominoSpots, isClaimed, migrateRun, newRun, onBench, onBoard,
-  reach, runPage, scout, sealedNow, toSpecs, values,
+  type RoundRecord, type RunAction, type RunState, act, inkBlocker, migrateRun, newRun, pageOf, scoreOf, valuesOf,
 } from '../../core/run';
 import { dailySeed, normalizeSeed } from '../../core/seed';
 import { drag } from '../input';
+import { sheet } from '../nav';
 import { buzz } from '../settings';
 import { play } from '../sound';
-import { sheet } from '../nav';
 import { freshSeed } from '../state';
 import { readJson, storage, writeJson } from '../storage';
 
@@ -25,26 +19,30 @@ export const SAVE_KEYS: Record<Slot, string> = { main: 'cagebreakers.run', daily
 const SLOT_KEY = 'cagebreakers.slot';
 const BEST_KEY = 'cagebreakers.daily.best';
 
+/** A saved run, or null. Runs saved before the commissions build can't continue and read as none. */
 export function loadSlot(sl: Slot): RunState | null {
   const s = migrateRun(readJson<unknown>(SAVE_KEYS[sl]));
-  if (!s || !normalizeSeed(s.seed)) return null;
-  return { ...s, lastArmy: s.lastArmy ?? [] };
+  return s && normalizeSeed(s.seed) ? s : null;
 }
 
 export const slot = signal<Slot>(readJson<{ slot?: Slot }>(SLOT_KEY)?.slot === 'daily' ? 'daily' : 'main');
 export const run = signal<RunState | null>(loadSlot(slot.value));
-/** Earlier layouts this planning phase, for undoing placements (never purchases). */
-export const undoStack = signal<RunState[]>([]);
-export const view = signal<'plan' | 'clash'>('plan');
-export const lastFight = signal<{ result: ClashResult; opponent: Opponent; record: ClashRecord; before: RunState } | null>(null);
-export type RunSelection = { kind: 'bench' | 'cell'; uid: string } | { kind: 'offer'; index: number };
-export const selection = signal<RunSelection | null>(null);
-/** A tool or relic waiting for its target. */
-export const itemMode = signal<{ slot: number; item: ItemId } | null>(null);
+// A battle-era save in the other slot is cleared too, so it never shows up as a run to continue.
+for (const sl of ['main', 'daily'] as Slot[]) if (storage.get(SAVE_KEYS[sl]) && !loadSlot(sl)) storage.remove(SAVE_KEYS[sl]);
+storage.remove('cagebreakers.codex');
+
+/** The number in hand, by token id. */
+export const selection = signal<number | null>(null);
+/** Set while the Lens waits for a cell. */
+export const lensMode = signal(false);
+/** The commission lit up on the page. */
+export const focus = signal<number | null>(null);
 export const message = signal<{ text: string; warn: boolean; id: number } | null>(null);
-export const justPlaced = signal('');
+export const justPlaced = signal(-1);
 export const justSealed = signal<Set<number>>(new Set());
 export const refused = signal<{ cell: number; id: number } | null>(null);
+/** The round just inked, for the result sheet: what was posted, what was met, what it paid. */
+export const lastInk = signal<{ record: RoundRecord; posted: Posted[]; met: boolean[] } | null>(null);
 
 effect(() => {
   const s = run.value, key = SAVE_KEYS[slot.value];
@@ -53,16 +51,17 @@ effect(() => {
 });
 
 /** Your best result on each day's page. */
-export interface DailyBest { won: boolean; reached: number; life: number }
-export const dailyBest = signal<Record<string, DailyBest>>(readJson<Record<string, DailyBest>>(BEST_KEY) ?? {});
+export interface DailyBest { score: number; done: boolean; round: number }
+const savedBest = readJson<Record<string, Partial<DailyBest>>>(BEST_KEY) ?? {};
+export const dailyBest = signal<Record<string, DailyBest>>(
+  Object.fromEntries(Object.entries(savedBest).filter(([, b]) => typeof b.score === 'number')) as Record<string, DailyBest>,
+);
 effect(() => {
   const s = run.value;
-  if (!s?.daily || (s.phase !== 'won' && s.phase !== 'lost')) return;
-  const now: DailyBest = { won: s.phase === 'won', reached: s.records.length, life: s.life };
+  if (!s?.daily || s.phase === 'arrange') return;
+  const now: DailyBest = { score: scoreOf(s).total, done: s.phase === 'done', round: s.records.length };
   const prev = dailyBest.peek()[s.daily];
-  // A win beats a loss, then reaching further, then more Life left.
-  const diff = prev ? Number(now.won) - Number(prev.won) || now.reached - prev.reached || now.life - prev.life : 1;
-  if (diff > 0) {
+  if (!prev || now.score > prev.score) {
     dailyBest.value = { ...dailyBest.peek(), [s.daily]: now };
     writeJson(BEST_KEY, dailyBest.value);
   }
@@ -73,13 +72,13 @@ export function today(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function resetView() {
+  selection.value = null; lensMode.value = false; focus.value = null; lastInk.value = null;
+}
+
 /** Switches to a slot, resuming whatever run it holds. */
 export function openSlot(sl: Slot) {
-  batch(() => {
-    slot.value = sl;
-    run.value = loadSlot(sl);
-    undoStack.value = []; selection.value = null; itemMode.value = null; lastFight.value = null; view.value = 'plan';
-  });
+  batch(() => { slot.value = sl; run.value = loadSlot(sl); resetView(); });
 }
 
 /** Opens today's Daily Page, continuing it if already begun (or starting it over when asked). */
@@ -87,80 +86,55 @@ export function startDaily(day = today(), fresh = false) {
   const saved = loadSlot('daily');
   batch(() => {
     slot.value = 'daily';
-    run.value = saved?.daily === day && !fresh ? saved : { ...newRun(dailySeed(day)), daily: day };
-    undoStack.value = []; selection.value = null; itemMode.value = null; lastFight.value = null; view.value = 'plan';
+    run.value = saved?.daily === day && !fresh ? saved : newRun(dailySeed(day), day);
+    resetView();
   });
 }
 
-export const page = computed(() => (run.value ? runPage(run.value) : null));
-export const sealed = computed(() => (run.value ? sealedNow(run.value) : new Set<number>()));
-export const traits = computed(() => tallyTraits(run.value ? toSpecs(onBoard(run.value)) : []));
-export const scouted = computed(() => (run.value && run.value.phase !== 'first-claim' ? scout(run.value) : null));
-/** The unit covering each cell (a Domino covers two). */
-export const unitAt = computed(() => {
-  const out = new Array<OwnedUnit | null>(CELLS).fill(null);
-  if (run.value) for (const u of onBoard(run.value)) for (const c of cellsOf(u)) out[c] = u;
-  return out;
+export function startRun(seed = freshSeed()) {
+  batch(() => { slot.value = 'main'; run.value = newRun(seed); resetView(); });
+}
+
+export function abandonRun() {
+  batch(() => { run.value = null; resetView(); });
+}
+
+export const page = computed(() => (run.value ? pageOf(run.value.seed) : null));
+export const values = computed(() => (run.value ? valuesOf(run.value) : new Array<number>(CELLS).fill(0)));
+export const view = computed(() => (page.value ? viewOf(page.value, values.value) : null));
+export const sealed = computed(() => view.value?.sealed ?? new Set<number>());
+/** For each posted commission, whether the page meets it right now. */
+export const met = computed(() => {
+  const s = run.value, v = view.value;
+  return s && v ? s.posted.map((p) => isMet(p.c, v)) : [];
 });
-/** The numbers Blanks stand for in sealed cages, by cell. */
-export const blankShown = computed(() => {
-  const s = run.value, p = page.value;
-  const out = new Map<number, number>();
-  if (!s || !p) return out;
-  const vals = values(s);
-  for (const id of sealed.value) for (const [c, v] of blankValues(p.cages[id]!, vals)) out.set(c, v);
-  return out;
-});
+export const blocker = computed(() => (run.value ? inkBlocker(run.value) : null));
 export const revealed = computed(() => {
   const s = run.value, p = page.value;
   return new Map((s?.revealed ?? []).map((c) => [c, p!.solution[c]!]));
 });
 
-/** What's in hand: the piece, and the cells it leaves when moved. */
-interface Holding { species: string; n: number; n2?: number; uid?: string; origin: number[] }
-export const holding = computed<Holding | null>(() => {
+/** The number in hand: dragged or selected, with the cell it would leave. */
+export const holding = computed<{ id: number; n: number; origin: number } | null>(() => {
   const s = run.value;
   if (!s) return null;
-  const fromUnit = (u: OwnedUnit | undefined | null): Holding | null => (u ? { species: u.species, n: u.n, n2: u.n2, uid: u.uid, origin: cellsOf(u) } : null);
-  const fromOffer = (i: number): Holding | null => { const o = s.offers[i]; return o && !o.sold ? { species: o.species, n: o.n, n2: o.n2, origin: [] } : null; };
   const d = drag.value;
+  let id: number | null = null;
   if (d) {
     const from = d.from;
-    if (from.kind === 'cell') return fromUnit(unitAt.value[from.cell]);
-    if (from.key.startsWith('offer:')) return fromOffer(Number(from.key.slice(6)));
-    return fromUnit(s.units.find((u) => u.uid === from.key));
+    id = from.kind === 'item' ? Number(from.key) : s.tokens.find((t) => t.cell === from.cell)?.id ?? null;
   }
-  const sel = selection.value;
-  if (!sel) return null;
-  if (sel.kind === 'offer') return fromOffer(sel.index);
-  return fromUnit(s.units.find((u) => u.uid === sel.uid));
+  else id = selection.value;
+  const t = id === null ? undefined : s.tokens.find((x) => x.id === id);
+  return t ? { id: t.id, n: t.n, origin: t.cell } : null;
 });
 
-/** Where a Domino in hand would put its second half if dropped on each cell. */
-export const dominoLanding = computed<number[]>(() => {
-  const s = run.value, h = holding.value;
-  const out = new Array<number>(CELLS).fill(-1);
-  if (!s || !h || pieceKind(h.species) !== 'domino') return out;
-  for (let c = 0; c < CELLS; c++) out[c] = dominoSpots(s, { uid: h.uid ?? '', n: h.n, n2: h.n2 }, c)[0] ?? -1;
-  return out;
-});
-
+/** Placement help for every empty cell while a number is in hand. */
 export const hints = computed<(Hint | null)[]>(() => {
-  const s = run.value, p = page.value, h = holding.value;
-  if (!s || !p || !h) return new Array(CELLS).fill(null);
-  const kind = pieceKind(h.species);
-  const vals = values(s);
-  for (const c of h.origin) vals[c] = 0;
+  const p = page.value, h = holding.value, vals = values.value;
   return Array.from({ length: CELLS }, (_, c) => {
-    if (p.stones[c] || h.origin.includes(c) || unitAt.value[c] || !isClaimed(s, c)) return null;
-    if (kind === 'domino') {
-      const b = dominoLanding.value[c]!;
-      if (b < 0) return 'blocked';
-      const next = vals.slice(); next[c] = h.n; next[b] = h.n2 ?? 0;
-      return [p.cageOf[c]!, p.cageOf[b]!].some((id) => isSealed(p.cages[id]!, next)) ? 'seals' : 'open';
-    }
-    const mark = kind === 'blank' ? BLANK : kind === 'smudge' ? SMUDGE : h.n;
-    return hintFor(p, vals, c, mark);
+    if (!p || !h || p.stones[c] || c === h.origin || vals[c]) return null;
+    return hintFor(p, vals, c, h.n, h.origin);
   });
 });
 
@@ -172,8 +146,7 @@ export function say(text: string, warn = false, ms = 2800) {
   timer = setTimeout(() => (message.value = null), ms);
 }
 
-
-/** Applies an action. Refusals explain themselves; seals that form are celebrated. */
+/** Applies an action. Refusals explain themselves; seals that form or break are heard. */
 export function dispatch(a: RunAction, cell = -1): boolean {
   const s = run.value;
   if (!s) return false;
@@ -185,122 +158,45 @@ export function dispatch(a: RunAction, cell = -1): boolean {
     return false;
   }
   const before = sealed.value;
+  const beforeMet = met.value;
   batch(() => {
-    if (a.type === 'place' || a.type === 'turn') undoStack.value = [...undoStack.value, s].slice(-40);
-    else if (a.type !== 'lock') undoStack.value = [];
     run.value = r.state;
-    if (a.type === 'place') justPlaced.value = a.uid;
+    if (a.type === 'place') justPlaced.value = a.id;
+    if (a.type !== 'place') selection.value = null;
   });
-  if (r.note) say(r.note, false, 3600);
-  const newly = new Set([...sealed.value].filter((id) => !before.has(id)));
+  if (r.inked) {
+    lastInk.value = { record: r.inked, posted: s.posted, met: beforeMet };
+    focus.value = null;
+    if (r.state.phase === 'done') play('win');
+    else if (r.state.phase === 'ruined') play('lose');
+    else if (r.inked.inkSpilled) { play('fall'); buzz([40, 60, 40]); }
+    else { play('pick'); buzz(12); }
+    sheet.value = { kind: 'round' };
+    return true;
+  }
+  const now = sealed.value;
+  const newly = new Set([...now].filter((id) => !before.has(id)));
+  const broke = [...before].some((id) => !now.has(id));
   if (newly.size) {
     justSealed.value = newly;
     buzz([12, 40, 18]); play('seal');
     setTimeout(() => { if (justSealed.value === newly) justSealed.value = new Set(); }, 1200);
-  } else if (a.type === 'place' || a.type === 'turn') { buzz(8); play('place'); }
-  else if (a.type === 'buy') { buzz(8); play('buy'); }
-  else if (a.type === 'pick' || a.type === 'use') play('pick');
-  if (r.fought) {
-    lastFight.value = { ...r.fought, before: s };
-    view.value = 'clash';
-  }
+  } else if (broke) { buzz(16); play('shatter'); }
+  else if (a.type === 'place') { buzz(8); play('place'); }
+  else play('buy');
   return true;
 }
 
-export function undo() {
-  const st = undoStack.value;
-  if (!st.length) return;
-  batch(() => { run.value = st[st.length - 1]!; undoStack.value = st.slice(0, -1); selection.value = null; });
+/** Moves a number to a cell, or into your hand with -1. */
+export function placeToken(id: number, cell: number): boolean {
+  return dispatch({ type: 'place', id, cell }, cell);
 }
 
-export function startRun(seed = freshSeed()) {
-  batch(() => {
-    slot.value = 'main';
-    run.value = newRun(seed);
-    undoStack.value = [];
-    selection.value = null;
-    itemMode.value = null;
-    lastFight.value = null;
-    view.value = 'plan';
-  });
-}
-
-export function abandonRun() {
-  batch(() => { run.value = null; undoStack.value = []; lastFight.value = null; itemMode.value = null; view.value = 'plan'; });
-}
-
-export function finishClash() {
-  view.value = 'plan';
-  const s = run.value;
-  if (s?.lastIncome && s.phase !== 'won' && s.phase !== 'lost') {
-    const i = s.lastIncome;
-    const parts = [`+${i.base} gold`];
-    if (i.interest) parts.push(`+${i.interest} interest`);
-    if (i.streak) parts.push(`+${i.streak} streak`);
-    if (i.win) parts.push(`+${i.win} for the win`);
-    say(parts.join(', '), false, 4000);
+/** Taps on the page while the Lens is waiting. */
+export function useLens(cell: number) {
+  if (dispatch({ type: 'lens', cell }, cell)) {
+    lensMode.value = false;
+    const p = page.value!;
+    say(`The Lens shows a ${p.solution[cell]} belongs there.`, false, 3600);
   }
 }
-
-/** Places a unit (or buys an offer straight onto a cell). */
-export function placeOnCell(source: RunSelection, cell: number): boolean {
-  const s = run.value;
-  if (!s) return false;
-  if (source.kind === 'offer') {
-    const before = s.units.length;
-    if (!dispatch({ type: 'buy', offer: source.index }, cell)) return false;
-    const after = run.value!;
-    if (after.phase === 'merge' || after.units.length <= before) return true;
-    const fresh = after.units[after.units.length - 1]!;
-    dispatch({ type: 'place', uid: fresh.uid, cell }, cell);
-    return true;
-  }
-  return dispatch({ type: 'place', uid: source.uid, cell }, cell);
-}
-
-/** Spends the item waiting for a target on what was tapped. Returns true when the tap was used. */
-export function useOn(target: { uid?: string; cell?: number }): boolean {
-  const m = itemMode.value, s = run.value, p = page.value;
-  if (!m || !s || !p) return false;
-  const item = m.item;
-  const name = ITEMS[item].name;
-  if (ITEMS[item].family === 'relic' || item === 'chisel' || item === 'flip') {
-    if (!target.uid) { say(`Tap a unit for the ${name}.`, true); return true; }
-    const u = s.units.find((x) => x.uid === target.uid)!;
-    // The Chisel asks which way; a Domino asks which half.
-    if (item === 'chisel' || (item === 'flip' && pieceKind(u.species) === 'domino')) {
-      sheet.value = { kind: 'tool', slot: m.slot, uid: u.uid };
-      return true;
-    }
-    if (dispatch({ type: 'use', slot: m.slot, uid: u.uid })) {
-      if (ITEMS[item].family === 'relic') say(`${speciesById(u.species).name} now carries the ${name}.`);
-      itemMode.value = null;
-    }
-    return true;
-  }
-  const cell = target.cell ?? -1;
-  if (cell < 0) { say(`Tap a cell on the page for the ${name}.`, true); return true; }
-  const a: RunAction = item === 'inkpot' ? { type: 'use', slot: m.slot, cage: p.cageOf[cell]! } : { type: 'use', slot: m.slot, cell };
-  if (dispatch(a, cell)) itemMode.value = null;
-  return true;
-}
-
-/** Cells a waiting tool can be used on, for ringing on the page. */
-export const toolTargets = computed<Set<number> | undefined>(() => {
-  const m = itemMode.value, s = run.value, p = page.value;
-  if (!m || !s || !p) return undefined;
-  if (m.item === 'eraser') return new Set(p.stones.map((v, c) => (v ? c : -1)).filter((c) => c >= 0));
-  if (m.item === 'lens') return new Set(p.stones.map((v, c) => (!v && !s.revealed.includes(c) && !unitAt.value[c] ? c : -1)).filter((c) => c >= 0));
-  if (m.item === 'inkpot') {
-    const out = new Set<number>();
-    for (const cage of p.cages) if ((cage.op === '+' || cage.op === '×') && !sealed.value.has(cage.id)) for (const c of cage.cells) out.add(c);
-    return out;
-  }
-  return new Set(onBoard(s).flatMap(cellsOf));
-});
-
-export const unitName = (u: { species: string }) => speciesById(u.species).name;
-export const benchUnits = computed(() => (run.value ? onBench(run.value) : []));
-export const armyCount = computed(() => (run.value ? onBoard(run.value).length : 0));
-export const armyLimit = computed(() => (run.value ? reach(run.value) : 0));
-export { isLegal };

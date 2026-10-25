@@ -2,17 +2,8 @@ import { CELLS, NUMBERS, PEERS } from './grid';
 import { type Cage, type Page, evaluate } from './page';
 
 /**
- * Board markers for Misprints that stand without a number. They are negative, so they never
- * match a number under the Latin rule, yet a cell holding one counts as filled.
- *  - BLANK counts as whatever number completes its cage, if the Latin rule allows one.
- *  - SMUDGE ignores the Latin rule, and no cage it stands in can seal.
- */
-export const BLANK = -1;
-export const SMUDGE = -2;
-
-/**
  * A board is the numbers standing on the page: stones plus whatever the player has placed.
- * `placed` holds the player's numbers and markers (0 = empty); stones live on the page.
+ * `placed` holds the player's numbers (0 = empty); stones live on the page.
  */
 export function boardValues(page: Page, placed: readonly number[]): number[] {
   const out = new Array<number>(CELLS);
@@ -20,68 +11,30 @@ export function boardValues(page: Page, placed: readonly number[]): number[] {
   return out;
 }
 
-const clashes = (values: readonly number[], cell: number, n: number, ignore = -1) =>
-  PEERS[cell]!.some((p) => p !== ignore && values[p] === n);
-
 /**
  * The Latin rule: a number may stand in a cell only if no other number in its row or column
  * is the same. `ignore` is a cell to treat as empty (the origin of a number being moved).
- * Misprint markers (BLANK, SMUDGE) stand anywhere that isn't a stone.
  */
 export function isLegal(page: Page, values: readonly number[], cell: number, n: number, ignore = -1): boolean {
   if (page.stones[cell]) return false;
-  if (n < 0) return true;
-  return !clashes(values, cell, n, ignore);
-}
-
-/** Assigns numbers to a cage's Blanks so the cage hits its target, or returns null. */
-function resolveBlanks(cage: Cage, values: readonly number[]): number[] | null {
-  const work = values.slice();
-  const blanks = cage.cells.filter((c) => work[c] === BLANK);
-  const walk = (k: number): boolean => {
-    if (k === blanks.length) return evaluate(cage.op, cage.cells.map((c) => work[c]!)) === cage.target;
-    const cell = blanks[k]!;
-    for (const n of NUMBERS) {
-      if (clashes(work, cell, n)) continue;
-      work[cell] = n;
-      if (walk(k + 1)) return true;
-    }
-    work[cell] = BLANK;
-    return false;
-  };
-  return walk(0) ? cage.cells.map((c) => work[c]!) : null;
+  for (const p of PEERS[cell]!) if (p !== ignore && values[p] === n) return false;
+  return true;
 }
 
 export function isSealed(cage: Cage, values: readonly number[]): boolean {
-  let wild = false;
-  for (const c of cage.cells) {
-    const v = values[c]!;
-    if (!v || v === SMUDGE) return false;
-    if (v === BLANK) wild = true;
-  }
-  if (!wild) return evaluate(cage.op, cage.cells.map((c) => values[c]!)) === cage.target;
-  return resolveBlanks(cage, values) !== null;
-}
-
-/** The numbers a sealed cage's Blanks stand for, keyed by cell. */
-export function blankValues(cage: Cage, values: readonly number[]): Map<number, number> {
-  const out = new Map<number, number>();
-  if (!cage.cells.some((c) => values[c] === BLANK)) return out;
-  const solved = resolveBlanks(cage, values);
-  if (solved) cage.cells.forEach((c, i) => { if (values[c] === BLANK) out.set(c, solved[i]!); });
-  return out;
+  const nums = cage.cells.map((c) => values[c]!);
+  if (nums.some((n) => !n)) return false;
+  return evaluate(cage.op, nums) === cage.target;
 }
 
 /**
- * Every way to finish a cage from the current board: assignments to its empty cells (and its
- * Blanks) that keep the Latin rule (against the whole board and within the cage) and hit the
- * target. Each result lists the cage's values in the order of `cage.cells`. A cage holding a
- * Smudge has none.
+ * Every way to finish a cage from the current board: assignments to its empty cells that keep
+ * the Latin rule (against the whole board and within the cage) and hit the target.
+ * Each result lists the cage's values in the order of `cage.cells`.
  */
 export function completions(page: Page, values: readonly number[], cage: Cage): number[][] {
-  if (cage.cells.some((c) => values[c] === SMUDGE)) return [];
   const work = values.slice();
-  const empties = cage.cells.filter((c) => !work[c] || work[c] === BLANK);
+  const empties = cage.cells.filter((c) => !work[c]);
   const out: number[][] = [];
   const walk = (k: number) => {
     if (k === empties.length) {
@@ -90,15 +43,12 @@ export function completions(page: Page, values: readonly number[], cage: Cage): 
       return;
     }
     const cell = empties[k]!;
-    const was = work[cell]!;
-    work[cell] = 0;
     for (const n of NUMBERS) {
       if (!isLegal(page, work, cell, n)) continue;
       work[cell] = n;
       walk(k + 1);
       work[cell] = 0;
     }
-    work[cell] = was;
   };
   walk(0);
   return out;
@@ -117,7 +67,7 @@ export function combinationSets(page: Page, values: readonly number[], cage: Cag
 export type Hint = 'blocked' | 'open' | 'seals' | 'dead';
 
 /**
- * What placing `n` (a number or a Misprint marker) in `cell` would do:
+ * What placing `n` in `cell` would do:
  *  - blocked: the Latin rule forbids it (or the cell is a stone)
  *  - seals:   it completes its cage correctly
  *  - dead:    it's legal, but its cage could no longer be completed
@@ -139,11 +89,11 @@ export function sealedCages(page: Page, values: readonly number[]): Set<number> 
   return out;
 }
 
-/** True when the Latin rule holds across every row and column of the board. Markers are exempt. */
+/** True when the Latin rule holds across every row and column of the board. */
 export function boardIsLatin(values: readonly number[]): boolean {
   for (let i = 0; i < CELLS; i++) {
-    const v = values[i]!;
-    if (v <= 0) continue;
+    const v = values[i];
+    if (!v) continue;
     for (const p of PEERS[i]!) if (values[p] === v) return false;
   }
   return true;

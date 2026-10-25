@@ -21,7 +21,7 @@ export function seedFromInts(ints: ArrayLike<number>): string {
 
 /**
  * The Daily Page's seed for a calendar day, written '2026-10-24'. Every phone derives the same
- * seed for the same day, so everyone plays the same page and shops with no server involved.
+ * seed for the same day, so everyone plays the same page, deals and commissions with no server involved.
  */
 export function dailySeed(day: string): string {
   const rng = createRng(`daily:${day}`);

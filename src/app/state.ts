@@ -200,40 +200,35 @@ export function exposeTestHooks() {
     place,
     newPage,
   };
-  void Promise.all([import('./run/state'), import('../core/run'), import('../core/opponent'), import('../core/clash')]).then(([r, core, opp, clash]) => {
+  void Promise.all([import('./run/state'), import('../core/run'), import('../core/commission'), import('../core/rng')]).then(([r, core, cm, rng]) => {
     (window as unknown as { __run: unknown }).__run = {
       state: () => r.run.value,
       dispatch: r.dispatch,
-      finishClash: r.finishClash,
       startRun: r.startRun,
-      /** Legal claimed cells for a unit, for test autopilots. */
-      legalCells(uid: string) {
-        const st = r.run.value!; const vals = core.values(st);
-        return Array.from({ length: 36 }, (_, c) => c).filter((c) => {
-          if (vals[c] || !core.isClaimed(st, c)) return false;
-          const res = core.act(st, { type: 'place', uid, cell: c });
-          return res.ok && res.state !== st;
-        });
+      page: () => (r.run.value ? core.pageOf(r.run.value.seed) : null),
+      /** Cells a number could move to, for test autopilots. */
+      legalCells: (id: number) => core.legalCells(r.run.value!, id),
+      /** Puts every number in hand onto a cell where the hidden solution has it. */
+      solveHand() {
+        let st = r.run.value!;
+        const p = core.pageOf(st.seed);
+        for (const t of st.tokens.filter((x) => x.cell < 0)) {
+          const cell = Array.from({ length: 36 }, (_, c) => c).find((c) => !p.stones[c] && p.solution[c] === t.n && !st.tokens.some((o) => o.cell === c));
+          if (cell !== undefined && r.dispatch({ type: 'place', id: t.id, cell })) st = r.run.value!;
+        }
       },
-      claimCost: (cage: number) => core.claimCost(r.run.value!, cage),
-      reach: () => core.reach(r.run.value!),
-      page: () => core.runPage(r.run.value!),
-      useOn: r.useOn,
-      itemMode: r.itemMode,
-      /** A heavy late-run fight between two generated armies, for timing on the phone. */
-      benchFight() {
-        const seed = r.run.value?.seed ?? 'BENCHS';
-        const a = opp.generateOpponent(seed, 15), b = opp.generateOpponent(seed, 14);
-        return clash.simulateClash({ page: a.page, units: a.units }, { page: b.page, units: b.units }).beats;
+      /** Milliseconds to post this round's commissions afresh, averaged, for timing on the phone. */
+      benchPost(times = 10) {
+        const st = r.run.value!;
+        const p = core.pageOf(st.seed);
+        const holding = { kept: st.tokens.filter((t) => t.round < st.round).map((t) => t.n), dealt: core.dealtThisRound(st).map((t) => t.n), need: st.need };
+        const now = cm.viewOf(p, core.valuesOf({ ...st, tokens: st.tokens.filter((t) => t.round < st.round) }));
+        const t0 = performance.now();
+        for (let i = 0; i < times; i++) cm.postCommissions({ page: p, round: Math.max(3, st.round), final: false, holding, now }, rng.createRng(`bench${i}`));
+        return (performance.now() - t0) / times;
       },
-      /** Replaces the run outright, for tests that need a particular board. */
-      load(st: unknown) { r.run.value = st as never; r.undoStack.value = []; },
-    };
-  });
-  void import('./fight/state').then((f) => {
-    (window as unknown as { __fight: unknown }).__fight = {
-      roster: f.roster, playerPage: f.playerPage, place: f.placeUnit, layout: () => ({ ...f.layout.value }),
-      sealed: () => [...f.sealed.value], clash: f.startClash, result: () => f.result.value, clear: f.clearLayout,
+      /** Replaces the run outright, for tests that need a particular state. */
+      load(st: unknown) { r.run.value = st as never; },
     };
   });
 }
