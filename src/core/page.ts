@@ -180,38 +180,51 @@ function makeUnique(page: Page, rng: Rng, budget: number): number[] | null {
 /** Generates the page for a seed. Deterministic: the same seed always gives the same page. */
 export function generatePage(seed: string, rules: PageRules = DEFAULT_PAGE_RULES): Page {
   const g = gridOf(rules.size);
-  const solution = latinSquare(stream(seed, 'page.latin'), g);
   const cageRng = stream(seed, 'page.cages');
   const opRng = stream(seed, 'page.ops');
   const stoneRng = stream(seed, 'page.stones');
-  // A page that must have one solution gets fresh cages when stones alone can't settle it.
-  const tries = rules.unique === undefined ? 1 : 200;
-  for (let attempt = 0; attempt < tries; attempt++) {
-    let cells: number[][] | null = null;
-    for (let i = 0; i < 500 && !cells; i++) cells = tryPartition(cageRng, rules, g);
-    if (!cells) throw new Error(`could not partition page ${seed}`);
-    // Order cages top-to-bottom, left-to-right by their first cell so ids read naturally.
-    cells.sort((a, b) => a[0]! - b[0]!);
 
-    const cageOf = new Array<number>(g.cells).fill(-1);
-    cells.forEach((cage, id) => cage.forEach((c) => (cageOf[c] = id)));
+  /** Cages and stones over one solution, `tries` times; null if none of them has only that solution. */
+  const build = (solution: number[], tries: number): Page | null => {
+    for (let attempt = 0; attempt < tries; attempt++) {
+      let cells: number[][] | null = null;
+      for (let i = 0; i < 500 && !cells; i++) cells = tryPartition(cageRng, rules, g);
+      if (!cells) throw new Error(`could not partition page ${seed}`);
+      // Order cages top-to-bottom, left-to-right by their first cell so ids read naturally.
+      cells.sort((a, b) => a[0]! - b[0]!);
 
-    const cages: Cage[] = cells.map((cage, id) => {
-      const values = cage.map((c) => solution[c]!);
-      const op = chooseOp(opRng, values, rules.ops);
-      return { id, cells: cage, op, target: evaluate(op, values) };
-    });
+      const cageOf = new Array<number>(g.cells).fill(-1);
+      cells.forEach((cage, id) => cage.forEach((c) => (cageOf[c] = id)));
 
-    let stones: number[] | null = null;
-    for (let i = 0; i < 200 && !stones; i++) {
-      stones = placeStones(stoneRng, solution, cageOf, cells, rules, g);
-      if (stones && rules.unique !== undefined) {
-        stones = makeUnique({ seed, size: g.size, solution, cages, cageOf, stones }, stoneRng, rules.unique);
-        if (!stones) break;
+      const cages: Cage[] = cells.map((cage, id) => {
+        const values = cage.map((c) => solution[c]!);
+        const op = chooseOp(opRng, values, rules.ops);
+        return { id, cells: cage, op, target: evaluate(op, values) };
+      });
+
+      let stones: number[] | null = null;
+      for (let i = 0; i < 200 && !stones; i++) {
+        stones = placeStones(stoneRng, solution, cageOf, cells, rules, g);
+        if (stones && rules.unique !== undefined) {
+          stones = makeUnique({ seed, size: g.size, solution, cages, cageOf, stones }, stoneRng, rules.unique);
+          if (!stones) break;
+        }
       }
+      if (stones) return { seed, size: g.size, solution, cages, cageOf, stones };
+      if (rules.unique === undefined) throw new Error(`could not place stones on page ${seed}`);
     }
-    if (stones) return { seed, size: g.size, solution, cages, cageOf, stones };
-    if (rules.unique === undefined) throw new Error(`could not place stones on page ${seed}`);
+    return null;
+  };
+
+  // A page that must have one solution gets fresh cages when stones alone can't settle it.
+  const first = build(latinSquare(stream(seed, 'page.latin'), g), rules.unique === undefined ? 1 : 200);
+  if (first) return first;
+  // Some solutions almost never come out unique without stones (a stoneless Fallow Field page, say):
+  // then the hidden solution itself is drawn again, as many times as it takes.
+  const more = stream(seed, 'page.latin.more');
+  for (let round = 0; round < 500; round++) {
+    const page = build(latinSquare(more, g), 40);
+    if (page) return page;
   }
   throw new Error(`could not make page ${seed} unique`);
 }

@@ -122,6 +122,13 @@ describe('pages of every size', () => {
     }), { numRuns: rules.size >= 7 ? 25 : 60 });
   }, 60_000);
 
+  it('draws the hidden solution again when no cages settle it, so a page is always made', () => {
+    // This seed's first solution never came out unique on a stoneless page.
+    const page = generatePage('YQPF5G', PAGE_VARIANTS['six-fallow']);
+    expect(page.stones.every((v) => !v)).toBe(true);
+    expect(solve(page, 2).found).toEqual([page.solution]);
+  });
+
   it('keeps the 6×6 pages from before for saved gardens', () => {
     expect(PAGE_VARIANTS.standard.unique).toBeUndefined();
     expect(generatePage('7KQ2X4', PAGE_VARIANTS.standard)).toEqual(generatePage('7KQ2X4'));
