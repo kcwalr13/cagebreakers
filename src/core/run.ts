@@ -6,9 +6,9 @@
  */
 import { BASE_TOOLS, RUN, TOOLS, type ToolId } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
-import { PAGE_VARIANTS, type PageVariant } from '../content/stations';
+import { PAGE_VARIANTS, type PageVariant, SEASONS } from '../content/stations';
 import { type Holding, type Posted, type View, findLayout, isMet, planRound, viewOf } from './commission';
-import { CELLS, PEERS, colOf, rowOf } from './grid';
+import { type Size, gridOf } from './grid';
 import { type Page, generatePage } from './page';
 import { type Rng, stream } from './rng';
 import { boardValues, isLegal } from './rules';
@@ -61,11 +61,17 @@ export interface RunSetup {
   kinds: readonly CommissionKind[];
 }
 
-/** A standard page with the standard tools and no upgrades: the Daily Page, and the default. */
+/** A standard 6×6 page with the standard tools and no upgrades: the 6×6 Daily Garden, and the default. */
 export const STANDARD_SETUP: RunSetup = {
-  station: null, page: 'standard', rounds: RUN.rounds, deal: RUN.deal, startInk: RUN.startInk, startGold: RUN.startGold,
+  station: null, page: 'six', rounds: RUN.rounds, deal: RUN.deal, startInk: RUN.startInk, startGold: RUN.startGold,
   inkBonus: RUN.inkBonus, tools: BASE_TOOLS, bountyBonus: 0, kinds: [],
 };
+
+/** The standard setup on a garden of any size: the Daily Gardens use these. */
+export function standardSetup(size: Size = 6): RunSetup {
+  const season = SEASONS[size];
+  return { ...STANDARD_SETUP, page: season.page, rounds: season.rounds, deal: season.deal, bountyBonus: season.bountyBonus };
+}
 
 export interface RunState {
   v: 3;
@@ -141,7 +147,7 @@ function remember(key: string, make: () => Page): Page {
 }
 
 /** The page a seed makes, for a kind of page. */
-export function pageOf(seed: string, variant: PageVariant = 'standard'): Page {
+export function pageOf(seed: string, variant: PageVariant = 'six'): Page {
   return remember(`${seed}|${variant}`, () => generatePage(seed, PAGE_VARIANTS[variant]));
 }
 
@@ -164,7 +170,7 @@ export const dealtThisRound = (s: RunState) => s.tokens.filter((t) => t.round ==
 
 /** Every number standing on the page, stones included (0 where empty). */
 export function valuesOf(s: RunState): number[] {
-  const placed = new Array<number>(CELLS).fill(0);
+  const placed = new Array<number>(runPage(s).stones.length).fill(0);
   for (const t of s.tokens) if (t.cell >= 0) placed[t.cell] = t.n;
   return boardValues(runPage(s), placed);
 }
@@ -182,7 +188,7 @@ export function legalCells(s: RunState, id: number): number[] {
   const values = valuesOf(s);
   if (t.cell >= 0) values[t.cell] = 0;
   const out: number[] = [];
-  for (let c = 0; c < CELLS; c++) {
+  for (let c = 0; c < page.stones.length; c++) {
     if (page.stones[c] || c === t.cell) continue;
     const was = values[c]!;
     values[c] = 0;
@@ -299,8 +305,8 @@ export interface NewRunOptions { daily?: string; setup?: RunSetup; id?: string }
 export function newRun(seed: string, opts: NewRunOptions = {}): RunState {
   const setup = opts.setup ?? STANDARD_SETUP;
   const page = pageOf(seed, setup.page);
-  const bag = new Array<number>(7).fill(0);
-  for (let c = 0; c < CELLS; c++) if (!page.stones[c]) bag[page.solution[c]!]!++;
+  const bag = new Array<number>(page.size + 1).fill(0);
+  for (let c = 0; c < page.stones.length; c++) if (!page.stones[c]) bag[page.solution[c]!]!++;
   const s: RunState = {
     v: 3, seed, ...(opts.daily ? { daily: opts.daily } : {}), ...(opts.id ? { id: opts.id } : {}), setup, erased: [], gilded: false,
     round: 1, phase: 'arrange', ink: setup.startInk, gold: setup.startGold,
@@ -340,9 +346,10 @@ const refuse = (s: RunState, reason: string): ActResult => ({ state: s, ok: fals
 
 /** Says which line already holds a number, for a refused placement. */
 function conflictLine(page: Page, values: readonly number[], cell: number, n: number): string {
-  for (const p of PEERS[cell]!) {
+  const g = gridOf(page.size);
+  for (const p of g.peers[cell]!) {
     if (values[p] !== n) continue;
-    return rowOf(p) === rowOf(cell) ? `There's already a ${n} in row ${rowOf(cell) + 1}` : `There's already a ${n} in column ${colOf(cell) + 1}`;
+    return g.rowOf(p) === g.rowOf(cell) ? `There's already a ${n} in row ${g.rowOf(cell) + 1}` : `There's already a ${n} in column ${g.colOf(cell) + 1}`;
   }
   return `A ${n} can't go there`;
 }
@@ -369,7 +376,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
       if (!t) return refuse(prev, 'No such number');
       if (a.cell === t.cell) return { state: prev, ok: true };
       if (a.cell < 0) { t.cell = -1; return { state: s, ok: true }; }
-      if (a.cell >= CELLS) return refuse(prev, 'Off the garden');
+      if (a.cell >= page.stones.length) return refuse(prev, 'Off the garden');
       if (page.stones[a.cell]) return refuse(prev, 'A stone sits there');
       const values = valuesOf(prev);
       const from = t.cell;
@@ -384,7 +391,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'lens': {
-      if (a.cell < 0 || a.cell >= CELLS || page.stones[a.cell]) return refuse(prev, 'Choose an empty square');
+      if (a.cell < 0 || a.cell >= page.stones.length || page.stones[a.cell]) return refuse(prev, 'Choose an empty square');
       if (tokenAt(s, a.cell)) return refuse(prev, 'Choose an empty square');
       if (s.revealed.includes(a.cell)) return refuse(prev, 'Hint has already shown that square');
       const why = spend(s, 'lens');
@@ -430,7 +437,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'eraser': {
-      if (a.cell < 0 || a.cell >= CELLS || !page.stones[a.cell]) return refuse(prev, 'Choose a stone');
+      if (a.cell < 0 || a.cell >= page.stones.length || !page.stones[a.cell]) return refuse(prev, 'Choose a stone');
       const why = spend(s, 'eraser');
       if (why) return refuse(prev, why);
       // The printed number becomes one of yours: it stays where it was, and can move like any other.

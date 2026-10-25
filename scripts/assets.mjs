@@ -47,6 +47,7 @@ const used = {
   map: 'treasure-map', library: 'book-cover', scriptorium: 'flower-pot', leaf: 'plant-seed', star: 'round-star', lock: 'padlock',
   purse: 'shiny-purse', strap: 'belt', bounty: 'gloves', palette: 'palette',
   kitchen: 'carrot', rocks: 'stone-pile', fallow: 'field', market: 'fruit-bowl', dry: 'sun', season: 'sunflower',
+  box: 'daisy', allotment: 'wheelbarrow', walled: 'stone-wall',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

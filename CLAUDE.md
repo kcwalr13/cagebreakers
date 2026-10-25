@@ -34,12 +34,17 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   No request may ever need a right number moved. Nothing on screen marks which numbers are right.
 - Every number is alike: to ink, all your numbers are on the page, or all but one (`placementOf`). Token
   `round` is history, not a rule.
+- Pages are 5×5 to 8×8 (`Page.size`, numbers 1 to size). Read geometry from `gridOf(page.size)`; never assume 6.
+  Every page variant except the legacy 6×6 ones (`standard`, `cloister`, `bare`, `counting`, kept so saved gardens keep
+  their pages) has exactly one solution (`PageRules.unique`, checked by `src/core/solve.ts`). Season shapes per size
+  live in `SEASONS` in `src/content/stations.ts`; `standardSetup(size)` is each size's Daily Garden.
 - A run carries its `RunSetup` (station, page variant, rounds, deal, ink, gold, tools, enabled kinds). Read the
-  page with `runPage(s)`, never `pageOf(s.seed)`, so variants and erased stones apply. The Daily Page always
-  uses the standard setup.
+  page with `runPage(s)`, never `pageOf(s.seed)`, so variants and erased stones apply. The Daily Gardens always
+  use `standardSetup(size)`.
 - The scriptorium profile is pure (`src/core/meta.ts`); `recordRun` counts each run once by its id. Stations
   and the shop live in `src/content/stations.ts` and `src/content/meta.ts`.
-- After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets. After a
+- After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets, and on a change that
+  touches other sizes, `npx tsx lab/runs.ts 200 all 5` (and 7, 8) too. After a
   station, price or leaf change: `npx tsx lab/meta.ts` must pass too.
 - Before shipping: `npm run typecheck && npm test && npm run build && npm run e2e`, then look at the
   screenshots in `test-results/`.

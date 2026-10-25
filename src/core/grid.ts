@@ -1,31 +1,57 @@
-/** The page is always 6×6, numbers 1–6. Cells are indexed 0–35, row-major; row 0 is the front. */
-export const SIZE = 6;
-export const CELLS = SIZE * SIZE;
-export const NUMBERS = [1, 2, 3, 4, 5, 6] as const;
+/**
+ * Square pages from 5×5 to 8×8, numbers 1 to n. Cells are indexed row-major from 0; row 0 is the
+ * top. Every rule reads its geometry from here, through the page's size.
+ */
+export const SIZES = [5, 6, 7, 8] as const;
+export type Size = (typeof SIZES)[number];
 
-export const rowOf = (cell: number): number => Math.floor(cell / SIZE);
-export const colOf = (cell: number): number => cell % SIZE;
-export const cellAt = (row: number, col: number): number => row * SIZE + col;
-
-export function neighbors(cell: number): number[] {
-  const r = rowOf(cell), c = colOf(cell);
-  const out: number[] = [];
-  if (r > 0) out.push(cell - SIZE);
-  if (r < SIZE - 1) out.push(cell + SIZE);
-  if (c > 0) out.push(cell - 1);
-  if (c < SIZE - 1) out.push(cell + 1);
-  return out;
+export interface Grid {
+  size: number;
+  /** size × size */
+  cells: number;
+  /** 1 to size. */
+  numbers: readonly number[];
+  rowOf(cell: number): number;
+  colOf(cell: number): number;
+  cellAt(row: number, col: number): number;
+  /** Orthogonal neighbours of each cell. Shared: don't mutate. */
+  neighbors: readonly (readonly number[])[];
+  /** Cells sharing a row or column with each cell, excluding it. Shared: don't mutate. */
+  peers: readonly (readonly number[])[];
+  /** Every cell index, 0 to cells − 1. Shared: don't mutate. */
+  all: readonly number[];
 }
 
-/** Cells sharing a row or column with `cell`, excluding it. */
-export function peers(cell: number): number[] {
-  const r = rowOf(cell), c = colOf(cell);
-  const out: number[] = [];
-  for (let i = 0; i < SIZE; i++) {
-    if (i !== c) out.push(cellAt(r, i));
-    if (i !== r) out.push(cellAt(i, c));
-  }
-  return out;
+const grids = new Map<number, Grid>();
+
+export function gridOf(size: number): Grid {
+  let g = grids.get(size);
+  if (g) return g;
+  const cells = size * size;
+  const rowOf = (c: number) => Math.floor(c / size);
+  const colOf = (c: number) => c % size;
+  const cellAt = (r: number, c: number) => r * size + c;
+  const all = Array.from({ length: cells }, (_, i) => i);
+  const neighbors = all.map((c) => {
+    const r = rowOf(c), k = colOf(c), out: number[] = [];
+    if (r > 0) out.push(c - size);
+    if (r < size - 1) out.push(c + size);
+    if (k > 0) out.push(c - 1);
+    if (k < size - 1) out.push(c + 1);
+    return out;
+  });
+  const peers = all.map((c) => {
+    const r = rowOf(c), k = colOf(c), out: number[] = [];
+    for (let i = 0; i < size; i++) {
+      if (i !== k) out.push(cellAt(r, i));
+      if (i !== r) out.push(cellAt(i, k));
+    }
+    return out;
+  });
+  g = { size, cells, numbers: Array.from({ length: size }, (_, i) => i + 1), rowOf, colOf, cellAt, neighbors, peers, all };
+  grids.set(size, g);
+  return g;
 }
 
-export const PEERS: readonly (readonly number[])[] = Array.from({ length: CELLS }, (_, i) => peers(i));
+/** The grid a board of values belongs to, from its length. */
+export const gridOfValues = (values: readonly unknown[]): Grid => gridOf(Math.round(Math.sqrt(values.length)));

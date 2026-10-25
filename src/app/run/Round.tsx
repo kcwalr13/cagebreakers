@@ -173,7 +173,7 @@ function Board() {
   const d = drag.value;
   const sel = selection.value;
   const movingCell = d?.from.kind === 'cell' ? d.from.cell : -1;
-  const pieces: (PieceView | null)[] = new Array(36).fill(null);
+  const pieces: (PieceView | null)[] = new Array(p.stones.length).fill(null);
   for (const t of s.tokens) {
     if (t.cell < 0) continue;
     pieces[t.cell] = {
@@ -261,7 +261,7 @@ function Hand() {
   const dealing = !!weekTurn.value;
   return (
     <div class="hand" role="toolbar" aria-label="Your numbers to plant">
-      <div class="hand-tokens">
+      <div class={`hand-tokens${stacks(hand).length > 6 ? ' many' : ''}`}>
         {stacks(hand).map(([n, ts], i) => {
           // Equal numbers share one stack; pressing it takes one of them.
           const t = ts.find((x) => x.id === sel) ?? ts[0]!;

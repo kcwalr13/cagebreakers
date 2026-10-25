@@ -1,12 +1,11 @@
 import { TOOLS, type ToolId } from '../../content/balance';
 import { describe } from '../../core/commission';
-import { CELLS } from '../../core/grid';
 import { TOOL_NAMES, act, bagCount, scoreOf, tokenAt } from '../../core/run';
 import { Icon } from '../Icon';
 import { goBack, screen, sheet } from '../nav';
 import { PageView, type PieceView } from '../PageView';
 import { RoundScreen, TOOL_ICON } from './Round';
-import { aim, dailyBest, dispatch, lastInk, page, run, sealed, startDaily, startStation } from './state';
+import { aim, dailyBest, dailyParts, dispatch, lastInk, page, run, sealed, startDaily, startStation } from './state';
 import { lastSettled } from '../meta';
 import { stationById } from '../../content/stations';
 
@@ -34,7 +33,7 @@ export function ToolSheet({ tool }: { tool: ToolId }) {
   const cost = TOOLS[tool];
   // Try the tool first (the rules are pure), so a refusal is explained before any gold changes hands.
   const instant = tool !== 'lens' && tool !== 'eraser' && s.gold >= cost ? act(s, { type: tool }) : null;
-  const empty = Array.from({ length: CELLS }, (_, c) => c).filter((c) => !p.stones[c] && !tokenAt(s, c) && !s.revealed.includes(c)).length;
+  const empty = p.stones.map((_, c) => c).filter((c) => !p.stones[c] && !tokenAt(s, c) && !s.revealed.includes(c)).length;
   const printed = p.stones.filter(Boolean).length;
   const why = s.gold < cost ? `You have ${s.gold} ${s.gold === 1 ? 'coin' : 'coins'}.`
     : tool === 'lens' && !empty ? 'There is no empty square left to look at.'
@@ -135,10 +134,11 @@ function RunSummary() {
   const s = run.value!, p = page.value!;
   const score = scoreOf(s);
   const done = s.phase === 'done';
-  const pieces: (PieceView | null)[] = new Array(CELLS).fill(null);
+  const pieces: (PieceView | null)[] = new Array(p.stones.length).fill(null);
   for (const t of s.tokens) if (t.cell >= 0) pieces[t.cell] = { key: `t${t.id}`, n: t.n };
   const best = s.daily ? dailyBest.value[s.daily] : undefined;
   const station = s.setup.station ? stationById(s.setup.station) : undefined;
+  const daily = s.daily ? dailyParts(s.daily) : null;
   return (
     <div class="column summary">
       <header class="header"><button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button><div class="title">{station ? <span class="title-page">{station.name}</span> : null}</div></header>
@@ -165,12 +165,12 @@ function RunSummary() {
         </tbody>
       </table>
       <p class="muted-sm center">
-        {s.daily ? `Daily Garden for ${s.daily}${best ? `. Your best today: ${best.score}` : ''}. ` : ''}Garden code {s.seed}.
+        {daily ? `${daily.size}×${daily.size} Daily Garden for ${daily.day}${best ? `. Your best today: ${best.score}` : ''}. ` : ''}Garden code {s.seed}.
       </p>
       <div class="spacer" />
       {s.daily ? (
         <div class="row-btns">
-          <button class="btn primary grow" onClick={() => startDaily(s.daily, true)}>Grow today's garden again</button>
+          <button class="btn primary grow" onClick={() => startDaily(daily!.day, true, daily!.size)}>Grow today's garden again</button>
           <button class="btn" onClick={() => (screen.value = 'title')}>Title</button>
         </div>
       ) : (

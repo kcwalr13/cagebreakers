@@ -2,19 +2,21 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { RUN, TOOLS } from '../content/balance';
 import { isMet, viewOf } from './commission';
-import { CELLS } from './grid';
+import { gridOf } from './grid';
 import { createRng } from './rng';
 import { boardIsLatin } from './rules';
 import {
-  type RunAction, type RunSetup, type RunState, STANDARD_SETUP, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun,
+  type RunAction, type RunSetup, type RunState, STANDARD_SETUP, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun, standardSetup,
   pageOf, placementOf, replay, runPage, scoreOf, valuesOf, viewNow,
 } from './run';
 import { STATIONS } from '../content/stations';
 import { NEW_PROFILE, setupFor } from './meta';
 
+const CELLS = gridOf(6).cells;
+
 const solutionCell = (s: RunState, n: number) => {
   const p = runPage(s);
-  for (let c = 0; c < CELLS; c++) if (!p.stones[c] && p.solution[c] === n && !s.tokens.some((t) => t.cell === c)) return c;
+  for (let c = 0; c < p.stones.length; c++) if (!p.stones[c] && p.solution[c] === n && !s.tokens.some((t) => t.cell === c)) return c;
   return -1;
 };
 
@@ -29,8 +31,8 @@ function placeOnSolution(s: RunState, count = Infinity): RunState {
 
 function openCounts(s: RunState): number[] {
   const p = runPage(s);
-  const out = new Array<number>(7).fill(0);
-  for (let c = 0; c < CELLS; c++) if (!p.stones[c]) out[p.solution[c]!]!++;
+  const out = new Array<number>(p.size + 1).fill(0);
+  for (let c = 0; c < p.stones.length; c++) if (!p.stones[c]) out[p.solution[c]!]!++;
   return out;
 }
 
@@ -55,9 +57,9 @@ function checkInvariants(s: RunState) {
 function checkProof(s: RunState) {
   const p = runPage(s);
   const proof = s.proof!;
-  expect(proof).toHaveLength(CELLS);
+  expect(proof).toHaveLength(p.stones.length);
   expect(boardIsLatin(proof)).toBe(true);
-  for (let c = 0; c < CELLS; c++) if (p.stones[c]) expect(proof[c]).toBe(p.stones[c]);
+  for (let c = 0; c < p.stones.length; c++) if (p.stones[c]) expect(proof[c]).toBe(p.stones[c]);
   const placed = proof.filter((n, c) => n && !p.stones[c]).sort();
   expect(placed, 'the proof places every number you hold, and no others').toEqual(s.tokens.map((t) => t.n).sort());
   const v = viewOf(p, proof);
@@ -211,6 +213,31 @@ describe('a run', () => {
     }
   });
 
+  it.each([5, 7, 8] as const)('grows a %i×%i garden to harvest, every week perfect', (size) => {
+    for (const seed of ['SZAAAA', 'SZBBBB', 'SZCCCC']) {
+      let s = newRun(seed, { setup: standardSetup(size) });
+      expect(runPage(s).size).toBe(size);
+      while (s.phase === 'arrange') {
+        checkInvariants(s);
+        expect(s.posted).toHaveLength(3);
+        const page = runPage(s), proof = s.proof!, right = new Set(s.rooted ?? []);
+        const free = new Map<number, number[]>();
+        for (let c = 0; c < page.stones.length; c++) if (proof[c] && !page.stones[c] && !right.has(c)) free.set(proof[c]!, [...(free.get(proof[c]!) ?? []), c]);
+        for (const t of s.tokens) {
+          if (t.cell >= 0 && right.has(t.cell)) continue;
+          const r = act(s, { type: 'place', id: t.id, cell: free.get(t.n)!.shift()! });
+          expect(r.ok, r.reason).toBe(true);
+          s = r.state;
+        }
+        expect(s.posted.every((p) => isMet(p.c, viewNow(s)))).toBe(true);
+        s = act(s, { type: 'ink' }).state;
+      }
+      expect(s.phase).toBe('done');
+      expect(s.records).toHaveLength(standardSetup(size).rounds);
+      expect(valuesOf(s)).toEqual(runPage(s).solution);
+    }
+  }, 30_000);
+
   it('never asks you to move a number that is right: a perfect round keeps every one where it stands', () => {
     for (const seed of ['ROOTAA', 'ROOTBB', 'ROOTCC', 'ROOTDD', 'ROOTEE', 'ROOTFF']) {
       // Each round, place this round's numbers where the hidden solution has them, and never move
@@ -224,7 +251,7 @@ describe('a run', () => {
         for (const c of right) expect(proof[c]).toBe(page.solution[c]);
         // Move the new numbers into the proof's other cells.
         const free = new Map<number, number[]>();
-        for (let c = 0; c < CELLS; c++) if (proof[c] && !page.stones[c] && !right.has(c)) free.set(proof[c]!, [...(free.get(proof[c]!) ?? []), c]);
+        for (let c = 0; c < page.stones.length; c++) if (proof[c] && !page.stones[c] && !right.has(c)) free.set(proof[c]!, [...(free.get(proof[c]!) ?? []), c]);
         for (const t of s.tokens) {
           if (t.cell >= 0 && right.has(t.cell)) continue;
           const cell = free.get(t.n)!.shift()!;
@@ -274,7 +301,7 @@ function randomActions(seed: string, steps: number, salt: number, setup: RunSetu
     if (roll < 0.55) {
       const t = rng.pick(s.tokens);
       const legal = legalCells(s, t.id);
-      a = { type: 'place', id: t.id, cell: legal.length && rng.next() < 0.85 ? rng.pick(legal) : rng.int(-1, CELLS - 1) };
+      a = { type: 'place', id: t.id, cell: legal.length && rng.next() < 0.85 ? rng.pick(legal) : rng.int(-1, runPage(s).stones.length - 1) };
     } else if (roll < 0.75) {
       if (inkBlocker(s)) {
         for (const t of s.tokens) if (t.cell < 0 && (t.round < s.round || rng.next() < 0.8)) {
@@ -286,7 +313,7 @@ function randomActions(seed: string, steps: number, salt: number, setup: RunSetu
     } else {
       // Tools: give the run gold sometimes so they get used, through an action-free state edit.
       const tool = rng.pick(['lens', 'quill', 'gilder', 'eraser', 'inkwell'] as const);
-      a = tool === 'lens' || tool === 'eraser' ? { type: tool, cell: rng.int(0, CELLS - 1) } : { type: tool };
+      a = tool === 'lens' || tool === 'eraser' ? { type: tool, cell: rng.int(0, runPage(s).stones.length - 1) } : { type: tool };
     }
     const r = act(s, a);
     if (!r.ok) expect(r.state).toBe(s);

@@ -5,7 +5,8 @@ import { Icon } from './Icon';
 import { LIFT_PX, drag } from './input';
 import { screen, sheet, updateReady } from './nav';
 import { RunScreen } from './run/Screens';
-import { aim, dailyBest, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, today } from './run/state';
+import { aim, dailyBest, dailyKey, dailySlot, loadSlot, openSlot, run, selection as runSelection, slot, startDaily, today } from './run/state';
+import { SIZES, type Size } from '../core/grid';
 import { LibraryScreen, Leaf, MapScreen, ShopScreen } from './Scriptorium';
 import { profile, stars } from './meta';
 import { Sheets } from './Sheets';
@@ -56,13 +57,14 @@ function Vine() {
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-function dailyLine(): string {
-  const day = today();
-  const best = dailyBest.value[day];
-  const saved = slot.value === 'daily' ? run.value : loadSlot('daily');
-  if (saved?.daily === day && saved.phase === 'arrange') return `Growing: week ${saved.round}, ${saved.gold} ${saved.gold === 1 ? 'coin' : 'coins'}.`;
-  if (best) return `Your best today: ${best.score} points${best.done ? '' : ', dried out'}. Grow it again?`;
-  return 'The same garden, deals and requests for everyone today.';
+/** Where today's Daily Garden of a size stands, in a word or two. */
+function dailyNote(size: Size): string {
+  const key = dailyKey(today(), size), sl = dailySlot(size);
+  const saved = slot.value === sl ? run.value : loadSlot(sl);
+  if (saved?.daily === key && saved.phase === 'arrange') return `Week ${saved.round}`;
+  const best = dailyBest.value[key];
+  if (best) return `Best ${best.score}`;
+  return 'New';
 }
 
 function Title() {
@@ -92,13 +94,22 @@ function Title() {
         <button class={`menu-card${live ? '' : ' primary'}`} onClick={() => (screen.value = 'map')}>
           <span class="mc-title"><Icon name="map" class="ico inline-ico big" /> The Map</span>
           <span class="mc-sub">{profile.value.filled.length
-            ? `Six gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
+            ? `Nine gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
             : 'Each week brings more numbers and three requests. Plant them to meet the requests until the garden is full. Start in the Kitchen Garden.'}</span>
         </button>
-        <button class="menu-card" onClick={() => { startDaily(); screen.value = 'run'; }}>
-          <span class="mc-title">Daily Garden <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span></span>
-          <span class="mc-sub">{dailyLine()}</span>
-        </button>
+        <div class="menu-card daily-card">
+          <span class="mc-title">Daily Gardens <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span></span>
+          <span class="mc-sub">One of each size, the same for everyone today.</span>
+          <div class="daily-sizes">
+            {SIZES.map((size) => (
+              <button key={size} class="daily-size" aria-label={`Daily Garden ${size}×${size}: ${dailyNote(size)}`}
+                onClick={() => { startDaily(today(), false, size); screen.value = 'run'; }}>
+                <span class="ds-size">{size}×{size}</span>
+                <span class="ds-note">{dailyNote(size)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div class="title-minor">
           <button class="minor-card" onClick={() => (screen.value = 'shop')}><Icon name="scriptorium" class="ico inline-ico" /> Potting Shed</button>
           <button class="minor-card" onClick={() => (screen.value = 'library')}><Icon name="library" class="ico inline-ico" /> Herbarium</button>

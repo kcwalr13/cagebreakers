@@ -175,7 +175,7 @@ export function setupFor(p: Profile, id: StationId): RunSetup {
     startGold: STANDARD_SETUP.startGold + gold,
     inkBonus: station.inkBonus ?? STANDARD_SETUP.inkBonus,
     tools: p.satchel.length ? p.satchel : [...BASE_TOOLS],
-    bountyBonus: owns(p, 'bounty-hunter') ? PERKS.bountyHunter : 0,
+    bountyBonus: (station.bountyBonus ?? 0) + (owns(p, 'bounty-hunter') ? PERKS.bountyHunter : 0),
     kinds: enabledKinds(p, station),
   };
 }

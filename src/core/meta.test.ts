@@ -3,13 +3,15 @@ import { BASE_TOOLS, RUN, TOOLS } from '../content/balance';
 import { ITEMS, LEAF, LIBRARY_SIZE, PERKS } from '../content/meta';
 import { STATIONS, type StationId, stationById } from '../content/stations';
 import { describe as say } from './commission';
-import { CELLS } from './grid';
+import { gridOf } from './grid';
 import {
   NEW_PROFILE, type Profile, buy, cantBuy, enabledKinds, migrateProfile, ownedTools, recordRun, rewardFor, satchelSize, setSatchel,
   setupFor, starsFor, stationOpen,
 } from './meta';
 import { pageOf } from './run';
 import { type RunSetup, type RunState, STANDARD_SETUP, act, dealtThisRound, newRun, placementOf, runPage, scoreOf, valuesOf } from './run';
+
+const CELLS = gridOf(6).cells;
 
 const fresh = (): Profile => migrateProfile(null);
 
@@ -20,7 +22,7 @@ function fill(seed: string, setup: RunSetup, id = `${seed}-run`): RunState {
     const p = runPage(s);
     for (const t of dealtThisRound(s)) {
       if (t.cell >= 0) continue;
-      const c = Array.from({ length: CELLS }, (_, k) => k).find((k) => !p.stones[k] && p.solution[k] === t.n && !s.tokens.some((o) => o.cell === k));
+      const c = p.stones.map((_, k) => k).find((k) => !p.stones[k] && p.solution[k] === t.n && !s.tokens.some((o) => o.cell === k));
       if (c !== undefined) s = act(s, { type: 'place', id: t.id, cell: c }).state;
     }
     s = act({ ...s, ink: s.setup.startInk }, { type: 'ink' }).state;
@@ -32,10 +34,13 @@ describe('stations', () => {
   it('make the pages their twists promise', () => {
     for (let i = 0; i < 60; i++) {
       const seed = `PGV${'23456789ABCDEFGHJKMNPQRSTUVWXYZ'[i % 31]}${'ABC'[Math.floor(i / 31)]}Q`;
-      const stones = (v: 'cloister' | 'bare') => pageOf(seed, v).stones.filter(Boolean).length;
+      const stones = (v: 'cloister' | 'bare' | 'six-rocks' | 'six-fallow') => pageOf(seed, v).stones.filter(Boolean).length;
       expect(stones('cloister')).toBeGreaterThanOrEqual(12);
       expect(stones('bare')).toBe(0);
       expect(pageOf(seed, 'counting').cages.every((c) => c.op === '+' || c.op === '×')).toBe(true);
+      expect(stones('six-rocks')).toBeGreaterThanOrEqual(12);
+      expect(stones('six-fallow')).toBe(0);
+      expect(pageOf(seed, 'six-market').cages.every((c) => c.op === '+' || c.op === '×')).toBe(true);
     }
   });
 
@@ -66,7 +71,7 @@ describe('stations', () => {
           for (const c of s.posted) seen.add(c.c.kind);
           const p2 = runPage(s);
           for (const t of dealtThisRound(s)) {
-            const c = Array.from({ length: CELLS }, (_, k) => k).find((k) => !p2.stones[k] && p2.solution[k] === t.n && !s.tokens.some((o) => o.cell === k));
+            const c = p2.stones.map((_, k) => k).find((k) => !p2.stones[k] && p2.solution[k] === t.n && !s.tokens.some((o) => o.cell === k));
             if (c !== undefined) s = act(s, { type: 'place', id: t.id, cell: c }).state;
           }
           s = act({ ...s, ink: 3 }, { type: 'ink' }).state;
@@ -113,7 +118,7 @@ describe('tools', () => {
     expect(act(s, { type: 'gilder' }).ok).toBe(false);
     const p = runPage(s);
     for (const t of dealtThisRound(s)) {
-      const c = Array.from({ length: CELLS }, (_, k) => k).find((k) => !p.stones[k] && p.solution[k] === t.n && !s.tokens.some((o) => o.cell === k));
+      const c = p.stones.map((_, k) => k).find((k) => !p.stones[k] && p.solution[k] === t.n && !s.tokens.some((o) => o.cell === k));
       if (c !== undefined) s = act(s, { type: 'place', id: t.id, cell: c }).state;
     }
     const r = act(s, { type: 'ink' });

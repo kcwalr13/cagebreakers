@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { CELLS, SIZE, colOf, neighbors, rowOf } from './grid';
+import { PAGE_VARIANTS, type PageVariant } from '../content/stations';
+import { gridOf } from './grid';
 import { DEFAULT_PAGE_RULES, evaluate, generatePage } from './page';
 import { boardIsLatin, boardValues, completions, isSealed, sealedCages } from './rules';
 import { SEED_ALPHABET } from './seed';
+import { solve } from './solve';
+
+const { cells: CELLS, size: SIZE, colOf, rowOf } = gridOf(6);
+const neighbors = (c: number) => gridOf(6).neighbors[c]!;
 
 const seedArb = fc.string({ unit: fc.constantFrom(...SEED_ALPHABET), minLength: 6, maxLength: 6 });
 const RUNS = { numRuns: 300 };
@@ -86,5 +91,39 @@ describe('generatePage', () => {
         expect(isSealed(cage, values)).toBe(false);
       }
     }), { numRuns: 100 });
+  });
+});
+
+describe('pages of every size', () => {
+  const variants: PageVariant[] = ['five', 'six', 'six-rocks', 'six-fallow', 'six-market', 'seven', 'eight'];
+  it.each(variants)('%s: a valid page with exactly one solution', (variant) => {
+    const rules = PAGE_VARIANTS[variant];
+    const g = gridOf(rules.size);
+    fc.assert(fc.property(seedArb, (seed) => {
+      const page = generatePage(seed, rules);
+      expect(page.size).toBe(rules.size);
+      expect(page.solution).toHaveLength(g.cells);
+      expect(page.solution.every((n) => n >= 1 && n <= g.size)).toBe(true);
+      expect(boardIsLatin(page.solution)).toBe(true);
+      const covered = page.cages.flatMap((c) => c.cells).sort((a, b) => a - b);
+      expect(covered).toEqual(g.all);
+      expect(page.cages.length).toBeGreaterThanOrEqual(rules.minCages);
+      expect(page.cages.length).toBeLessThanOrEqual(rules.maxCages);
+      for (const cage of page.cages) {
+        expect(evaluate(cage.op, cage.cells.map((c) => page.solution[c]!))).toBe(cage.target);
+        expect(cage.cells.some((c) => !page.stones[c])).toBe(true);
+      }
+      page.stones.forEach((v, i) => { if (v) expect(v).toBe(page.solution[i]); });
+      if (rules.maxStones === 0) expect(page.stones.every((v) => !v)).toBe(true);
+      // Every square can be worked out: the hidden solution is the only one.
+      const { found, settled } = solve(page, 2);
+      expect(settled).toBe(true);
+      expect(found).toEqual([page.solution]);
+    }), { numRuns: rules.size >= 7 ? 25 : 60 });
+  }, 60_000);
+
+  it('keeps the 6×6 pages from before for saved gardens', () => {
+    expect(PAGE_VARIANTS.standard.unique).toBeUndefined();
+    expect(generatePage('7KQ2X4', PAGE_VARIANTS.standard)).toEqual(generatePage('7KQ2X4'));
   });
 });

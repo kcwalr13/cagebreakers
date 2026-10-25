@@ -1,5 +1,10 @@
 import { batch, computed, effect, signal } from '@preact/signals';
-import { CELLS, colOf, rowOf } from '../core/grid';
+import { gridOf } from '../core/grid';
+
+/** The practice plot is always a 6×6 garden. */
+const G = gridOf(6);
+const CELLS = G.cells;
+const rowOf = G.rowOf, colOf = G.colOf;
 import { type Page, generatePage } from '../core/page';
 import { boardValues, hintFor, isLegal, sealedCages } from '../core/rules';
 import type { CellHint } from './PageView';
@@ -218,6 +223,7 @@ export function exposeTestHooks() {
       dispatch: r.dispatch,
       startRun: r.startRun,
       startStation: r.startStation,
+      startDaily: r.startDaily,
       /** The scriptorium profile, and a way to set it for tests. */
       profile: () => m.profile.value,
       setProfile(p: unknown) { m.profile.value = p as never; },
@@ -229,7 +235,7 @@ export function exposeTestHooks() {
         let st = r.run.value!;
         const p = core.runPage(st);
         for (const t of st.tokens.filter((x) => x.cell < 0)) {
-          const cell = Array.from({ length: 36 }, (_, c) => c).find((c) => !p.stones[c] && p.solution[c] === t.n && !st.tokens.some((o) => o.cell === c));
+          const cell = p.stones.map((_, c) => c).find((c) => !p.stones[c] && p.solution[c] === t.n && !st.tokens.some((o) => o.cell === c));
           if (cell !== undefined && r.dispatch({ type: 'place', id: t.id, cell })) st = r.run.value!;
         }
       },

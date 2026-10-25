@@ -7,7 +7,6 @@ import { TOOLS } from '../content/balance';
 import { ITEMS, type Item, type ItemId } from '../content/meta';
 import { STATIONS, type Station, type StationId, stationById } from '../content/stations';
 import { describe } from '../core/commission';
-import { CELLS } from '../core/grid';
 import { type LibraryEntry, cantBuy, ownedTools, satchelSize, stationOpen } from '../core/meta';
 import { TOOL_NAMES, pageOf } from '../core/run';
 import { sealedCages } from '../core/rules';
@@ -18,11 +17,12 @@ import { buy, chooseSatchel, profile, stars } from './meta';
 import { goBack, screen, sheet } from './nav';
 import { PageView, type PieceView } from './PageView';
 import { TOOL_ICON } from './run/Round';
-import { loadSlot, run, slot, startStation } from './run/state';
+import { dailyParts, loadSlot, run, slot, startStation } from './run/state';
 import { type ThemeChoice, theme } from './state';
 
 const STATION_ICON: Record<StationId, IconName> = {
   'copy-desk': 'kitchen', cloister: 'rocks', 'bare-vellum': 'fallow', 'counting-house': 'market', 'long-night': 'dry', 'grand-folio': 'season',
+  'window-box': 'box', allotment: 'allotment', 'walled-garden': 'walled',
 };
 const ITEM_ICON: Record<ItemId, IconName> = {
   quill: 'quill', gilder: 'gilder', eraser: 'eraser', inkwell: 'inkwell', 'purse-1': 'purse', 'purse-2': 'purse',
@@ -231,11 +231,16 @@ function boardOf(e: LibraryEntry) {
   const stones = base.stones.slice();
   for (const c of e.erased) stones[c] = 0;
   const page = { ...base, stones };
-  const pieces: (PieceView | null)[] = Array.from({ length: CELLS }, (_, c) => (stones[c] || !e.values[c] ? null : { key: `${c}`, n: e.values[c]! }));
+  const pieces: (PieceView | null)[] = Array.from({ length: e.values.length }, (_, c) => (stones[c] || !e.values[c] ? null : { key: `${c}`, n: e.values[c]! }));
   return { page, pieces, sealed: sealedCages(page, e.values) };
 }
 
-const entryTitle = (e: LibraryEntry) => (e.station ? stationById(e.station)?.name ?? 'A garden' : e.daily ? `Daily Garden, ${e.daily}` : 'A garden');
+const entryTitle = (e: LibraryEntry) => {
+  if (e.station) return stationById(e.station)?.name ?? 'A garden';
+  if (!e.daily) return 'A garden';
+  const { day, size } = dailyParts(e.daily);
+  return `${size}×${size} Daily Garden, ${day}`;
+};
 
 export function LibraryScreen() {
   const books = profile.value.library;

@@ -1,11 +1,13 @@
 import type { Ref } from 'preact';
 import { useMemo } from 'preact/hooks';
-import { CELLS, SIZE, colOf, rowOf } from '../core/grid';
+import { gridOf } from '../core/grid';
 import type { Page } from '../core/page';
-import { BOARD_PX, CELL_PX, INSET_PX } from './input';
+import { CELL_PX, INSET_PX, boardPx } from './input';
 import { TokenShape } from './Token';
 
-export const cellX = (cell: number) => INSET_PX + colOf(cell) * CELL_PX;
+/** Where a square's top-left corner sits in the drawing. */
+export const cellX = (cell: number, size: number) => INSET_PX + gridOf(size).colOf(cell) * CELL_PX;
+export const cellY = (cell: number, size: number) => INSET_PX + gridOf(size).rowOf(cell) * CELL_PX;
 
 /** A pebble for a stone (a printed number), about 36 by 32 around its centre. */
 const PEBBLE = 'M-17 2C-18-10-6-16 5-15C15-14 19-5 18 4C17 13 6 17-4 16C-13 15-16 9-17 2Z';
@@ -20,7 +22,6 @@ function Flower({ x, y }: { x: number; y: number }) {
     </g>
   );
 }
-export const cellY = (cell: number) => INSET_PX + rowOf(cell) * CELL_PX;
 
 /**
  * Where the number in hand can go, cell by cell: open (bright), open and making its plot bloom
@@ -38,15 +39,17 @@ export interface PieceView {
 function useRules(p: Page) {
   return useMemo(() => {
     const thin: string[] = [], heavy: string[] = [];
-    for (let cell = 0; cell < CELLS; cell++) {
-      const r = rowOf(cell), c = colOf(cell);
-      if (c < SIZE - 1) {
-        const d = `M${cellX(cell) + CELL_PX} ${cellY(cell)}V${cellY(cell) + CELL_PX}`;
+    const g = gridOf(p.size), n = p.size;
+    const x = (c: number) => cellX(c, n), y = (c: number) => cellY(c, n);
+    for (let cell = 0; cell < g.cells; cell++) {
+      const r = g.rowOf(cell), c = g.colOf(cell);
+      if (c < n - 1) {
+        const d = `M${x(cell) + CELL_PX} ${y(cell)}V${y(cell) + CELL_PX}`;
         (p.cageOf[cell] === p.cageOf[cell + 1] ? thin : heavy).push(d);
       }
-      if (r < SIZE - 1) {
-        const d = `M${cellX(cell)} ${cellY(cell) + CELL_PX}H${cellX(cell) + CELL_PX}`;
-        (p.cageOf[cell] === p.cageOf[cell + SIZE] ? thin : heavy).push(d);
+      if (r < n - 1) {
+        const d = `M${x(cell)} ${y(cell) + CELL_PX}H${x(cell) + CELL_PX}`;
+        (p.cageOf[cell] === p.cageOf[cell + n] ? thin : heavy).push(d);
       }
     }
     return { thin: thin.join(''), heavy: heavy.join('') };
@@ -79,11 +82,13 @@ export interface PageViewProps {
 export function PageView(props: PageViewProps) {
   const { page: p, id, sealed, flashing, hints, hover, refused, pieceRadius = 21 } = props;
   const rules = useRules(p);
-  const span = CELL_PX * SIZE;
-  const y = cellY;
+  const span = CELL_PX * p.size;
+  const BOARD_PX = boardPx(p.size);
+  const cellX = (c: number) => INSET_PX + gridOf(p.size).colOf(c) * CELL_PX;
+  const y = (c: number) => INSET_PX + gridOf(p.size).rowOf(c) * CELL_PX;
 
   return (
-    <svg ref={props.svgRef} class={`board ${props.class ?? ''}`} viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`} role="img" aria-label={props.label}>
+    <svg ref={props.svgRef} class={`board size-${p.size} ${props.class ?? ''}`} data-size={p.size} viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`} role="img" aria-label={props.label}>
       <defs>
         <linearGradient id={`${id}-gold`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" class="g0" /><stop offset=".45" class="g1" /><stop offset=".55" class="g2" /><stop offset="1" class="g3" />

@@ -1,10 +1,10 @@
 # Plot Twist
 
-An offline number puzzle for phones on airplanes: one KenKen garden, planted over six weeks.
+An offline number puzzle for phones on airplanes: one KenKen garden, planted over a few weeks. Gardens run from 5×5 to 8×8, and every one has exactly one solution.
 
 No number may repeat in a row or column, and an outlined plot blooms only when its numbers hit the target in its corner. Each week deals a few more numbers and brings three requests ("Row 3 adds to 12 or more", "Make a × plot bloom", "No 6 in column 2"). Anything in the garden can move, but a number in its right square never has to: the requests steer where each week's numbers go, and when one seems to need a number moved, that number is wrong. Miss the required one and a drop of water dries up; bonus requests and blooming plots pay coins. In harvest week the last numbers go in, and the garden is full.
 
-Between gardens, a finished garden earns seeds, which buy tools, upgrades and looks in the Potting Shed that stay with you. A map of six gardens, each with a twist, opens as you finish them, and the Herbarium keeps every garden you've grown.
+Between gardens, a finished garden earns seeds, which buy tools, upgrades and looks in the Potting Shed that stay with you. A map of nine gardens, each with a twist (three of them 5×5, 7×7 and 8×8), opens as you finish them, there's a Daily Garden of each size, and the Herbarium keeps every garden you've grown.
 
 **Play:** https://kcwalr13.github.io/cagebreakers/ — open it once with a connection, add it to your home screen, and it works in airplane mode from then on.
 
@@ -23,7 +23,7 @@ The game was called Cagebreakers until M8. The code, the web address, save codes
 | M5 · Flight-Ready | Settings and quiet sound, the Daily Page, the Codex, save codes, a first chapter that teaches by playing, an art pass | Built |
 | M6 · Commissions | The battle is retired: numbers are the only pieces, each round deals more of them under three commissions, and the final round fills the page | Built |
 | M7 · The Scriptorium | Gold leaf, a map of six stations with stars, a shop of tools, upgrades and styles, the satchel and the library | Built |
-| M8 · Plot Twist | The whole game becomes a garden with the same rules: plots that bloom, weeks, water, coins and seeds, and four looks (Botanical, Night Garden, Cottage Garden and Greenhouse); right numbers never have to move, and a season is six weeks | Built |
+| M8 · Plot Twist | The whole game becomes a garden with the same rules: plots that bloom, weeks, water, coins and seeds, and four looks (Botanical, Night Garden, Cottage Garden and Greenhouse); right numbers never have to move, a season is six weeks, gardens of 5×5, 7×7 and 8×8 with a Daily Garden of each size, and every page has one solution | Built |
 
 ## Working on it
 
@@ -32,8 +32,9 @@ npm install
 npm run dev         # local server
 npm test            # core unit and property tests
 npm run e2e         # phone-sized end-to-end tests against the production build (run npm run build first)
-npm run lab -- 2000 # page generator statistics
+npm run lab -- 2000 six # page generator statistics for a kind of page (five, six, seven, eight, …)
 npx tsx lab/runs.ts 400   # three bots play full runs: the balance report, checked against the design targets
+npx tsx lab/runs.ts 200 all 8  # the same on another size of garden (5, 7 or 8)
 npx tsx lab/meta.ts       # every station for the bots, and how fast a Careful player progresses
 npm run assets      # re-copy fonts and regenerate the icon module
 node scripts/app-icons.mjs  # re-render home-screen icons

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { CELLS, PEERS } from './grid';
+import { gridOf } from './grid';
 import { generatePage } from './page';
 import { boardIsLatin, boardValues, combinationSets, completions, hintFor, isLegal, isSealed } from './rules';
 import { SEED_ALPHABET } from './seed';
+
+const CELLS = gridOf(6).cells;
+const PEERS = gridOf(6).peers;
 
 const seedArb = fc.string({ unit: fc.constantFrom(...SEED_ALPHABET), minLength: 6, maxLength: 6 });
 

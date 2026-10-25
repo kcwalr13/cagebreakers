@@ -1,4 +1,4 @@
-import { CELLS, NUMBERS, PEERS } from './grid';
+import { gridOf, gridOfValues } from './grid';
 import { type Cage, type Page, evaluate } from './page';
 
 /**
@@ -6,8 +6,8 @@ import { type Cage, type Page, evaluate } from './page';
  * `placed` holds the player's numbers (0 = empty); stones live on the page.
  */
 export function boardValues(page: Page, placed: readonly number[]): number[] {
-  const out = new Array<number>(CELLS);
-  for (let i = 0; i < CELLS; i++) out[i] = page.stones[i] || placed[i] || 0;
+  const out = new Array<number>(page.stones.length);
+  for (let i = 0; i < out.length; i++) out[i] = page.stones[i] || placed[i] || 0;
   return out;
 }
 
@@ -17,7 +17,7 @@ export function boardValues(page: Page, placed: readonly number[]): number[] {
  */
 export function isLegal(page: Page, values: readonly number[], cell: number, n: number, ignore = -1): boolean {
   if (page.stones[cell]) return false;
-  for (const p of PEERS[cell]!) if (p !== ignore && values[p] === n) return false;
+  for (const p of gridOf(page.size).peers[cell]!) if (p !== ignore && values[p] === n) return false;
   return true;
 }
 
@@ -43,7 +43,7 @@ export function completions(page: Page, values: readonly number[], cage: Cage): 
       return;
     }
     const cell = empties[k]!;
-    for (const n of NUMBERS) {
+    for (const n of gridOf(page.size).numbers) {
       if (!isLegal(page, work, cell, n)) continue;
       work[cell] = n;
       walk(k + 1);
@@ -91,10 +91,11 @@ export function sealedCages(page: Page, values: readonly number[]): Set<number> 
 
 /** True when the Latin rule holds across every row and column of the board. */
 export function boardIsLatin(values: readonly number[]): boolean {
-  for (let i = 0; i < CELLS; i++) {
+  const g = gridOfValues(values);
+  for (let i = 0; i < g.cells; i++) {
     const v = values[i];
     if (!v) continue;
-    for (const p of PEERS[i]!) if (values[p] === v) return false;
+    for (const p of g.peers[i]!) if (values[p] === v) return false;
   }
   return true;
 }

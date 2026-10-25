@@ -10,7 +10,6 @@
  */
 import { RUN } from '../src/content/balance';
 import { choices, isMet, viewOf } from '../src/core/commission';
-import { CELLS } from '../src/core/grid';
 import { type Rng, stream } from '../src/core/rng';
 import { isLegal } from '../src/core/rules';
 import {
@@ -56,10 +55,10 @@ function witness(s: RunState, which: readonly Token[], rng: Rng): Map<number, nu
   const taken = new Set<number>();
   for (const t of s.tokens) if (isRight(s, t)) taken.add(t.cell);
   for (const t of tokens) if (isRight(s, t)) out.set(t.id, t.cell);
-  for (let n = 1; n <= 6; n++) {
+  for (let n = 1; n <= page.size; n++) {
     const mine = tokens.filter((t) => t.n === n && !out.has(t.id));
     if (!mine.length) continue;
-    const cells = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !page.stones[c] && page.solution[c] === n && !taken.has(c)));
+    const cells = rng.shuffle(page.stones.map((_, c) => c).filter((c) => !page.stones[c] && page.solution[c] === n && !taken.has(c)));
     mine.forEach((t, i) => out.set(t.id, cells[i]!));
   }
   return out;
@@ -86,7 +85,7 @@ function latinFill(p: Player, rng: Rng): boolean {
   const page = runPage(s);
   const values = valuesOf(s);
   const loose = s.tokens.filter((t) => t.cell < 0);
-  const empty = rng.shuffle(Array.from({ length: CELLS }, (_, c) => c).filter((c) => !values[c]));
+  const empty = rng.shuffle(values.map((_, c) => c).filter((c) => !values[c]));
   const used = new Array<boolean>(loose.length).fill(false);
   const plan: [number, number][] = [];
   let budget = 20000;
@@ -182,7 +181,7 @@ function carefulRound(p: Player, rng: Rng) {
       const base = worth(s, values);
       values[from] = 0;
       let move: { cell: number; w: number } | null = null;
-      for (let c = 0; c < CELLS; c++) {
+      for (let c = 0; c < values.length; c++) {
         if (values[c] || page.stones[c] || !isLegal(page, values, c, n)) continue;
         values[c] = n;
         const w = worth(s, values);

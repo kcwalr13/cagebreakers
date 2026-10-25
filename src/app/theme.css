@@ -89,6 +89,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 @keyframes sheen { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
 .target { font-family: var(--font-display); font-style: var(--display-italic); font-weight: 600; font-size: 13px; fill: var(--rubric); }
 .target.on-gold { fill: var(--on-gold-red); }
+/* Bigger gardens are drawn smaller on the same screen; their targets grow a little to stay readable. */
+.board.size-7 .target { font-size: 14.5px; }
+.board.size-8 .target { font-size: 15px; }
 /* Stones: the garden's given numbers, carved in pebbles */
 .pebble { fill: var(--pebble); stroke: var(--pebble-edge); stroke-width: 1.2; }
 .stone { font-family: var(--font-display); font-weight: 600; font-size: 25px; fill: var(--stone-num); text-anchor: middle; }
@@ -202,6 +205,17 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .title-menu { display: flex; flex-direction: column; gap: 12px; }
 .menu-card { text-align: left; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--rule); background: var(--paper); display: flex; flex-direction: column; gap: 4px; min-height: 76px; }
 .menu-card.primary { border: 2px solid var(--accent); }
+/* The Daily Gardens: one button per size */
+.daily-card { padding-bottom: 12px; }
+.daily-card:active { border-color: var(--rule); }
+.daily-sizes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+.daily-size {
+  min-height: 56px; border-radius: 12px; border: 1px solid var(--rule); background: var(--paper-hi);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 2px;
+}
+.daily-size:active { border-color: var(--accent); }
+.daily-size .ds-size { font-family: var(--font-display); font-weight: 800; font-size: 18px; line-height: 1.1; }
+.daily-size .ds-note { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 .mc-title { font-family: var(--font-display); font-weight: 800; font-size: 22px; }
 .mc-sub { color: var(--ink-soft); font-size: 15px; line-height: 1.35; }
 .mc-date { font-family: var(--font-ui); font-weight: 500; font-size: 14px; color: var(--ink-soft); margin-left: 6px; }
@@ -216,8 +230,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 
 /* ---- The round ----------------------------------------------------------------------------- */
 .hud-row { gap: 4px; }
-.hud-round { flex: 1; min-width: 0; padding-left: 2px; font-family: var(--font-display); font-style: var(--display-italic); font-weight: 700; font-size: 17px; white-space: nowrap; color: var(--ink-soft); }
+.hud-round { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; font-family: var(--font-display); font-style: var(--display-italic); font-weight: 700; font-size: 17px; white-space: nowrap; color: var(--ink-soft); }
 .hud-round b { color: var(--ink); font-size: 20px; font-style: normal; }
+@media (max-width: 380px) { .hud-round { font-size: 15px; } .hud-round b { font-size: 17px; } }
 .hud-ink { display: flex; gap: 1px; padding: 0 4px; }
 .hud-ink .drop { width: 20px; height: 20px; fill: var(--ink); }
 .hud-ink .drop.spent { opacity: .18; }
@@ -249,7 +264,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 
 /* The hand: numbers dealt this round, and any lifted off the page */
 .hand { display: flex; align-items: center; gap: 6px; min-height: 58px; padding: 4px 0; border-top: 1px solid var(--rule); touch-action: none; flex: none; }
-.hand-tokens { flex: 1; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; min-width: 0; align-items: center; padding: 3px 8px 3px 3px; }
+.hand-tokens { flex: 1; display: flex; gap: 6px 8px; overflow-x: auto; scrollbar-width: none; min-width: 0; align-items: center; padding: 3px 8px 3px 3px; }
+/* Big gardens can hand you seven or eight different numbers: they wrap onto a second row rather than scroll. */
+.hand-tokens.many { flex-wrap: wrap; overflow-x: visible; }
 .hand-tokens::-webkit-scrollbar { display: none; }
 /* Up to six stacks (one per value) always fit: slots shrink a little on narrow phones rather than scroll. */
 .hand-slot { flex: 0 1 50px; min-width: 44px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; position: relative; }

@@ -8,7 +8,7 @@ import {
   BIG_CAGE_BONUS, BOUNTY_FROM, BOUNTY_GOLD, type CommissionKind, DIFFICULTY, FINAL_SEALS, GATED_KINDS, REQUIRED_FROM, THRESHOLD_RANGE,
   VARIANTS,
 } from '../content/commissions';
-import { CELLS, SIZE, colOf, rowOf } from './grid';
+import { gridOf } from './grid';
 import type { Op, Page } from './page';
 import type { Rng } from './rng';
 import { sealedCages } from './rules';
@@ -50,32 +50,72 @@ export const viewOf = (page: Page, values: readonly number[]): View => ({ page, 
 
 // ---- Geometry ---------------------------------------------------------------------------------
 
-const LINES: Record<Axis, readonly (readonly number[])[]> = {
-  row: Array.from({ length: SIZE }, (_, line) => Array.from({ length: SIZE }, (_, i) => line * SIZE + i)),
-  col: Array.from({ length: SIZE }, (_, line) => Array.from({ length: SIZE }, (_, i) => i * SIZE + line)),
-};
+/**
+ * The shapes commissions talk about, for one size of page. On an odd-sized page the halves and
+ * the quarters leave out the middle row and column, so "the top half" of a 7×7 page is its top
+ * three rows; sentences say so.
+ */
+interface Shapes {
+  size: number;
+  lines: Record<Axis, readonly (readonly number[])[]>;
+  diagonal: readonly number[];
+  corners: readonly number[];
+  quarters: Record<Quarter, readonly number[]>;
+  inZone: Record<Zone, (cell: number) => boolean>;
+  /** Rows (or columns) in a half, and on a side of a quarter. */
+  half: number;
+}
+const shapeCache = new Map<number, Shapes>();
+function shapesOf(size: number): Shapes {
+  let sh = shapeCache.get(size);
+  if (sh) return sh;
+  const g = gridOf(size);
+  const half = Math.floor(size / 2), far = size - half;
+  const top = (c: number) => g.rowOf(c) < half, bottom = (c: number) => g.rowOf(c) >= far;
+  const left = (c: number) => g.colOf(c) < half, right = (c: number) => g.colOf(c) >= far;
+  const range = Array.from({ length: size }, (_, i) => i);
+  sh = {
+    size, half,
+    lines: {
+      row: range.map((line) => range.map((i) => g.cellAt(line, i))),
+      col: range.map((line) => range.map((i) => g.cellAt(i, line))),
+    },
+    diagonal: range.map((i) => g.cellAt(i, i)),
+    corners: [0, size - 1, g.cells - size, g.cells - 1],
+    quarters: {
+      tl: g.all.filter((c) => top(c) && left(c)), tr: g.all.filter((c) => top(c) && right(c)),
+      bl: g.all.filter((c) => bottom(c) && left(c)), br: g.all.filter((c) => bottom(c) && right(c)),
+    },
+    inZone: { top, bottom, left, right },
+  };
+  shapeCache.set(size, sh);
+  return sh;
+}
 /** The cells of a row or column, top to bottom or left to right. Shared: don't mutate. */
-export const lineCells = (axis: Axis, line: number): readonly number[] => LINES[axis][line]!;
-const DIAGONAL = Array.from({ length: SIZE }, (_, i) => i * SIZE + i);
-const CORNERS = [0, SIZE - 1, CELLS - SIZE, CELLS - 1];
-const QUARTERS: Record<Quarter, readonly number[]> = {
-  tl: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) < 3 && colOf(c) < 3),
-  tr: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) < 3 && colOf(c) >= 3),
-  bl: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) >= 3 && colOf(c) < 3),
-  br: Array.from({ length: CELLS }, (_, c) => c).filter((c) => rowOf(c) >= 3 && colOf(c) >= 3),
-};
+export const lineCells = (size: number, axis: Axis, line: number): readonly number[] => shapesOf(size).lines[axis][line]!;
+
+const WORDS = ['no', 'one', 'two', 'three', 'four'];
 const QUARTER_WORD: Record<Quarter, string> = { tl: 'top-left', tr: 'top-right', bl: 'bottom-left', br: 'bottom-right' };
-const IN_ZONE: Record<Zone, (cell: number) => boolean> = {
-  top: (c) => rowOf(c) < 3, bottom: (c) => rowOf(c) >= 3, left: (c) => colOf(c) < 3, right: (c) => colOf(c) >= 3,
-};
-const ZONE_WORD: Record<Zone, string> = { top: 'top half', bottom: 'bottom half', left: 'left half', right: 'right half' };
+/** "the top half", or on an odd-sized page "the top three rows". */
+function zoneWord(zone: Zone, size: number): string {
+  if (size % 2 === 0) return `the ${zone} half`;
+  const n = WORDS[Math.floor(size / 2)];
+  return zone === 'top' || zone === 'bottom' ? `the ${zone} ${n} rows` : `the ${zone} ${n} columns`;
+}
+/** "The top-left quarter", or on an odd-sized page "The top-left 3×3 corner". */
+function quarterWord(q: Quarter, size: number): string {
+  const h = Math.floor(size / 2);
+  return size % 2 === 0 ? `The ${QUARTER_WORD[q]} quarter` : `The ${QUARTER_WORD[q]} ${h}×${h} corner`;
+}
 const OP_WORD: Record<Op, string> = { '+': '+', '×': '×', '−': '−', '÷': '÷' };
 
 const total = (v: View, cells: readonly number[]) => cells.reduce((s, c) => s + v.values[c]!, 0);
 const filled = (v: View, cells: readonly number[]) => cells.reduce((s, c) => s + (v.values[c] ? 1 : 0), 0);
 const lineName = (axis: Axis, line: number) => `${axis === 'row' ? 'Row' : 'Column'} ${line + 1}`;
-const touches = (page: Page, cage: number, axis: Axis, line: number) =>
-  page.cages[cage]!.cells.some((c) => (axis === 'row' ? rowOf(c) : colOf(c)) === line);
+const touches = (page: Page, cage: number, axis: Axis, line: number) => {
+  const g = gridOf(page.size);
+  return page.cages[cage]!.cells.some((c) => (axis === 'row' ? g.rowOf(c) : g.colOf(c)) === line);
+};
 
 /**
  * A cage's label as printed, with its row when another cage shares the label. Player-facing words
@@ -85,7 +125,7 @@ export function cageName(page: Page, id: number): string {
   const cage = page.cages[id]!;
   const label = `${cage.target}${cage.op}`;
   const twins = page.cages.filter((c) => `${c.target}${c.op}` === label).length;
-  return twins > 1 ? `the ${label} plot in row ${rowOf(cage.cells[0]!) + 1}` : `the ${label} plot`;
+  return twins > 1 ? `the ${label} plot in row ${gridOf(page.size).rowOf(cage.cells[0]!) + 1}` : `the ${label} plot`;
 }
 
 // ---- Judging ----------------------------------------------------------------------------------
@@ -93,21 +133,23 @@ export function cageName(page: Page, id: number): string {
 /** The quantity a commission is about: a total or count for threshold kinds, 1 or 0 for yes-or-no kinds. */
 export function measure(c: Commission, v: View): number {
   const { page, values, sealed } = v;
+  const sh = shapesOf(page.size);
+  const lineCells = (axis: Axis, line: number) => sh.lines[axis][line]!;
   switch (c.kind) {
     case 'line-min': case 'line-max': return total(v, lineCells(c.axis, c.line));
     case 'line-count-max': return filled(v, lineCells(c.axis, c.line));
-    case 'diagonal-min': return total(v, DIAGONAL);
+    case 'diagonal-min': return total(v, sh.diagonal);
     case 'seal-count': return sealed.size;
     case 'no-number': return lineCells(c.axis, c.line).some((x) => values[x] === c.n) ? 0 : 1;
     case 'zone': {
       let all = 0, inside = 0;
-      for (let x = 0; x < CELLS; x++) if (values[x] === c.n) { all++; if (IN_ZONE[c.zone](x)) inside++; }
+      for (let x = 0; x < values.length; x++) if (values[x] === c.n) { all++; if (sh.inZone[c.zone](x)) inside++; }
       return all > 0 && inside === all ? 1 : 0;
     }
     case 'seal-op': return [...sealed].some((id) => page.cages[id]!.op === c.op) ? 1 : 0;
     case 'seal-cage': return sealed.has(c.cage) ? 1 : 0;
     case 'empty-cage': return page.cages[c.cage]!.cells.every((x) => page.stones[x] || !values[x]) ? 1 : 0;
-    case 'fill-line': return filled(v, lineCells(c.axis, c.line)) === SIZE ? 1 : 0;
+    case 'fill-line': return filled(v, lineCells(c.axis, c.line)) === sh.size ? 1 : 0;
     case 'equal-lines': {
       const a = total(v, lineCells(c.axis, c.a)), b = total(v, lineCells(c.axis, c.b));
       return a === b && a >= c.min ? 1 : 0;
@@ -123,8 +165,8 @@ export function measure(c: Commission, v: View): number {
     }
     case 'fill-page': return values.every((n) => n) ? 1 : 0;
     case 'seal-all': return sealed.size === page.cages.length ? 1 : 0;
-    case 'corners-min': return total(v, CORNERS);
-    case 'quarter-min': return total(v, QUARTERS[c.quarter]);
+    case 'corners-min': return total(v, sh.corners);
+    case 'quarter-min': return total(v, sh.quarters[c.quarter]);
     case 'seal-op-count': return [...sealed].filter((id) => page.cages[id]!.op === c.op).length;
   }
 }
@@ -145,7 +187,7 @@ export function describe(c: Commission, page: Page): string {
     case 'line-min': return `${lineName(c.axis, c.line)} adds to ${c.min} or more`;
     case 'line-max': return `${lineName(c.axis, c.line)} adds to ${c.max} or less`;
     case 'no-number': return `No ${c.n} in ${lineName(c.axis, c.line).toLowerCase()}`;
-    case 'zone': return `Every ${c.n} sits in the ${ZONE_WORD[c.zone]}`;
+    case 'zone': return `Every ${c.n} sits in ${zoneWord(c.zone, page.size)}`;
     case 'seal-count': return `Make ${c.count} ${c.count === 1 ? 'plot' : 'plots'} bloom`;
     case 'seal-op': return `Make a ${OP_WORD[c.op]} plot bloom`;
     case 'seal-cage': return `Make ${cageName(page, c.cage)} bloom`;
@@ -160,7 +202,7 @@ export function describe(c: Commission, page: Page): string {
     case 'fill-page': return 'Fill every square';
     case 'seal-all': return 'Make every plot bloom';
     case 'corners-min': return `The four corners add to ${c.min} or more`;
-    case 'quarter-min': return `The ${QUARTER_WORD[c.quarter]} quarter adds to ${c.min} or more`;
+    case 'quarter-min': return `${quarterWord(c.quarter, page.size)} adds to ${c.min} or more`;
     case 'seal-op-count': return `Make ${c.count} ${OP_WORD[c.op]} plots bloom`;
   }
 }
@@ -168,6 +210,8 @@ export function describe(c: Commission, page: Page): string {
 /** Where the page stands on a commission, in a few words. */
 export function readout(c: Commission, v: View): string {
   const m = measure(c, v);
+  const sh = shapesOf(v.page.size);
+  const lineCells = (axis: Axis, line: number) => sh.lines[axis][line]!;
   switch (c.kind) {
     case 'line-min': case 'line-max': case 'diagonal-min': case 'corners-min': case 'quarter-min': return `now ${m}`;
     case 'seal-op-count': return `${m} in bloom`;
@@ -176,32 +220,34 @@ export function readout(c: Commission, v: View): string {
     case 'no-number': return m ? 'clear' : `a ${c.n} is there`;
     case 'zone': {
       let all = 0, inside = 0;
-      for (let x = 0; x < CELLS; x++) if (v.values[x] === c.n) { all++; if (IN_ZONE[c.zone](x)) inside++; }
+      for (let x = 0; x < v.values.length; x++) if (v.values[x] === c.n) { all++; if (sh.inZone[c.zone](x)) inside++; }
       return all ? `${inside} of ${all}` : `no ${c.n} yet`;
     }
     case 'seal-op': case 'seal-cage': return m ? 'in bloom' : 'not yet';
     case 'empty-cage': return m ? 'empty' : 'not empty';
-    case 'fill-line': return `${filled(v, lineCells(c.axis, c.line))} of ${SIZE}`;
+    case 'fill-line': return `${filled(v, lineCells(c.axis, c.line))} of ${sh.size}`;
     case 'equal-lines': return `${total(v, lineCells(c.axis, c.a))} and ${total(v, lineCells(c.axis, c.b))}`;
     case 'no-seal-line': return m ? 'clear' : 'a bloom touches it';
     case 'rising': case 'parity-line': return m ? 'yes' : 'not yet';
-    case 'fill-page': return `${v.values.filter((n) => n).length} of ${CELLS}`;
+    case 'fill-page': return `${v.values.filter((n) => n).length} of ${v.values.length}`;
     case 'seal-all': return `${v.sealed.size} of ${v.page.cages.length}`;
   }
 }
 
 /** The cells a commission is about, for lighting them up on the page. */
 export function cellsOf(c: Commission, page: Page): number[] {
+  const sh = shapesOf(page.size);
+  const lineCells = (axis: Axis, line: number) => sh.lines[axis][line]!;
   switch (c.kind) {
     case 'line-min': case 'line-max': case 'no-number': case 'line-count-max': case 'fill-line': case 'no-seal-line': case 'parity-line':
       return [...lineCells(c.axis, c.line)];
     case 'equal-lines': return [...lineCells(c.axis, c.a), ...lineCells(c.axis, c.b)];
     case 'rising': return [...lineCells('col', c.line)];
-    case 'diagonal-min': return DIAGONAL.slice();
-    case 'corners-min': return CORNERS.slice();
-    case 'quarter-min': return [...QUARTERS[c.quarter]];
+    case 'diagonal-min': return sh.diagonal.slice();
+    case 'corners-min': return sh.corners.slice();
+    case 'quarter-min': return [...sh.quarters[c.quarter]];
     case 'seal-op-count': return page.cages.filter((g) => g.op === c.op).flatMap((g) => g.cells);
-    case 'zone': return Array.from({ length: CELLS }, (_, x) => x).filter(IN_ZONE[c.zone]);
+    case 'zone': return gridOf(page.size).all.filter(sh.inZone[c.zone]);
     case 'seal-cage': case 'empty-cage': return page.cages[c.cage]!.cells.slice();
     case 'seal-op': return page.cages.filter((g) => g.op === c.op).flatMap((g) => g.cells);
     default: return [];
@@ -235,8 +281,8 @@ const openByValueCache = new WeakMap<Page, number[][]>();
 function openByValue(page: Page): number[][] {
   let out = openByValueCache.get(page);
   if (!out) {
-    out = Array.from({ length: 7 }, () => [] as number[]);
-    for (let c = 0; c < CELLS; c++) if (!page.stones[c]) out[page.solution[c]!]!.push(c);
+    out = Array.from({ length: page.size + 1 }, () => [] as number[]);
+    for (let c = 0; c < page.stones.length; c++) if (!page.stones[c]) out[page.solution[c]!]!.push(c);
     openByValueCache.set(page, out);
   }
   return out;
@@ -257,11 +303,11 @@ function freeByValue(page: Page, rooted: readonly number[]): number[][] {
  */
 export function sampleLayout(page: Page, numbers: readonly number[], rng: Rng, rooted: readonly number[] = []): number[] {
   const values = page.stones.slice();
-  const counts = new Array<number>(7).fill(0);
+  const counts = new Array<number>(page.size + 1).fill(0);
   for (const n of numbers) counts[n]!++;
   for (const c of rooted) { const n = page.solution[c]!; values[c] = n; counts[n]!--; }
   const byValue = freeByValue(page, rooted);
-  for (let n = 1; n <= 6; n++) {
+  for (let n = 1; n <= page.size; n++) {
     const cells = byValue[n]!.slice();
     const k = Math.min(counts[n]!, cells.length);
     for (let i = 0; i < k; i++) {
@@ -290,14 +336,14 @@ function candidates(page: Page, round: number, enabled: readonly CommissionKind[
     const req = (REQUIRED_FROM[kind] ?? 99) <= round, bty = (BOUNTY_FROM[kind] ?? 99) <= round;
     if (req || bty) out.push({ kind, dir, make, req, bty });
   };
-  const lines = [0, 1, 2, 3, 4, 5];
+  const lines = Array.from({ length: page.size }, (_, i) => i);
   for (const axis of ['row', 'col'] as Axis[]) for (const line of lines) {
     add('line-min', 'min', (t) => ({ kind: 'line-min', axis, line, min: t }));
     add('line-max', 'max', (t) => ({ kind: 'line-max', axis, line, max: t }));
     add('line-count-max', 'max', (t) => ({ kind: 'line-count-max', axis, line, max: t }));
     add('fill-line', 'bool', () => ({ kind: 'fill-line', axis, line }));
     add('no-seal-line', 'bool', () => ({ kind: 'no-seal-line', axis, line }));
-    for (let n = 1; n <= 6; n++) add('no-number', 'bool', () => ({ kind: 'no-number', axis, line, n }));
+    for (let n = 1; n <= page.size; n++) add('no-number', 'bool', () => ({ kind: 'no-number', axis, line, n }));
     for (const even of [true, false]) for (const count of VARIANTS.parityCount) {
       add('parity-line', 'bool', () => ({ kind: 'parity-line', axis, line, even, count }));
     }
@@ -306,7 +352,7 @@ function candidates(page: Page, round: number, enabled: readonly CommissionKind[
     }
   }
   for (const line of lines) for (const count of VARIANTS.risingCount) add('rising', 'bool', () => ({ kind: 'rising', line, count }));
-  for (let n = 1; n <= 6; n++) for (const zone of ['top', 'bottom', 'left', 'right'] as Zone[]) {
+  for (let n = 1; n <= page.size; n++) for (const zone of ['top', 'bottom', 'left', 'right'] as Zone[]) {
     add('zone', 'bool', () => ({ kind: 'zone', n, zone }));
   }
   add('seal-count', 'min', (t) => ({ kind: 'seal-count', count: t }));

@@ -28,8 +28,9 @@ async function noSmallButtons(p: PWPage) {
 test('the map: begin in the Kitchen Garden, finish it, save seeds and open the next gardens', async ({ page: p }, info) => {
   await fresh(p);
   await p.getByRole('button', { name: /The Map/ }).click();
-  await expect(p.locator('.station')).toHaveCount(6);
-  await expect(p.locator('.station.locked')).toHaveCount(5);
+  await expect(p.locator('.station')).toHaveCount(9);
+  // The Kitchen Garden and the Window Box are open from the start.
+  await expect(p.locator('.station.locked')).toHaveCount(7);
   await noSmallButtons(p);
   await p.screenshot({ path: info.outputPath('m7-01-map.png') });
   await p.getByRole('button', { name: /The Kitchen Garden/ }).click();
@@ -48,7 +49,7 @@ test('the map: begin in the Kitchen Garden, finish it, save seeds and open the n
   const leaf = await R(p, '(r) => r.profile().leaf') as number;
   expect(leaf).toBeGreaterThan(0);
   await p.getByRole('button', { name: /Back to the map/ }).click();
-  await expect(p.locator('.station.locked')).toHaveCount(3);
+  await expect(p.locator('.station.locked')).toHaveCount(5);
   await expect(p.locator('.station.filled')).toHaveCount(1);
   // The run is counted once, even after a reload on the summary.
   await p.goto('./?test&nosw&screen=title');
@@ -109,7 +110,7 @@ test('the Daily Garden ignores upgrades and the tool belt', async ({ page: p }) 
   await R(p, `(r) => r.setProfile({ ...r.profile(), owned: ['purse-1', 'purse-2', 'quill', 'deeper-inkwell'], satchel: ['quill', 'lens'] })`);
   await p.goto('./?test&nosw&screen=title');
   await p.waitForFunction(() => !!(window as Any).__run);
-  await p.getByRole('button', { name: /Daily Garden/ }).click();
+  await p.getByRole('button', { name: /Daily Garden 6×6/ }).click();
   const s = await R(p, '(r) => ({ gold: r.state().gold, ink: r.state().ink, tools: r.state().setup.tools, station: r.state().setup.station })');
   expect(s).toEqual({ gold: 0, ink: 3, tools: ['lens'], station: null });
 });
@@ -148,4 +149,44 @@ test("the back gesture steps back like the back arrow, and leaves the app only f
   await p.getByRole('button', { name: 'Back to title' }).click();
   await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
   await expect.poll(() => p.evaluate(() => history.state?.cagebreakers ?? null)).toBeNull();
+});
+
+test('gardens of other sizes: the Window Box from the start, the Allotment and the Walled Garden after the Long Season', async ({ page: p }, info) => {
+  await fresh(p);
+  await p.getByRole('button', { name: /The Map/ }).click();
+  await expect(p.locator('.station:not(.locked)')).toContainText(['The Kitchen Garden', 'The Window Box']);
+  await p.getByRole('button', { name: /The Window Box/ }).click();
+  await p.getByRole('button', { name: 'Begin' }).click();
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 4');
+  expect(await p.locator('svg.board').getAttribute('data-size')).toBe('5');
+  expect(await R(p, FINISH)).toBe('done');
+  // The Long Season opens both big gardens.
+  await R(p, `(r) => r.setProfile({ ...r.profile(), filled: ['copy-desk', 'cloister', 'bare-vellum', 'counting-house', 'long-night', 'grand-folio'] })`);
+  await p.goto('./?test&nosw&screen=map');
+  await p.waitForFunction(() => !!(window as Any).__run);
+  await expect(p.locator('.station.locked')).toHaveCount(0);
+  await noSmallButtons(p);
+  await p.locator('.map-scroll').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await p.screenshot({ path: info.outputPath('m7-07-map-sizes.png') });
+  await p.getByRole('button', { name: /The Walled Garden/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('8×8');
+  await p.getByRole('button', { name: 'Begin' }).click();
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
+  expect(await p.locator('svg.board').getAttribute('data-size')).toBe('8');
+  await noSmallButtons(p);
+  // A tap on a square low in an 8×8 garden lands on that square.
+  const target = await R(p, `(r) => { const s = r.state(), pg = r.page();
+    for (const t of s.tokens.filter((t) => t.cell < 0)) {
+      const c = [...pg.stones.keys()].reverse().find((c) => !pg.stones[c] && pg.solution[c] === t.n);
+      if (c !== undefined) return { n: t.n, cell: c };
+    } }`) as { n: number; cell: number };
+  await p.locator('.hand-slot', { hasText: String(target.n) }).first().click();
+  const box = (await p.locator('.board-wrap svg.board').boundingBox())!;
+  const scale = box.width / (8 + 59 * 8);
+  await p.mouse.click(box.x + (4 + (target.cell % 8) * 59 + 29.5) * scale, box.y + (4 + Math.floor(target.cell / 8) * 59 + 29.5) * scale);
+  expect(await R(p, '(r, c) => r.state().tokens.some((t) => t.cell === c)', target.cell)).toBe(true);
+  await p.screenshot({ path: info.outputPath('m7-08-walled-garden.png') });
+  expect(await R(p, FINISH)).toBe('done');
+  await p.keyboard.press('Escape');
+  await expect(p.locator('.summary-verdict')).toContainText('Harvest!');
 });

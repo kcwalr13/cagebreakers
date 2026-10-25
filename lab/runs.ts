@@ -1,14 +1,19 @@
 /**
  * Balance report: every bot plays many full runs, then the targets from the design doc's
- * Verification table are checked. Run: npx tsx lab/runs.ts [runs per bot] [bots]
+ * Verification table are checked. Run: npx tsx lab/runs.ts [runs per bot] [bots] [size 5–8]
  */
-import { RUN } from '../src/content/balance';
+import type { Size } from '../src/core/grid';
+import { standardSetup } from '../src/core/run';
 import { type BotName, BOTS, playRun } from './bots';
 import { labSeeds } from './seeds';
 
 const N = Number(process.argv[2] ?? 300);
 const seeds = labSeeds(N);
-const which = (process.argv[3]?.split(',') ?? BOTS) as BotName[];
+const which = (process.argv[3] && process.argv[3] !== 'all' ? process.argv[3].split(',') : BOTS) as BotName[];
+const size = Number(process.argv[4] ?? 6) as Size;
+const setup = standardSetup(size);
+const RUN = { rounds: setup.rounds, inkBonus: setup.inkBonus };
+console.log(`${size}×${size} gardens: ${setup.rounds} weeks, deals ${setup.deal.join(', ')}`);
 const out: Record<string, { reqRate: number; bountyShare: number; fullHandRate: number; perfectRate: number }> = {};
 const pct = (x: number) => `${(100 * x).toFixed(1)}%`;
 
@@ -17,7 +22,7 @@ for (const bot of which) {
   let allThree = 0, reqMet = 0, reqPosted = 0, bountyGold = 0, sealGold = 0, handGold = 0, fullHands = 0, perfect = 0, bounties = 0, ruined = 0, inkLeft = 0, score = 0, rounds = 0;
   const missByRound = new Array<number>(RUN.rounds + 1).fill(0), postedByRound = new Array<number>(RUN.rounds + 1).fill(0);
   for (const seed of seeds) {
-    const { state } = playRun(seed, bot);
+    const { state } = playRun(seed, bot, setup);
     for (const r of state.records) {
       rounds++;
       if (r.required !== null && r.round < RUN.rounds) {

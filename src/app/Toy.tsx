@@ -1,5 +1,7 @@
 import { useEffect } from 'preact/hooks';
-import { NUMBERS } from '../core/grid';
+import { gridOf } from '../core/grid';
+
+const NUMBERS = gridOf(6).numbers;
 import { Board } from './Board';
 import { Icon } from './Icon';
 import { type PressHandlers, pressItem, setHandlers } from './input';

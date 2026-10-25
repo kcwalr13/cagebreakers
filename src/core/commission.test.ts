@@ -4,11 +4,14 @@ import { FINAL_SEALS } from '../content/commissions';
 import {
   type Commission, type Holding, cageName, cellsOf, choices, describe, isMet, possible, postCommissions, readout, sampleLayout, viewOf,
 } from './commission';
-import { CELLS } from './grid';
+import { gridOf } from './grid';
+import { PAGE_VARIANTS } from '../content/stations';
 import { generatePage } from './page';
 import { createRng, stream } from './rng';
 import { boardIsLatin } from './rules';
 import { act, dealtThisRound, newRun, pageOf, type RunState } from './run';
+
+const CELLS = gridOf(6).cells;
 
 const page = generatePage('CMSNAA');
 const empty = viewOf(page, page.stones.slice());
@@ -30,6 +33,16 @@ group('commission sentences', () => {
     expect(describe({ kind: 'parity-line', axis: 'row', line: 5, even: true, count: 2 }, page)).toBe('Only even numbers in row 6, 2 or more');
     expect(describe({ kind: 'fill-page' }, page)).toBe('Fill every square');
     expect(describe({ kind: 'seal-all' }, page)).toBe('Make every plot bloom');
+  });
+
+  it('names halves and corners plainly on odd-sized gardens, which have a middle row and column', () => {
+    const seven = generatePage('ODDSZ7', PAGE_VARIANTS.seven), five = generatePage('ODDSZ5', PAGE_VARIANTS.five);
+    expect(describe({ kind: 'zone', n: 7, zone: 'top' }, seven)).toBe('Every 7 sits in the top three rows');
+    expect(describe({ kind: 'zone', n: 2, zone: 'right' }, five)).toBe('Every 2 sits in the right two columns');
+    expect(describe({ kind: 'quarter-min', quarter: 'bl', min: 20 }, seven)).toBe('The bottom-left 3×3 corner adds to 20 or more');
+    expect(cellsOf({ kind: 'quarter-min', quarter: 'tl', min: 1 }, seven)).toEqual([0, 1, 2, 7, 8, 9, 14, 15, 16]);
+    expect(cellsOf({ kind: 'zone', n: 1, zone: 'bottom' }, five)).toEqual([15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
+    expect(cellsOf({ kind: 'diagonal-min', min: 1 }, generatePage('EVNSZ8', PAGE_VARIANTS.eight))).toEqual([0, 9, 18, 27, 36, 45, 54, 63]);
   });
 
   it('names a cage by its label, adding its row when two cages share one', () => {

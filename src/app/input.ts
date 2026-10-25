@@ -7,11 +7,12 @@
  * Each screen registers its own handlers; the controller knows nothing about game rules.
  */
 import { signal } from '@preact/signals';
-import { CELLS, SIZE } from '../core/grid';
 
-export const BOARD_PX = 362;
+/** A square is the same size in the drawing at every page size; the drawing scales to fit the screen. */
 export const CELL_PX = 59;
 export const INSET_PX = 4;
+/** The drawing's width and height for a page of this size (362 for 6×6). */
+export const boardPx = (size: number) => INSET_PX * 2 + CELL_PX * size;
 /** How far above the finger the dragged piece floats, in CSS pixels. */
 export const LIFT_PX = 56;
 const DRAG_THRESHOLD = 8;
@@ -49,13 +50,14 @@ export function cellFromPoint(x: number, y: number): number {
   if (!boardEl) return -1;
   const rect = boardEl.getBoundingClientRect();
   if (!rect.width) return -1;
-  const scale = rect.width / BOARD_PX;
+  const size = Number(boardEl.dataset.size ?? 6);
+  const scale = rect.width / boardPx(size);
   const lx = (x - rect.left) / scale - INSET_PX;
   const ly = (y - rect.top) / scale - INSET_PX;
-  const span = CELL_PX * SIZE;
+  const span = CELL_PX * size;
   if (lx < 0 || ly < 0 || lx >= span || ly >= span) return -1;
-  const cell = Math.floor(ly / CELL_PX) * SIZE + Math.floor(lx / CELL_PX);
-  return cell >= 0 && cell < CELLS ? cell : -1;
+  const cell = Math.floor(ly / CELL_PX) * size + Math.floor(lx / CELL_PX);
+  return cell >= 0 && cell < size * size ? cell : -1;
 }
 
 interface Press { from: Source; look: DragLook | null; x0: number; y0: number; dragging: boolean; id: number; timer?: ReturnType<typeof setTimeout>; done: boolean }

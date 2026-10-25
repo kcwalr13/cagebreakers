@@ -1,12 +1,12 @@
 import { batch, computed, effect, signal } from '@preact/signals';
 import { type Posted, isMet, viewOf } from '../../core/commission';
-import { CELLS } from '../../core/grid';
 import { hintFor } from '../../core/rules';
 import type { CellHint } from '../PageView';
 import type { StationId } from '../../content/stations';
+import type { Size } from '../../core/grid';
 import { setupFor } from '../../core/meta';
 import {
-  type RoundRecord, type RunAction, type RunState, act, inkBlocker, legalCells, migrateRun, newRun, runPage, scoreOf, valuesOf,
+  type RoundRecord, type RunAction, type RunState, act, inkBlocker, legalCells, migrateRun, newRun, runPage, scoreOf, standardSetup, valuesOf,
 } from '../../core/run';
 import { profile, runId, settle } from '../meta';
 import { dailySeed, normalizeSeed } from '../../core/seed';
@@ -18,8 +18,23 @@ import { freshSeed } from '../state';
 import { readJson, storage, writeJson } from '../storage';
 
 /** Two runs can be in progress at once: your own, and today's Daily Page. */
-export type Slot = 'main' | 'daily';
-export const SAVE_KEYS: Record<Slot, string> = { main: 'cagebreakers.run', daily: 'cagebreakers.daily' };
+/** Your own garden, and one Daily Garden of each size, each saved on its own. */
+export type Slot = 'main' | 'daily' | 'daily5' | 'daily7' | 'daily8';
+export const SLOTS: readonly Slot[] = ['main', 'daily', 'daily5', 'daily7', 'daily8'];
+export const SAVE_KEYS: Record<Slot, string> = {
+  main: 'cagebreakers.run', daily: 'cagebreakers.daily', daily5: 'cagebreakers.daily5', daily7: 'cagebreakers.daily7', daily8: 'cagebreakers.daily8',
+};
+/** The save slot for a size's Daily Garden: 6×6 keeps the slot it always had. */
+export const dailySlot = (size: Size): Slot => (size === 6 ? 'daily' : `daily${size}` as Slot);
+/**
+ * The name a Daily Garden goes by in saves and best scores: the day for 6×6, as it always was,
+ * and the day and size for the others.
+ */
+export const dailyKey = (day: string, size: Size): string => (size === 6 ? day : `${day}/${size}`);
+export function dailyParts(key: string): { day: string; size: Size } {
+  const [day, size] = key.split('/');
+  return { day: day!, size: (Number(size) || 6) as Size };
+}
 const SLOT_KEY = 'cagebreakers.slot';
 const BEST_KEY = 'cagebreakers.daily.best';
 
@@ -29,10 +44,11 @@ export function loadSlot(sl: Slot): RunState | null {
   return s && normalizeSeed(s.seed) ? s : null;
 }
 
-export const slot = signal<Slot>(readJson<{ slot?: Slot }>(SLOT_KEY)?.slot === 'daily' ? 'daily' : 'main');
+const savedSlot = readJson<{ slot?: Slot }>(SLOT_KEY)?.slot;
+export const slot = signal<Slot>(savedSlot && SLOTS.includes(savedSlot) ? savedSlot : 'main');
 export const run = signal<RunState | null>(loadSlot(slot.value));
 // A battle-era save in the other slot is cleared too, so it never shows up as a run to continue.
-for (const sl of ['main', 'daily'] as Slot[]) if (storage.get(SAVE_KEYS[sl]) && !loadSlot(sl)) storage.remove(SAVE_KEYS[sl]);
+for (const sl of SLOTS) if (storage.get(SAVE_KEYS[sl]) && !loadSlot(sl)) storage.remove(SAVE_KEYS[sl]);
 storage.remove('cagebreakers.codex');
 
 /** The number in hand, by token id. */
@@ -122,12 +138,13 @@ export function openSlot(sl: Slot) {
   batch(() => { slot.value = sl; run.value = loadSlot(sl); resetView(); });
 }
 
-/** Opens today's Daily Page, continuing it if already begun (or starting it over when asked). */
-export function startDaily(day = today(), fresh = false) {
-  const saved = loadSlot('daily');
+/** Opens today's Daily Garden of a size, continuing it if already begun (or starting it over when asked). */
+export function startDaily(day = today(), fresh = false, size: Size = 6) {
+  const sl = dailySlot(size), key = dailyKey(day, size);
+  const saved = loadSlot(sl);
   batch(() => {
-    slot.value = 'daily';
-    run.value = saved?.daily === day && !fresh ? saved : newRun(dailySeed(day), { daily: day, id: runId() });
+    slot.value = sl;
+    run.value = saved?.daily === key && !fresh ? saved : newRun(dailySeed(key), { daily: key, id: runId(), setup: standardSetup(size) });
     resetView();
   });
 }
@@ -153,7 +170,7 @@ effect(() => {
   const s = run.value;
   if (s && s.phase !== 'arrange') settle(s, today());
 });
-export const values = computed(() => (run.value ? valuesOf(run.value) : new Array<number>(CELLS).fill(0)));
+export const values = computed(() => (run.value ? valuesOf(run.value) : new Array<number>(36).fill(0)));
 export const view = computed(() => (page.value ? viewOf(page.value, values.value) : null));
 export const sealed = computed(() => view.value?.sealed ?? new Set<number>());
 /** For each posted commission, whether the page meets it right now. */
@@ -194,7 +211,7 @@ export const legal = computed(() => {
  */
 export const hints = computed<(CellHint | null)[]>(() => {
   const p = page.value, h = holding.value, vals = values.value, ok = legal.value;
-  return Array.from({ length: CELLS }, (_, c) => {
+  return Array.from({ length: vals.length }, (_, c) => {
     if (!p || !h || !ok || c === h.origin) return null;
     if (!ok.has(c)) return 'blocked';
     if (vals[c]) return 'swap';
@@ -206,7 +223,7 @@ export const hints = computed<(CellHint | null)[]>(() => {
 export const blockers = computed(() => {
   const h = holding.value, vals = values.value;
   if (!h) return undefined;
-  return new Set(Array.from({ length: CELLS }, (_, c) => c).filter((c) => c !== h.origin && vals[c] === h.n));
+  return new Set(vals.map((_, c) => c).filter((c) => c !== h.origin && vals[c] === h.n));
 });
 
 let messageId = 0;

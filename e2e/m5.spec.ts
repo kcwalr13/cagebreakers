@@ -17,7 +17,8 @@ async function settled(p: PWPage) {
 
 test('the Daily Page is the same page for everyone today, kept apart from your own run', async ({ page: p }, info) => {
   await fresh(p);
-  await expect(p.getByRole('button', { name: /Daily Garden/ })).toContainText('same garden, deals and requests');
+  await expect(p.locator('.daily-card')).toContainText('One of each size, the same for everyone today');
+  await expect(p.locator('.daily-size')).toHaveCount(4);
   await p.screenshot({ path: info.outputPath('m5-01-title.png') });
   // Start your own run first, so the daily must not replace it.
   await p.getByRole('button', { name: /The Map/ }).click();
@@ -25,17 +26,27 @@ test('the Daily Page is the same page for everyone today, kept apart from your o
   await p.getByRole('button', { name: 'Begin' }).click();
   const ownSeed = await R(p, '(r) => r.state().seed');
   await p.getByRole('button', { name: 'Back to title' }).click();
-  await p.getByRole('button', { name: /Daily Garden/ }).click();
+  await p.getByRole('button', { name: /Daily Garden 6×6/ }).click();
   const daily = await R(p, '(r) => ({ seed: r.state().seed, daily: r.state().daily })') as { seed: string; daily: string };
   const expected = await p.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   expect(daily.daily).toBe(expected);
   expect(daily.seed).not.toBe(ownSeed);
   // The same day gives the same seed on a fresh phone.
   await fresh(p);
-  await p.getByRole('button', { name: /Daily Garden/ }).click();
+  await p.getByRole('button', { name: /Daily Garden 6×6/ }).click();
   expect(await R(p, '(r) => r.state().seed')).toBe(daily.seed);
   await p.getByRole('button', { name: 'Back to title' }).click();
-  await expect(p.getByRole('button', { name: /Daily Garden/ })).toContainText('Growing: week 1');
+  await expect(p.getByRole('button', { name: /Daily Garden 6×6/ })).toContainText('Week 1');
+  // Each size is its own garden, saved apart from the others.
+  await p.getByRole('button', { name: /Daily Garden 8×8/ }).click();
+  const big = await R(p, '(r) => ({ seed: r.state().seed, daily: r.state().daily, size: r.page().size })') as { seed: string; daily: string; size: number };
+  expect(big).toEqual({ seed: expect.any(String), daily: `${expected}/8`, size: 8 });
+  expect(big.seed).not.toBe(daily.seed);
+  await p.getByRole('button', { name: 'Back to title' }).click();
+  await p.getByRole('button', { name: /Daily Garden 6×6/ }).click();
+  expect(await R(p, '(r) => r.state().seed')).toBe(daily.seed);
+  await p.getByRole('button', { name: 'Back to title' }).click();
+  await expect(p.getByRole('button', { name: /Daily Garden 8×8/ })).toContainText('Week 1');
   await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
 });
 
