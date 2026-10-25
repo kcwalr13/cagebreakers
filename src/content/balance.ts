@@ -12,6 +12,8 @@ export const RUN = {
   finalReserve: 3,
   /** Each sealed cage pays this much gold when a round is inked. */
   sealGold: 1,
+  /** Placing every number dealt this round (not just all but one) pays this much gold when it's inked. */
+  fullHandGold: 1,
   /** Each drop of ink left at the end adds this much to the score. */
   inkBonus: 10,
 } as const;

@@ -105,16 +105,23 @@ test('a round: drag numbers in, read the commissions, ink it', async ({ page: p 
 
   // Inking waits until enough numbers are placed, then shows what the round earned.
   await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.locator('.status.warn')).toContainText('Place 1 more number');
+  await expect(p.locator('.status.warn')).toContainText('Place 1 more new number');
+  // New numbers are pencilled; the meter counts them, and placing every one earns the bonus.
+  await expect(p.locator('svg.board .token.fresh')).toHaveCount(2);
+  await expect(p.locator('.deal-meter .dm-pips i.on')).toHaveCount(2);
   await R(p, '(r) => r.solveHand()');
+  await expect(p.locator('.deal-meter.full')).toBeVisible();
+  await expect(p.locator('.status')).toContainText('Ready to ink, with every new number placed');
   await p.getByRole('button', { name: /Ink it/ }).click();
   await expect(p.getByRole('dialog')).toContainText('Round 1 inked');
+  await expect(p.getByRole('dialog')).toContainText('Every new number placed');
   await expect(p.getByRole('dialog')).toContainText(/cages? sealed|No seals/);
   await p.screenshot({ path: info.outputPath('m6-04-inked.png') });
   await p.getByRole('button', { name: 'On to round 2' }).click();
   await expect(p.locator('.hud-round')).toContainText('Round 2 of 8');
-  // Last round's numbers lost their red mark; this round's carry it.
+  // Last round's numbers are inked now (solid); this round's new ones are still in hand.
   expect(await p.locator('svg.board .token.fresh').count()).toBe(0);
+  await expect(p.locator('svg.board .token:not(.fresh)')).toHaveCount(4);
   await expect(p.locator('.hand-slot')).toHaveCount(4);
 });
 
@@ -130,9 +137,11 @@ test('anything on the page can move, but earlier numbers must go back before ink
   expect(await R(p, '(r, id) => r.state().tokens.find((t) => t.id === id).cell', old.id)).toBe(-1);
   await expect(p.locator('.hand-slot.stray')).toHaveCount(1);
   await R(p, '(r) => { const s = r.state(); const p = r.page(); for (const t of s.tokens.filter((t) => t.round === s.round)) { const c = [...Array(36).keys()].find((c) => !p.stones[c] && p.solution[c] === t.n && !r.state().tokens.some((o) => o.cell === c)); if (c !== undefined) r.dispatch({ type: "place", id: t.id, cell: c }); } }');
+  // Every new number is down, so the status says one of them could come off instead.
+  await expect(p.locator('.status')).toContainText(/Put your inked \d back on the page\. Only 3 of your 4 new ones must stay\./);
   await p.screenshot({ path: info.outputPath('m6-05-lifted.png') });
   await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.locator('.status.warn')).toContainText('Put your lifted number back on the page');
+  await expect(p.locator('.status.warn')).toContainText(/Put your inked \d back on the page/);
   // Put it back with a tap, then tap a cell.
   await p.locator('.hand-slot.stray').click();
   const back = await R(p, SOLUTION_CELL, old.id) as number;

@@ -155,9 +155,11 @@ function carefulRound(p: Player, rng: Rng) {
   let best: { target: Map<number, number>; w: number } | null = null;
   for (const set of sets) {
     const tokens = [...kept, ...set];
+    // Placing every new number pays the full-hand bonus, weighed like a bounty's gold.
+    const bonus = set.length === fresh.length && fresh.length > s.need ? RUN.fullHandGold * 10 : 0;
     for (let i = 0; i < 40; i++) {
       const target = witness(s, tokens, rng);
-      const w = worth(s, valuesWith(s, target));
+      const w = worth(s, valuesWith(s, target)) + bonus;
       if (!best || w > best.w) best = { target, w };
     }
   }

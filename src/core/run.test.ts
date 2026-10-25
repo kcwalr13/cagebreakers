@@ -7,7 +7,7 @@ import { createRng } from './rng';
 import { boardIsLatin } from './rules';
 import {
   type RunAction, type RunSetup, type RunState, STANDARD_SETUP, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun,
-  pageOf, replay, runPage, scoreOf, valuesOf, viewNow,
+  pageOf, placementOf, replay, runPage, scoreOf, valuesOf, viewNow,
 } from './run';
 import { STATIONS } from '../content/stations';
 import { NEW_PROFILE, setupFor } from './meta';
@@ -124,7 +124,7 @@ describe('a run', () => {
     const old = s.tokens.find((t) => t.round === 1)!;
     s = placeOnSolution(s);
     s = act(s, { type: 'place', id: old.id, cell: -1 }).state;
-    expect(inkBlocker(s)).toMatch(/lifted number/);
+    expect(inkBlocker(s)).toMatch(/Put your inked \d back on the page/);
     checkInvariants(s);
   });
 
@@ -152,10 +152,29 @@ describe('a run', () => {
     let s = placeOnSolution(newRun('PAYDAY'));
     const r = act(s, { type: 'ink' });
     const rec = r.inked!;
-    expect(r.state.gold).toBe(rec.bountyGold + rec.sealGold);
+    expect(r.state.gold).toBe(rec.bountyGold + rec.sealGold + rec.fullHandGold);
     expect(rec.sealGold).toBe(rec.seals * RUN.sealGold);
     s = r.state;
     expect(s.records).toHaveLength(1);
+  });
+
+  it('pays the full-hand bonus for placing every new number, never in the final round', () => {
+    const s = newRun('FULLHAND');
+    const some = act(placeOnSolution(s, s.need), { type: 'ink' });
+    expect(some.inked!.fullHand).toBe(false);
+    expect(some.inked!.fullHandGold).toBe(0);
+    expect(placementOf(placeOnSolution(s, s.need)).full).toBe(false);
+    const every = placeOnSolution(s);
+    expect(placementOf(every)).toMatchObject({ placed: s.need + 1, need: s.need, bonus: RUN.fullHandGold, full: true });
+    const all = act(every, { type: 'ink' });
+    expect(all.inked!.fullHand).toBe(true);
+    expect(all.state.gold).toBe(all.inked!.bountyGold + all.inked!.sealGold + RUN.fullHandGold);
+    // The final round must place everything, so there's no bonus to earn.
+    let f = newRun('FULLHAND');
+    while (f.round < RUN.rounds) f = act({ ...placeOnSolution(f), ink: RUN.startInk }, { type: 'ink' }).state;
+    expect(placementOf(f).bonus).toBe(0);
+    const last = act(placeOnSolution(f), { type: 'ink' });
+    expect(last.inked!.fullHand).toBe(false);
   });
 
   it('fills the whole page by the final round, then scores the run', () => {
@@ -298,5 +317,5 @@ describe('random play', () => {
       ),
       { numRuns: 50, seed: 20261024 },
     );
-  });
+  }, 30_000); // About 5 s on its own: heavy enough to need room when the suite runs in parallel.
 });

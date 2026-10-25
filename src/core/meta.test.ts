@@ -139,7 +139,7 @@ describe('tools', () => {
     expect(runPage(r.state).stones[stone]).toBe(0);
     // It can move, and it must stay on the page.
     const lifted = act(r.state, { type: 'place', id: t.id, cell: -1 }).state;
-    expect(act(lifted, { type: 'ink' }).reason).toMatch(/lifted number/);
+    expect(act(lifted, { type: 'ink' }).reason).toMatch(/Put your inked \d back on the page/);
     expect(act(s, { type: 'eraser', cell: p.stones.findIndex((n) => n === 0) }).reason).toMatch(/printed number/);
   });
 });

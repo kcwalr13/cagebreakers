@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
-import { RUN, TOOLS, type ToolId } from '../../content/balance';
+import { TOOLS, type ToolId } from '../../content/balance';
 import { cellsOf, describe, readout } from '../../core/commission';
-import { TOOL_NAMES, bagCount, inHand, tokenAt } from '../../core/run';
+import { type RunState, TOOL_NAMES, bagCount, inHand, placementOf, tokenAt } from '../../core/run';
 import { dismissTip, tip } from '../coach';
 import { Icon } from '../Icon';
 import type { IconName } from '../icons';
@@ -59,22 +59,22 @@ const handlers: PressHandlers = {
   },
 };
 
-function Ink({ ink }: { ink: number }) {
+function Ink({ ink, max }: { ink: number; max: number }) {
   return (
     <span class="hud-ink" role="img" aria-label={`${ink} ${ink === 1 ? 'drop' : 'drops'} of ink`}>
-      {Array.from({ length: RUN.startInk }, (_, i) => <Icon key={i} name="ink" class={`ico drop${i < ink ? '' : ' spent'}`} />)}
+      {Array.from({ length: Math.max(max, ink) }, (_, i) => <Icon key={i} name="ink" class={`ico drop${i < ink ? '' : ' spent'}`} />)}
     </span>
   );
 }
 
 function Hud() {
   const s = run.value!;
-  const final = s.round === RUN.rounds;
+  const final = s.round === s.setup.rounds;
   return (
     <header class="header hud-row">
       <button class="icon-btn" aria-label="Back to title" onClick={() => (screen.value = 'title')}><Icon name="back" /></button>
-      <span class="hud-round">{final ? 'Final round' : <>Round <b>{s.round}</b> of {RUN.rounds}</>}</span>
-      <Ink ink={s.ink} />
+      <span class="hud-round">{final ? 'Final round' : <>Round <b>{s.round}</b> of {s.setup.rounds}</>}</span>
+      <Ink ink={s.ink} max={s.setup.startInk} />
       <span class="hud-stat" aria-label={`${s.gold} gold`}><Icon name="gold" class="ico gold" /><b>{s.gold}</b></span>
       <button class="icon-btn" aria-label="Menu" onClick={() => (sheet.value = { kind: 'menu' })}><Icon name="menu" /></button>
     </header>
@@ -183,9 +183,47 @@ function Status() {
       </div>
     );
   }
-  const why = blocker.value;
-  const final = s.round === RUN.rounds;
-  return <div class="status" role="status">{why ? `${why}${final ? ' to fill the page' : ''}.` : final ? 'The page is full. Finish the run.' : 'Ready to ink. Rearrange as much as you like first.'}</div>;
+  const meter = placementOf(s).bonus > 0;
+  return (
+    <div class={`status${meter ? ' with-meter' : ''}`} role="status">
+      <span>{roundStatus(s, blocker.value)}</span>
+      {meter ? <DealMeter /> : null}
+    </div>
+  );
+}
+
+const listOf = (ns: readonly number[]) => (ns.length < 2 ? `${ns[0]}` : `${ns.slice(0, -1).join(', ')} and ${ns[ns.length - 1]}`);
+
+/** What the round still needs before it can be inked, in plain words. */
+function roundStatus(s: RunState, why: string | null): string {
+  const p = placementOf(s);
+  if (s.round === s.setup.rounds) return why ? `${why} to fill the page.` : 'The page is full. Finish the run.';
+  if (p.strays.length) return `${why}.${p.placed > p.need ? ` Only ${p.need} of your ${p.dealt} new ones must stay.` : ''}`;
+  if (why) return `${why}.`;
+  if (p.full || !p.bonus) return 'Ready to ink, with every new number placed.';
+  const spare = inHand(s).filter((t) => t.round === s.round).map((t) => t.n).sort((a, b) => a - b);
+  return `Ready to ink. Your spare ${listOf(spare)} ${spare.length === 1 ? 'goes' : 'go'} back for later.`;
+}
+
+/** New numbers placed this round: the first ones are needed, the rest earn the full-hand bonus. */
+function DealMeter() {
+  const s = run.value!;
+  const p = placementOf(s);
+  const explain = () => say(`Place at least ${p.need} of your ${p.dealt} new numbers to ink. Place all ${p.dealt} and the round pays ${p.bonus} more gold. Any you keep go back for a later round.`, false, 5000);
+  return (
+    <button
+      class={`deal-meter${p.full ? ' full' : ''}`}
+      aria-label={`${p.placed} of ${p.dealt} new numbers placed. Placing all ${p.dealt} pays ${p.bonus} more gold.`}
+      onClick={explain}
+    >
+      <span class="dm-pips" aria-hidden="true">
+        {Array.from({ length: p.dealt }, (_, i) => (
+          <i key={i} class={[i < p.placed ? 'on' : '', i >= p.need ? 'extra' : '', i === p.need ? 'gap' : ''].join(' ').trim()} />
+        ))}
+      </span>
+      <span class="dm-bonus" aria-hidden="true"><Icon name="gold" class="ico gold xs" />+{p.bonus}</span>
+    </button>
+  );
 }
 
 function Hand() {
@@ -202,7 +240,7 @@ function Hand() {
             <button
               key={t.id}
               class={`hand-slot${sel === t.id ? ' selected' : ''}${fresh ? '' : ' stray'}`}
-              aria-label={`Number ${t.n}${fresh ? '' : ', from an earlier round: it must go back on the page'}`}
+              aria-label={fresh ? `New number ${t.n}` : `Inked number ${t.n}: it must go back on the page`}
               aria-pressed={sel === t.id}
               onPointerDown={(e) => pressItem(e as unknown as PointerEvent, String(t.id))}
             >
@@ -212,7 +250,7 @@ function Hand() {
         })}
         {!hand.length ? <span class="hand-empty">All your numbers are on the page.</span> : null}
       </div>
-      {s.round < RUN.rounds ? (
+      {s.round < s.setup.rounds ? (
         <span class="hand-bag" aria-label={`${toCome} more numbers to come in later rounds`}>{toCome}<small>to come</small></span>
       ) : null}
     </div>
@@ -226,7 +264,7 @@ const TOOL_NAME = TOOL_NAMES;
 
 function Controls() {
   const s = run.value!;
-  const final = s.round === RUN.rounds;
+  const final = s.round === s.setup.rounds;
   const tools = s.setup.tools;
   const ink = () => {
     const why = blocker.value;

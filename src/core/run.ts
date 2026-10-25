@@ -32,6 +32,9 @@ export interface RoundRecord {
   bountyGold: number;
   seals: number;
   sealGold: number;
+  /** Every number dealt this round was on the page, so the full-hand bonus was paid. */
+  fullHand: boolean;
+  fullHandGold: number;
 }
 
 export type RunPhase = 'arrange' | 'done' | 'ruined';
@@ -185,13 +188,42 @@ export function legalCells(s: RunState, id: number): number[] {
   return out;
 }
 
+/**
+ * Where this round's numbers stand. New numbers are the ones dealt this round: at least `need` of
+ * them go on the page, and placing all of them earns the full-hand bonus. Inked numbers (from
+ * earlier rounds) must all be back on the page to ink.
+ */
+export interface Placement {
+  dealt: number;
+  placed: number;
+  need: number;
+  /** Inked numbers in your hand, which must go back on the page. */
+  strays: number[];
+  /** Gold for placing every new number; 0 when there's no choice (the final round). */
+  bonus: number;
+  /** Every new number is on the page and the bonus will be paid. */
+  full: boolean;
+}
+
+export function placementOf(s: RunState): Placement {
+  const fresh = dealtThisRound(s);
+  const placed = fresh.filter((t) => t.cell >= 0).length;
+  const final = s.round >= s.setup.rounds;
+  const bonus = !final && fresh.length > s.need ? RUN.fullHandGold : 0;
+  const strays = s.tokens.filter((t) => t.round < s.round && t.cell < 0).map((t) => t.n).sort((a, b) => a - b);
+  return { dealt: fresh.length, placed, need: s.need, strays, bonus, full: bonus > 0 && placed === fresh.length };
+}
+
 /** Why the round can't be inked yet, or null when it can. */
 export function inkBlocker(s: RunState): string | null {
   if (s.phase !== 'arrange') return 'The run is over';
-  const strays = s.tokens.filter((t) => t.round < s.round && t.cell < 0).length;
-  if (strays) return strays === 1 ? 'Put your lifted number back on the page' : `Put your ${strays} lifted numbers back on the page`;
-  const short = s.need - dealtThisRound(s).filter((t) => t.cell >= 0).length;
-  if (short > 0) return short === 1 ? 'Place 1 more number' : `Place ${short} more numbers`;
+  const p = placementOf(s);
+  if (p.strays.length) {
+    return p.strays.length === 1 ? `Put your inked ${p.strays[0]} back on the page` : `Put your ${p.strays.length} inked numbers back on the page`;
+  }
+  const short = p.need - p.placed;
+  const final = s.round >= s.setup.rounds;
+  if (short > 0) return short === 1 ? `Place 1 more${final ? '' : ' new'} number` : `Place ${short} more${final ? '' : ' new'} numbers`;
   return null;
 }
 
@@ -274,7 +306,7 @@ export function migrateRun(raw: unknown): RunState | null {
     erased: r.erased ?? [],
     gilded: r.gilded ?? false,
     revealed: r.revealed ?? [],
-    records: r.records ?? [],
+    records: (r.records ?? []).map((x) => ({ ...x, fullHand: x.fullHand ?? false, fullHandGold: x.fullHandGold ?? 0 })),
   };
 }
 
@@ -447,6 +479,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
       const blocked = inkBlocker(s);
       if (blocked) return refuse(prev, blocked);
       const view = viewNow(s);
+      const placement = placementOf(s);
       const required = s.posted.find((p) => p.required);
       const met = required ? isMet(required.c, view) : null;
       const won = s.posted.filter((p) => !p.required && isMet(p.c, view));
@@ -455,10 +488,11 @@ export function act(prev: RunState, a: RunAction): ActResult {
         round: s.round, required: met, blotted: met === false && s.blotter, inkSpilled,
         bounties: won.length, bountyGold: won.reduce((g, p) => g + p.gold, 0),
         seals: view.sealed.size, sealGold: view.sealed.size * RUN.sealGold * (s.gilded ? 2 : 1),
+        fullHand: placement.full, fullHandGold: placement.full ? placement.bonus : 0,
       };
       s.records.push(record);
       s.ink -= inkSpilled;
-      s.gold += record.bountyGold + record.sealGold;
+      s.gold += record.bountyGold + record.sealGold + record.fullHandGold;
       // Unplaced numbers go back to the bag.
       for (const t of s.tokens) if (t.cell < 0) s.bag[t.n]!++;
       s.tokens = s.tokens.filter((t) => t.cell >= 0);

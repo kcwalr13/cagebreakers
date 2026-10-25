@@ -18,7 +18,7 @@ const TOOL_TEXT: Record<ToolId, string> = {
   redraw: "Swaps the numbers in your hand that were dealt this round for different ones from those still to come. Numbers on the page stay put. Your new numbers always keep all three commissions possible together.",
   lens: 'Shows the number the hidden solution has in one empty cell. It stays shown for the rest of the run.',
   blotter: 'For this round only: missing the required commission spills no ink.',
-  quill: 'Draws one extra number for this round. You may place it or leave it; a spare comes back later.',
+  quill: 'Draws one extra new number for this round. Like the others, you can keep it back, but the full-hand bonus asks for every new number.',
   gilder: 'For this round only: every sealed cage pays double when you ink.',
   eraser: 'Lifts a printed number off the page into your hand. From then on it moves like your own, and like them it must be on the page when you ink. Refused if it would make a commission impossible.',
   inkwell: 'Refills one drop of ink, up to what you started with.',
@@ -67,7 +67,8 @@ export function RoundSheet() {
   const r = li.record;
   const over = s.phase !== 'arrange';
   const title = s.phase === 'done' ? 'The page is full' : s.phase === 'ruined' ? 'The page is ruined' : `Round ${r.round} inked`;
-  const gained = r.bountyGold + r.sealGold;
+  const gained = r.bountyGold + r.sealGold + r.fullHandGold;
+  const choice = r.round < s.setup.rounds && (r.fullHand || li.spare.length > 0);
   return (
     <>
       <div class="sheet-head"><h2 class={`verdict${s.phase === 'ruined' ? ' lost' : ''}`}>{title}</h2></div>
@@ -88,8 +89,16 @@ export function RoundSheet() {
           <span class="il-mark"><Icon name="seal" class="ico" /></span>
           <span class="il-text"><span>{r.seals} {r.seals === 1 ? 'cage' : 'cages'} sealed</span><span class="il-out">{r.seals ? `+${r.sealGold} gold` : 'No seals this round'}</span></span>
         </li>
+        {choice ? (
+          <li class={r.fullHand ? 'ok' : 'no'}>
+            <span class="il-mark">{r.fullHand ? <Icon name="check" class="ico" /> : null}</span>
+            <span class="il-text">
+              <span>{r.fullHand ? 'Every new number placed' : `Kept back: ${li.spare.join(' and ')}, ${li.spare.length === 1 ? 'it comes' : 'they come'} back later`}</span>
+              <span class="il-out">{r.fullHand ? `+${r.fullHandGold} gold` : 'No bonus'}</span>
+            </span>
+          </li>
+        ) : null}
       </ul>
-      {li.spare.length ? <p class="muted-sm">{li.spare.length === 1 ? `Your spare ${li.spare[0]} comes back in a later round.` : `Your spare ${li.spare.join(' and ')} come back in later rounds.`}</p> : null}
       <p class="ink-total">
         {gained ? <>+{gained} gold this round. </> : null}
         {s.phase === 'ruined' ? 'No ink left.' : `${s.ink} ${s.ink === 1 ? 'drop' : 'drops'} of ink left.`}
@@ -152,7 +161,7 @@ function RunSummary() {
               <td>{r.round}</td>
               <td class={r.required === false ? (r.blotted ? 'soft' : 'miss') : ''}>{r.required === null ? '–' : r.required ? 'met' : r.blotted ? 'blotted' : 'missed'}</td>
               <td>{r.bounties}</td>
-              <td>+{r.bountyGold + r.sealGold}</td>
+              <td>+{r.bountyGold + r.sealGold + r.fullHandGold}</td>
             </tr>
           ))}
         </tbody>

@@ -15,6 +15,7 @@ const pct = (x: number) => `${(100 * x).toFixed(0)}%`;
 const quant = (xs: number[], q: number) => { const s = xs.slice().sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))] ?? 0; };
 
 console.log('STATIONS (fresh profile, no upgrades)');
+const thirdStar: number[] = [];
 for (const st of STATIONS) {
   for (const bot of ['careful', 'tidy'] as BotName[]) {
     const scores: number[] = [];
@@ -24,6 +25,7 @@ for (const st of STATIONS) {
       if (state.phase === 'done') { filled++; scores.push(scoreOf(state).total); }
       stars[starsFor(st, state)]!++;
     }
+    if (bot === 'careful') thirdStar.push(stars[3]! / N);
     console.log(`  ${st.name.padEnd(20)} ${bot.padEnd(8)} filled ${pct(filled / N).padStart(4)}  score median ${quant(scores, 0.5)} p75 ${quant(scores, 0.75)} p90 ${quant(scores, 0.9)}  stars 1/2/3: ${pct(stars[1]! / N)} ${pct(stars[2]! / N)} ${pct(stars[3]! / N)}  (marks ${st.stars.join('/')})`);
   }
 }
@@ -56,5 +58,7 @@ console.log(`  leaf per run: median ${quant(leafPerRun, 0.5)}, p90 ${quant(leafP
 console.log(`  first purchase after run ${quant(firstRunToOwn, 0.5)} (median)`);
 console.log(`  every station filled after ${quant(runsToAllStations, 0.5)} runs (median)`);
 console.log(`  everything owned after ${quant(runsToAll, 0.5)} runs (median; -1 = not within 120)`);
+const lo = Math.min(...thirdStar), hi = Math.max(...thirdStar);
+console.log(`\nTARGET Careful earns the third star in 15–40% of runs at every station: ${pct(lo)}–${pct(hi)} ${lo >= 0.15 && hi <= 0.4 ? 'pass' : 'FAIL'}`);
 const target = quant(runsToAll, 0.5);
-console.log(`\nTARGET a Careful player owns everything after 15–25 runs: ${target} ${target >= 15 && target <= 25 ? 'pass' : 'FAIL'}`);
+console.log(`TARGET a Careful player owns everything after 15–25 runs: ${target} ${target >= 15 && target <= 25 ? 'pass' : 'FAIL'}`);
