@@ -256,6 +256,6 @@ export function useAim(cell: number) {
     aim.value = null;
     const p = page.value!;
     if (tool === 'lens') say(`Hint: a ${p.solution[cell]} belongs there.`, false, 3600);
-    else say('That number is yours now: move it like any other.', false, 3600);
+    else say('Dug up: that number is yours now, free to move like any other.', false, 3600);
   }
 }

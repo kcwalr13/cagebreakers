@@ -1,14 +1,16 @@
-# Cagebreakers
+# Plot Twist
 
-An offline number puzzle for phones on airplanes: one KenKen page, filled in over eight rounds.
+An offline number puzzle for phones on airplanes: one KenKen garden, planted over eight weeks.
 
-No number may repeat in a row or column, and an outlined cage seals in gold only when its numbers hit the printed target. Each round deals a few more numbers and posts three commissions ("Row 3 adds to 12 or more", "Seal a × cage", "No 6 in column 2"). Anything on the page can move, so each round's commissions pull last round's page apart. Miss the required one and you spill a drop of ink; bounties and seals pay gold. In the final round the last numbers go in, and the page is full.
+No number may repeat in a row or column, and an outlined plot blooms only when its numbers hit the target in its corner. Each week deals a few more numbers and brings three requests ("Row 3 adds to 12 or more", "Make a × plot bloom", "No 6 in column 2"). Anything in the garden can move, so each week's requests pull last week's garden apart. Miss the required one and a drop of water dries up; bonus requests and blooming plots pay coins. In harvest week the last numbers go in, and the garden is full.
 
-Above the runs sits the Scriptorium. Filled pages earn gold leaf, which buys tools, upgrades and styles that stay with you. A map of six stations, each a page with a twist, opens as you fill them, and a library keeps every page you've filled.
+Between gardens, a finished garden earns seeds, which buy tools, upgrades and looks in the Potting Shed that stay with you. A map of six gardens, each with a twist, opens as you finish them, and the Herbarium keeps every garden you've grown.
 
 **Play:** https://kcwalr13.github.io/cagebreakers/ — open it once with a connection, add it to your home screen, and it works in airplane mode from then on.
 
-The design lives in the [Cagebreakers design doc](https://claude.ai/artifact/NJVkJZeMok9X2xViKNu7mY).
+The design lives in the [Plot Twist design doc](https://claude.ai/artifact/NJVkJZeMok9X2xViKNu7mY).
+
+The game was called Cagebreakers until M8. The code, the web address, save codes and storage keys keep that name and the original words (cage, seal, page, ink, gold, leaf, station, scriptorium), so saves carry over; only what players see speaks garden. The design doc's Garden words table maps one to the other.
 
 ## Status
 
@@ -21,6 +23,7 @@ The design lives in the [Cagebreakers design doc](https://claude.ai/artifact/NJV
 | M5 · Flight-Ready | Settings and quiet sound, the Daily Page, the Codex, save codes, a first chapter that teaches by playing, an art pass | Built |
 | M6 · Commissions | The battle is retired: numbers are the only pieces, each round deals more of them under three commissions, and the final round fills the page | Built |
 | M7 · The Scriptorium | Gold leaf, a map of six stations with stars, a shop of tools, upgrades and styles, the satchel and the library | Built |
+| M8 · Plot Twist | The whole game becomes a garden with the same rules: plots that bloom, weeks, water, coins and seeds, and four looks (Botanical, Night Garden, Cottage Garden and Greenhouse) | Built |
 
 ## Working on it
 
@@ -50,4 +53,4 @@ The build uses a relative base path and keeps storage behind `src/app/storage.ts
 
 ## Credits
 
-Icons by Lorc, Delapouite and contributors at [game-icons.net](https://game-icons.net), CC BY 3.0. Typefaces Alegreya and Alegreya Sans by Huerta Tipográfica, SIL Open Font License (licenses in `src/app/fonts`).
+Icons by Lorc, Delapouite and contributors at [game-icons.net](https://game-icons.net), CC BY 3.0. Typefaces Fraunces (Undercase Type), Alegreya Sans (Huerta Tipográfica), Nunito and DM Sans, all under the SIL Open Font License (licenses in `src/app/fonts`).

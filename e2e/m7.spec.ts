@@ -25,25 +25,25 @@ async function noSmallButtons(p: PWPage) {
   expect(small).toEqual([]);
 }
 
-test('the map: begin at the Copy Desk, fill it, earn leaf and open the next stations', async ({ page: p }, info) => {
+test('the map: begin in the Kitchen Garden, finish it, save seeds and open the next gardens', async ({ page: p }, info) => {
   await fresh(p);
   await p.getByRole('button', { name: /The Map/ }).click();
   await expect(p.locator('.station')).toHaveCount(6);
   await expect(p.locator('.station.locked')).toHaveCount(5);
   await noSmallButtons(p);
   await p.screenshot({ path: info.outputPath('m7-01-map.png') });
-  await p.getByRole('button', { name: /The Copy Desk/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('Fill the page');
+  await p.getByRole('button', { name: /The Kitchen Garden/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('Fill the garden');
   await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(1);
   await p.waitForTimeout(250); // let the sheet finish rising
   await p.screenshot({ path: info.outputPath('m7-02-station.png') });
   await p.getByRole('button', { name: 'Begin' }).click();
-  await expect(p.locator('.hud-round')).toContainText('Round 1 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
   expect(await R(p, '(r) => r.state().setup.station')).toBe('copy-desk');
   expect(await R(p, FINISH)).toBe('done');
   await p.keyboard.press('Escape');
-  await expect(p.locator('.leaf-panel')).toContainText(/\+\d+ gold leaf/);
-  await expect(p.locator('.leaf-panel')).toContainText('Opened on the map: The Cloister and The Bare Vellum');
+  await expect(p.locator('.leaf-panel')).toContainText(/\+\d+ seeds?/);
+  await expect(p.locator('.leaf-panel')).toContainText('Opened on the map: The Rock Garden and The Fallow Field');
   await p.screenshot({ path: info.outputPath('m7-03-summary.png') });
   const leaf = await R(p, '(r) => r.profile().leaf') as number;
   expect(leaf).toBeGreaterThan(0);
@@ -57,7 +57,7 @@ test('the map: begin at the Copy Desk, fill it, earn leaf and open the next stat
   await expect(p.locator('.leaf-count')).toContainText(String(leaf));
 });
 
-test('the scriptorium sells tools, upgrades and styles; the satchel carries tools into a run', async ({ page: p }, info) => {
+test('the Potting Shed sells tools, upgrades and looks; the tool belt carries tools into a garden', async ({ page: p }, info) => {
   await fresh(p);
   await R(p, `(r) => r.setProfile({ ...r.profile(), leaf: 200, filled: ['copy-desk', 'cloister', 'bare-vellum'] })`);
   await p.goto('./?test&nosw&screen=shop');
@@ -65,17 +65,17 @@ test('the scriptorium sells tools, upgrades and styles; the satchel carries tool
   await noSmallButtons(p);
   await p.screenshot({ path: info.outputPath('m7-04-shop.png'), fullPage: true });
   await p.getByRole('button', { name: /Buy Extra/ }).click();
-  await p.getByRole('button', { name: /Buy Patron's Purse for/ }).click();
-  await p.getByRole('button', { name: /Buy Newsprint/ }).click();
+  await p.getByRole('button', { name: /Buy Seed Money for/ }).click();
+  await p.getByRole('button', { name: /Buy Cottage Garden/ }).click();
   expect(await R(p, '(r) => r.profile().leaf')).toBe(200 - 20 - 20 - 30);
   await expect(p.locator('.shop-item.owned')).toHaveCount(3);
   // A style, once bought, can be worn.
-  await p.locator('.shop-item', { hasText: 'Newsprint' }).getByRole('button', { name: 'Use' }).click();
+  await p.locator('.shop-item', { hasText: 'Cottage Garden' }).getByRole('button', { name: 'Use' }).click();
   await expect.poll(() => p.evaluate(() => document.documentElement.className)).toContain('theme-newsprint');
   // Extra went straight into the satchel beside Hint; begin with both.
   await p.goto('./?test&nosw&screen=map');
   await p.waitForFunction(() => !!(window as Any).__run);
-  await p.getByRole('button', { name: /The Cloister/ }).click();
+  await p.getByRole('button', { name: /The Rock Garden/ }).click();
   await expect(p.locator('.satchel-tool[aria-pressed="true"]')).toHaveCount(2);
   await expect(p.locator('.satchel-tool', { hasText: 'Extra' })).toHaveAttribute('aria-pressed', 'true');
   await p.getByRole('button', { name: 'Begin' }).click();
@@ -88,7 +88,7 @@ test('the scriptorium sells tools, upgrades and styles; the satchel carries tool
   await p.screenshot({ path: info.outputPath('m7-05-newsprint-quill.png') });
 });
 
-test('the library binds every filled page', async ({ page: p }, info) => {
+test('the Herbarium presses every finished garden', async ({ page: p }, info) => {
   await fresh(p);
   await R(p, `(r) => r.startStation('copy-desk')`);
   await p.goto('./?test&nosw&screen=run');
@@ -97,30 +97,30 @@ test('the library binds every filled page', async ({ page: p }, info) => {
   await p.goto('./?test&nosw&screen=library');
   await p.waitForFunction(() => !!(window as Any).__run);
   await expect(p.locator('.book')).toHaveCount(1);
-  await expect(p.locator('.book')).toContainText('The Copy Desk');
+  await expect(p.locator('.book')).toContainText('The Kitchen Garden');
   await noSmallButtons(p);
   await p.locator('.book').click();
   await expect(p.getByRole('dialog')).toContainText('points');
   await p.screenshot({ path: info.outputPath('m7-06-library.png') });
 });
 
-test('the Daily Page ignores upgrades and the satchel', async ({ page: p }) => {
+test('the Daily Garden ignores upgrades and the tool belt', async ({ page: p }) => {
   await fresh(p);
   await R(p, `(r) => r.setProfile({ ...r.profile(), owned: ['purse-1', 'purse-2', 'quill', 'deeper-inkwell'], satchel: ['quill', 'lens'] })`);
   await p.goto('./?test&nosw&screen=title');
   await p.waitForFunction(() => !!(window as Any).__run);
-  await p.getByRole('button', { name: /Daily Page/ }).click();
+  await p.getByRole('button', { name: /Daily Garden/ }).click();
   const s = await R(p, '(r) => ({ gold: r.state().gold, ink: r.state().ink, tools: r.state().setup.tools, station: r.state().setup.station })');
   expect(s).toEqual({ gold: 0, ink: 3, tools: ['lens'], station: null });
 });
 
-test('Erase turns a printed number into one of yours', async ({ page: p }) => {
+test('Dig turns a stone into one of your numbers', async ({ page: p }) => {
   await fresh(p);
   await R(p, `(r) => { r.setProfile({ ...r.profile(), owned: ['eraser'], satchel: ['eraser', 'lens'], filled: ['copy-desk', 'cloister'] }); r.startStation('cloister'); r.load({ ...r.state(), gold: 20 }); }`);
   await p.goto('./?test&nosw&screen=run');
   await p.waitForFunction(() => !!(window as Any).__run);
-  await p.getByRole('button', { name: /^Erase/ }).click();
-  await p.getByRole('button', { name: /Choose a printed number for/ }).click();
+  await p.getByRole('button', { name: /^Dig/ }).click();
+  await p.getByRole('button', { name: /Choose a stone for/ }).click();
   await expect(p.locator('svg.board .tool-target').first()).toBeVisible();
   // Try printed numbers until one may be lifted (a lift that would break a commission is refused).
   const lifted = await R(p, `(r) => { const p = r.page(); for (let c = 0; c < 36; c++) if (p.stones[c] && r.dispatch({ type: 'eraser', cell: c })) return c; return -1; }`) as number;
@@ -136,7 +136,7 @@ test("the back gesture steps back like the back arrow, and leaves the app only f
   await expect(p.getByRole('button', { name: /The Map/ })).toBeVisible();
   // A sheet closes first, then the screen goes back.
   await p.getByRole('button', { name: /The Map/ }).click();
-  await p.getByRole('button', { name: /The Copy Desk/ }).click();
+  await p.getByRole('button', { name: /The Kitchen Garden/ }).click();
   await expect(p.getByRole('dialog')).toBeVisible();
   await p.goBack();
   await expect(p.getByRole('dialog')).toHaveCount(0);

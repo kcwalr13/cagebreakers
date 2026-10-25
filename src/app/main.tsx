@@ -9,14 +9,15 @@ import { profile } from './meta';
 import { exposeTestHooks, theme } from './state';
 import './theme.css';
 
-// Theme: follow the phone unless the player picked one, and keep the browser chrome in step.
+// Look: Botanical, or Night Garden after dark, unless the player picked one; keep the browser chrome in step.
+// Cottage (newsprint in code) and Greenhouse (neon) are light looks bought in the Potting Shed.
 const dark = window.matchMedia('(prefers-color-scheme: dark)');
 const applyTheme = () => {
-  // A style the scriptorium no longer holds (after loading another phone's save) falls back to the phone's choice.
+  // A look the Potting Shed no longer holds (after loading another phone's save) falls back to the phone's choice.
   const t = (theme.value === 'newsprint' || theme.value === 'neon') && !profile.value.owned.includes(theme.value) ? 'system' : theme.value;
-  const isDark = t === 'dark' || t === 'neon' || (t === 'system' && dark.matches);
+  const isDark = t === 'dark' || (t === 'system' && dark.matches);
   document.documentElement.className = `${isDark ? 'theme-dark' : 'theme-light'}${t === 'newsprint' ? ' theme-newsprint' : t === 'neon' ? ' theme-neon' : ''}`;
-  const bg = t === 'newsprint' ? '#E9E6DE' : t === 'neon' ? '#0B0B14' : isDark ? '#15100C' : '#E2D3B4';
+  const bg = t === 'newsprint' ? '#FFF3E3' : t === 'neon' ? '#EDF2EE' : isDark ? '#11170F' : '#E6E9D8';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
 };
 effect(applyTheme);

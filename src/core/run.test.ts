@@ -83,7 +83,7 @@ describe('a run', () => {
     for (let c = 0; c < CELLS; c++) {
       const r = act(s, { type: 'place', id: t.id, cell: c });
       expect(r.ok, `cell ${c}`).toBe(legal.has(c));
-      if (p.stones[c]) expect(r.reason).toMatch(/printed/);
+      if (p.stones[c]) expect(r.reason).toMatch(/stone/);
       else if (!r.ok) expect(r.reason).toMatch(/already a \d in (row|column) \d/);
     }
     s = act(s, { type: 'place', id: t.id, cell: [...legal][0]! }).state;
@@ -109,7 +109,7 @@ describe('a run', () => {
   it("won't ink until enough of this round's numbers and all earlier ones are on the page", () => {
     let s = newRun('INKWAIT');
     expect(act(s, { type: 'ink' }).ok).toBe(false);
-    expect(inkBlocker(s)).toMatch(/Place \d more/);
+    expect(inkBlocker(s)).toMatch(/Plant \d more/);
     s = placeOnSolution(s, s.need);
     expect(inkBlocker(s)).toBeNull();
     s = act(s, { type: 'ink' }).state;
@@ -122,7 +122,7 @@ describe('a run', () => {
     s = act(s, { type: 'place', id: old!.id, cell: -1 }).state;
     expect(inkBlocker(s)).toBeNull();
     s = act(s, { type: 'place', id: other!.id, cell: -1 }).state;
-    expect(inkBlocker(s)).toBe('Place 1 more number');
+    expect(inkBlocker(s)).toBe('Plant 1 more number');
     checkInvariants(s);
   });
 

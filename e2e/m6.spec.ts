@@ -45,9 +45,9 @@ const center = async (p: PWPage, sel: string, nth = 0) => {
 const SOLUTION_CELL = `(r, id) => { const s = r.state(); const p = r.page(); const t = s.tokens.find((x) => x.id === id);
   return [...Array(36).keys()].find((c) => !p.stones[c] && p.solution[c] === t.n && !s.tokens.some((o) => o.cell === c) && r.legalCells(id).includes(c)); }`;
 
-test('a round: drag numbers in, read the commissions, ink it', async ({ page: p }, info) => {
+test('a week: drag numbers in, read the requests, water it', async ({ page: p }, info) => {
   await runOn(p, 'RQUND6');
-  await expect(p.locator('.hud-round')).toContainText('Round 1 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
   await expect(p.locator('.commission')).toHaveCount(3);
   await expect(p.locator('.commission.required')).toHaveCount(1);
   await expect.poll(() => handCount(p)).toBe(4);
@@ -67,7 +67,7 @@ test('a round: drag numbers in, read the commissions, ink it', async ({ page: p 
       if (bad !== undefined) return { i, id: hand[i].id, bad }; } return null; }`) as { i: number; id: number; bad: number };
   expect(pick).not.toBeNull();
   await p.locator('.hand-slot').nth(pick.i).click();
-  await expect(p.locator('.status')).toContainText(/Bright cells take the \d/);
+  await expect(p.locator('.status')).toContainText(/Bright squares take the \d/);
   // Holding a number lights the cells that can take it, shades the ones that can't, and rings what blocks them.
   expect(await p.locator('svg.board .hint-open, svg.board .hint-seals').count()).toBeGreaterThan(0);
   expect(await p.locator('svg.board .hint-blocked').count()).toBeGreaterThan(0);
@@ -100,30 +100,30 @@ test('a round: drag numbers in, read the commissions, ink it', async ({ page: p 
   expect(small).toEqual([]);
   const { scroll, client } = await p.evaluate(() => ({ scroll: document.documentElement.scrollHeight, client: innerHeight }));
   expect(scroll).toBeLessThanOrEqual(client);
-  await expect(p.getByRole('button', { name: /Ink it/ })).toBeInViewport({ ratio: 1 });
+  await expect(p.getByRole('button', { name: /Water it/ })).toBeInViewport({ ratio: 1 });
   await expect(p.locator('.commission').last()).toBeInViewport({ ratio: 1 });
   const cell = await p.evaluate(() => { const b = document.querySelector('.board-wrap svg.board')!.getBoundingClientRect(); return (b.width / 362) * 59; });
   expect(cell).toBeGreaterThanOrEqual(44);
 
   // Inking waits until enough numbers are placed, then shows what the round earned.
-  await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.locator('.status.warn')).toContainText('Place 1 more number');
-  await expect(p.locator('.status')).toContainText(/Place 1 more number, or all 2 for \d bonus gold\./);
+  await p.getByRole('button', { name: /Water it/ }).click();
+  await expect(p.locator('.status.warn')).toContainText('Plant 1 more number');
+  await expect(p.locator('.status')).toContainText(/Plant 1 more number, or all 2 for \d bonus coins?\./);
   await R(p, '(r) => r.solveHand()');
-  await expect(p.locator('.status')).toContainText(/Every number is placed: \d bonus gold when you ink\./);
-  await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('Round 1 inked');
-  await expect(p.getByRole('dialog')).toContainText('Every number placed');
-  await expect(p.getByRole('dialog')).toContainText(/cages? sealed|No seals/);
+  await expect(p.locator('.status')).toContainText(/Every number is planted: \d bonus coins? when you water\./);
+  await p.getByRole('button', { name: /Water it/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('Week 1 watered');
+  await expect(p.getByRole('dialog')).toContainText('Every number planted');
+  await expect(p.getByRole('dialog')).toContainText(/plots? in bloom|No blooms/);
   await p.screenshot({ path: info.outputPath('m6-04-inked.png') });
-  await p.getByRole('button', { name: 'On to round 2' }).click();
-  await expect(p.locator('.hud-round')).toContainText('Round 2 of 8');
+  await p.getByRole('button', { name: 'On to week 2' }).click();
+  await expect(p.locator('.hud-round')).toContainText('Week 2 of 8');
   // Last round's numbers stay on the page; this round's are in hand. They all look the same.
   await expect(p.locator('svg.board .token')).toHaveCount(4);
   await expect.poll(() => handCount(p)).toBe(4);
 });
 
-test('anything on the page can move, All to hand clears it, and any one number may stay out', async ({ page: p }, info) => {
+test('anything in the garden can move, Pick up all clears it, and any one number may stay out', async ({ page: p }, info) => {
   await runOn(p, 'MQVERS');
   await R(p, `(r) => { r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.keyboard.press('Escape');
@@ -133,32 +133,32 @@ test('anything on the page can move, All to hand clears it, and any one number m
   const hand = await center(p, '.hand');
   await dragTo(p, from, { x: hand.x, y: hand.y - 56 + 10 });
   expect(await R(p, '(r, id) => r.state().tokens.find((t) => t.id === id).cell', old.id)).toBe(-1);
-  await expect(p.locator('.status')).toContainText(/Place 4 more numbers, or all 5 for \d bonus gold\./);
+  await expect(p.locator('.status')).toContainText(/Plant 4 more numbers, or all 5 for \d bonus coins?\./);
   // Everything off the page at once, and back again.
-  await p.getByRole('button', { name: 'All to hand' }).click();
+  await p.getByRole('button', { name: 'Pick up all' }).click();
   await expect(p.locator('svg.board .token')).toHaveCount(0);
   await expect.poll(() => handCount(p)).toBe(8);
   await p.screenshot({ path: info.outputPath('m6-05-all-to-hand.png') });
   await p.getByRole('button', { name: 'Put back' }).click();
   await expect(p.locator('svg.board .token')).toHaveCount(3);
-  await expect(p.getByRole('button', { name: 'All to hand' })).toBeEnabled();
+  await expect(p.getByRole('button', { name: 'Pick up all' })).toBeEnabled();
   // Any one number may stay in hand, whenever it was dealt.
   await R(p, '(r) => r.solveHand()');
   await R(p, '(r, id) => r.dispatch({ type: "place", id, cell: -1 })', old.id);
-  await expect(p.locator('.status')).toContainText(/Ready to ink\. Keep the \d for later, or place it for \d bonus gold\./);
-  await p.getByRole('button', { name: /Ink it/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('Round 2 inked');
+  await expect(p.locator('.status')).toContainText(/Ready to water\. Keep the \d for later, or plant it for \d bonus coins?\./);
+  await p.getByRole('button', { name: /Water it/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('Week 2 watered');
   await expect(p.getByRole('dialog')).toContainText('Kept back');
 });
 
-test('gold buys a Hint', async ({ page: p }, info) => {
+test('coins buy a Hint', async ({ page: p }, info) => {
   await runOn(p, 'TQQKSA');
   await R(p, '(r) => r.load({ ...r.state(), gold: 20 })');
   await expect(p.locator('.run-controls .tool')).toHaveCount(1);
   await p.getByRole('button', { name: /^Hint/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('Shows the right number for one empty cell');
+  await expect(p.getByRole('dialog')).toContainText('Shows the right number for one empty square');
   await p.screenshot({ path: info.outputPath('m6-06-hint-sheet.png') });
-  await p.getByRole('button', { name: 'Choose a cell' }).click();
+  await p.getByRole('button', { name: 'Choose a square' }).click();
   await expect(p.locator('svg.board .tool-target').first()).toBeVisible();
   const empty = await R(p, '(r) => [...Array(36).keys()].find((c) => !r.page().stones[c] && !r.state().tokens.some((t) => t.cell === c))') as number;
   const ep = await cellPoint(p, empty);
@@ -169,7 +169,7 @@ test('gold buys a Hint', async ({ page: p }, info) => {
   expect(await R(p, '(r) => r.state().gold')).toBe(17);
 });
 
-test('a double tap sends a number on the page back to the hand', async ({ page: p }) => {
+test('a double tap picks a planted number back up', async ({ page: p }) => {
   await runOn(p, 'DQBTAP');
   await R(p, '(r) => r.solveHand()');
   const t = await R(p, '(r) => r.state().tokens.find((t) => t.cell >= 0)') as { id: number; cell: number };
@@ -186,16 +186,16 @@ test('a double tap sends a number on the page back to the hand', async ({ page: 
   expect(await R(p, '(r, id) => r.state().tokens.find((t) => t.id === id).cell', u.id)).toBe(u.cell);
 });
 
-test('a run resumes after the game is closed', async ({ page: p }) => {
+test('a garden resumes after the game is closed', async ({ page: p }) => {
   await runOn(p, 'RESUME');
   for (let i = 0; i < 2; i++) await R(p, `(r) => { r.load({ ...r.state(), ink: 3 }); r.solveHand(); r.dispatch({ type: 'ink' }); }`);
   await p.goto('./?test&nosw&screen=title');
-  await expect(p.getByRole('button', { name: /Continue run/ })).toContainText(/round 3 of 8/i);
-  await p.getByRole('button', { name: /Continue run/ }).click();
-  await expect(p.locator('.hud-round')).toContainText('Round 3 of 8');
+  await expect(p.getByRole('button', { name: /Keep growing/ })).toContainText(/week 3 of 8/i);
+  await p.getByRole('button', { name: /Keep growing/ }).click();
+  await expect(p.locator('.hud-round')).toContainText('Week 3 of 8');
 });
 
-test('a whole run fills the page, then is scored', async ({ page: p }, info) => {
+test('a whole garden fills, then is harvested and scored', async ({ page: p }, info) => {
   test.setTimeout(90_000);
   await runOn(p, 'WHQKE6');
   for (let r = 1; r < 8; r++) {
@@ -203,22 +203,22 @@ test('a whole run fills the page, then is scored', async ({ page: p }, info) => 
     await p.keyboard.press('Escape');
     if (r === 4) await p.screenshot({ path: info.outputPath('m6-08-midrun.png') });
   }
-  await expect(p.locator('.hud-round')).toContainText('Final round');
-  await expect(p.locator('.commission').first()).toContainText('Fill every cell');
+  await expect(p.locator('.hud-round')).toContainText('Harvest week');
+  await expect(p.locator('.commission').first()).toContainText('Fill every square');
   await p.screenshot({ path: info.outputPath('m6-09-final-round.png') });
   await R(p, '(r) => r.solveHand()');
-  await p.getByRole('button', { name: /Finish/ }).click();
-  await expect(p.getByRole('dialog')).toContainText('The page is full');
-  await p.getByRole('button', { name: 'See the run' }).click();
+  await p.getByRole('button', { name: /Harvest/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('Harvest!');
+  await p.getByRole('button', { name: 'See the garden' }).click();
   await expect(p.locator('.summary-verdict')).toContainText('points');
   await expect(p.locator('.records tbody tr')).toHaveCount(8);
   await p.screenshot({ path: info.outputPath('m6-10-summary.png') });
-  await expect(p.locator('.leaf-panel')).toContainText('gold leaf');
+  await expect(p.locator('.leaf-panel')).toContainText('seeds');
   await p.getByRole('button', { name: 'Again' }).click();
-  await expect(p.locator('.hud-round')).toContainText('Round 1 of 8');
+  await expect(p.locator('.hud-round')).toContainText('Week 1 of 8');
 });
 
-test('spilling the last drop of ink ruins the page', async ({ page: p }, info) => {
+test('losing the last drop of water dries the garden out', async ({ page: p }, info) => {
   await runOn(p, 'RUXNED');
   for (let i = 0; i < 8; i++) {
     const missed = await R(p, `(r) => { r.load({ ...r.state(), ink: 1 }); const st = r.state(); const p = r.page();
@@ -227,9 +227,9 @@ test('spilling the last drop of ink ruins the page', async ({ page: p }, info) =
     if (missed) break;
     await p.keyboard.press('Escape');
   }
-  await expect(p.getByRole('dialog')).toContainText('The page is ruined');
-  await expect(p.getByRole('dialog')).toContainText('a drop of ink spilled');
+  await expect(p.getByRole('dialog')).toContainText('The garden dried out');
+  await expect(p.getByRole('dialog')).toContainText('a drop of water dried up');
   await p.screenshot({ path: info.outputPath('m6-11-ruined.png') });
-  await p.getByRole('button', { name: 'See the run' }).click();
-  await expect(p.locator('.summary-verdict')).toContainText('Ruined in round');
+  await p.getByRole('button', { name: 'See the garden' }).click();
+  await expect(p.locator('.summary-verdict')).toContainText('Dried out in week');
 });

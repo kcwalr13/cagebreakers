@@ -11,33 +11,42 @@ const fontsOut = join(root, 'src/app/fonts');
 mkdirSync(fontsOut, { recursive: true });
 
 const fonts = [
-  ['alegreya', 'alegreya-latin-500-italic.woff2'],
-  ['alegreya', 'alegreya-latin-700-normal.woff2'],
-  ['alegreya', 'alegreya-latin-700-italic.woff2'],
-  ['alegreya', 'alegreya-latin-800-normal.woff2'],
+  // Botanical (the default) and Night Garden: Fraunces for display and numbers, Alegreya Sans for text.
+  ['fraunces', 'fraunces-latin-600-normal.woff2'],
+  ['fraunces', 'fraunces-latin-600-italic.woff2'],
+  ['fraunces', 'fraunces-latin-800-normal.woff2'],
   ['alegreya-sans', 'alegreya-sans-latin-400-normal.woff2'],
   ['alegreya-sans', 'alegreya-sans-latin-500-normal.woff2'],
   ['alegreya-sans', 'alegreya-sans-latin-700-normal.woff2'],
+  // Cottage: Nunito throughout.
+  ['nunito', 'nunito-latin-500-normal.woff2'],
+  ['nunito', 'nunito-latin-700-normal.woff2'],
+  ['nunito', 'nunito-latin-900-normal.woff2'],
+  // Greenhouse: DM Sans throughout.
+  ['dm-sans', 'dm-sans-latin-400-normal.woff2'],
+  ['dm-sans', 'dm-sans-latin-500-normal.woff2'],
+  ['dm-sans', 'dm-sans-latin-700-normal.woff2'],
 ];
 for (const [pkg, file] of fonts) {
   copyFileSync(require.resolve(`@fontsource/${pkg}/files/${file}`), join(fontsOut, file));
 }
-copyFileSync(require.resolve('@fontsource/alegreya/LICENSE'), join(fontsOut, 'OFL-Alegreya.txt'));
-copyFileSync(require.resolve('@fontsource/alegreya-sans/LICENSE'), join(fontsOut, 'OFL-Alegreya-Sans.txt'));
+for (const [pkg, name] of [['fraunces', 'Fraunces'], ['alegreya-sans', 'Alegreya-Sans'], ['nunito', 'Nunito'], ['dm-sans', 'DM-Sans']]) {
+  copyFileSync(require.resolve(`@fontsource/${pkg}/LICENSE`), join(fontsOut, `OFL-${name}.txt`));
+}
 
 // Icon silhouettes from game-icons.net (CC BY 3.0), keyed by the name the game uses.
 const icons = require('@iconify-json/game-icons/icons.json').icons;
 const used = {
-  undo: 'anticlockwise-rotation', newPage: 'scroll-unfurled', menu: 'hamburger-menu', close: 'cancel', sun: 'sun', moon: 'moon',
-  back: 'return-arrow', info: 'info', help: 'help', remove: 'trash-can', page: 'scroll-unfurled',
-  // The run: gold, ink and what they buy
-  gold: 'two-coins', ink: 'drop', spill: 'droplet-splash', check: 'check-mark', seal: 'wax-seal', trophy: 'laurels-trophy',
+  undo: 'anticlockwise-rotation', newPage: 'seedling', menu: 'hamburger-menu', close: 'cancel', sun: 'sun', moon: 'moon',
+  back: 'return-arrow', info: 'info', help: 'help', remove: 'trash-can', page: 'seedling',
+  // The garden: coins, water and what they buy (keys keep the code's names: ink is water, gold is coins)
+  gold: 'two-coins', ink: 'water-drop', spill: 'droplet-splash', check: 'check-mark', seal: 'flower-emblem', trophy: 'laurels-trophy',
   lens: 'magnifying-glass',
-  quill: 'quill', gilder: 'paint-brush', eraser: 'broom', inkwell: 'covered-jar',
-  // The scriptorium
-  map: 'treasure-map', library: 'bookshelf', scriptorium: 'desk', leaf: 'solid-leaf', star: 'round-star', lock: 'padlock',
-  purse: 'shiny-purse', strap: 'shoulder-bag', bounty: 'coins-pile', palette: 'palette',
-  church: 'church', vellum: 'scroll-unfurled', candle: 'candle-flame', folio: 'open-book',
+  quill: 'sprout', gilder: 'sunbeams', eraser: 'trowel', inkwell: 'plant-watering',
+  // The map, the Potting Shed (scriptorium) and the Herbarium (library); leaf is seeds
+  map: 'treasure-map', library: 'book-cover', scriptorium: 'flower-pot', leaf: 'plant-seed', star: 'round-star', lock: 'padlock',
+  purse: 'shiny-purse', strap: 'belt', bounty: 'gloves', palette: 'palette',
+  kitchen: 'carrot', rocks: 'stone-pile', fallow: 'field', market: 'fruit-bowl', dry: 'sun', season: 'sunflower',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

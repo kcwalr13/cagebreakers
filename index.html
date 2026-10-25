@@ -3,20 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <title>Cagebreakers</title>
-    <meta name="description" content="An offline number puzzle: one KenKen page, filled in over eight rounds." />
-    <meta name="theme-color" content="#E2D3B4" />
+    <title>Plot Twist</title>
+    <meta name="description" content="An offline number garden: one KenKen-style garden, grown over eight weeks." />
+    <meta name="theme-color" content="#E6E9D8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Cagebreakers" />
+    <meta name="apple-mobile-web-app-title" content="Plot Twist" />
     <link rel="icon" href="./icons/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <script>
       // Paint the right background before the app loads, so a dark cabin never sees a white flash.
       try {
         var t = JSON.parse(localStorage.getItem('cagebreakers.prefs') || '{}').theme || 'system';
-        var d = t === 'dark' || t === 'neon' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        var d = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.className = (d ? 'theme-dark' : 'theme-light') + (t === 'newsprint' ? ' theme-newsprint' : t === 'neon' ? ' theme-neon' : '');
       } catch (e) {}
     </script>

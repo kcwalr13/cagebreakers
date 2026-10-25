@@ -1,5 +1,5 @@
 /**
- * The scriptorium's map: six stations, each a page with a twist. Balance numbers for each live
+ * The map: six gardens (stations in code), each a page with a twist. Balance numbers for each live
  * here; the rules that use them live in src/core/run.ts and src/core/meta.ts.
  */
 import { DEFAULT_PAGE_RULES, type PageRules } from '../core/page';
@@ -39,12 +39,12 @@ export interface Station {
 }
 
 export const STATIONS: readonly Station[] = [
-  { id: 'copy-desk', name: 'The Copy Desk', twist: 'A standard page.', page: 'standard', after: [], stars: [100, 158], at: [0, 1] },
-  { id: 'cloister', name: 'The Cloister', twist: 'More printed numbers: a gentle page.', page: 'cloister', brings: 'corners-min', after: ['copy-desk'], stars: [105, 165], at: [1, 0] },
-  { id: 'bare-vellum', name: 'The Bare Vellum', twist: 'No printed numbers at all.', page: 'bare', brings: 'quarter-min', after: ['copy-desk'], stars: [90, 140], at: [1, 2] },
-  { id: 'counting-house', name: 'The Counting House', twist: 'Only + and × cages.', page: 'counting', brings: 'seal-op-count', after: ['cloister', 'bare-vellum'], stars: [100, 162], at: [2, 1] },
-  { id: 'long-night', name: 'The Long Night', twist: 'Two drops of ink, each worth double at the end.', page: 'standard', startInk: 2, inkBonus: 20, after: ['counting-house'], stars: [105, 169], at: [3, 1] },
-  { id: 'grand-folio', name: 'The Grand Folio', twist: 'Ten rounds, with fewer numbers dealt in each.', page: 'standard', rounds: 10, deal: [3, 3, 3, 3, 3, 3, 3, 4, 4], after: ['long-night'], stars: [110, 178], at: [4, 1] },
+  { id: 'copy-desk', name: 'The Kitchen Garden', twist: 'A standard garden.', page: 'standard', after: [], stars: [100, 158], at: [0, 1] },
+  { id: 'cloister', name: 'The Rock Garden', twist: 'More stones: a gentle garden.', page: 'cloister', brings: 'corners-min', after: ['copy-desk'], stars: [105, 165], at: [1, 0] },
+  { id: 'bare-vellum', name: 'The Fallow Field', twist: 'No stones at all.', page: 'bare', brings: 'quarter-min', after: ['copy-desk'], stars: [90, 140], at: [1, 2] },
+  { id: 'counting-house', name: 'The Market Garden', twist: 'Only + and × plots.', page: 'counting', brings: 'seal-op-count', after: ['cloister', 'bare-vellum'], stars: [100, 162], at: [2, 1] },
+  { id: 'long-night', name: 'The Dry Spell', twist: 'Two drops of water, each worth double at harvest.', page: 'standard', startInk: 2, inkBonus: 20, after: ['counting-house'], stars: [105, 169], at: [3, 1] },
+  { id: 'grand-folio', name: 'The Long Season', twist: 'Ten weeks, with fewer numbers dealt in each.', page: 'standard', rounds: 10, deal: [3, 3, 3, 3, 3, 3, 3, 4, 4], after: ['long-night'], stars: [110, 178], at: [4, 1] },
 ];
 
 export const stationById = (id: string): Station | undefined => STATIONS.find((s) => s.id === id);

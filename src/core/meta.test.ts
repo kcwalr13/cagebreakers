@@ -140,7 +140,7 @@ describe('tools', () => {
     // It's one of your numbers now: it can move, and counts like any other.
     const lifted = act(r.state, { type: 'place', id: t.id, cell: -1 }).state;
     expect(placementOf(lifted).hand).toContain(t.n);
-    expect(act(s, { type: 'eraser', cell: p.stones.findIndex((n) => n === 0) }).reason).toMatch(/printed number/);
+    expect(act(s, { type: 'eraser', cell: p.stones.findIndex((n) => n === 0) }).reason).toMatch(/Choose a stone/);
   });
 });
 
@@ -183,8 +183,8 @@ describe('the scriptorium', () => {
 
   it('sells each thing once, in order, for leaf', () => {
     let p: Profile = { ...fresh(), leaf: 200 };
-    expect(buy(p, 'eraser').reason).toMatch(/Opens when you fill The Cloister/);
-    expect(buy(p, 'purse-2').reason).toMatch(/Needs Patron's Purse/);
+    expect(buy(p, 'eraser').reason).toMatch(/Opens when you finish The Rock Garden/);
+    expect(buy(p, 'purse-2').reason).toMatch(/Needs Seed Money/);
     let r = buy(p, 'quill');
     expect(r.ok).toBe(true);
     p = r.profile;

@@ -1,4 +1,10 @@
-# Cagebreakers: notes for Claude
+# Plot Twist: notes for Claude
+
+Plot Twist was called Cagebreakers until M8. Players see garden words (plot, bloom, week, water, coins,
+seeds, garden, request, Potting Shed, Herbarium, tool belt); the code, storage keys, save-code id and web
+address keep the original names (cage, seal, round, ink, gold, leaf, page, commission, scriptorium, library,
+satchel, `cagebreakers.*`). Write player-facing text in garden words; the design doc's Garden words table maps
+the two. Fonts are bundled open fonts: Fraunces and Alegreya Sans, Nunito (Cottage Garden), DM Sans (Greenhouse).
 
 Kyle is the visionary; Claude builds. The design doc is the source of truth:
 https://claude.ai/artifact/NJVkJZeMok9X2xViKNu7mY. Read it (docs tools) before changing gameplay, keep

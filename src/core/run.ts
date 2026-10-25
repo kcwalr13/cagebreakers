@@ -217,10 +217,10 @@ export function placementOf(s: RunState): Placement {
 
 /** Why the round can't be inked yet, or null when it can. */
 export function inkBlocker(s: RunState): string | null {
-  if (s.phase !== 'arrange') return 'The run is over';
+  if (s.phase !== 'arrange') return 'This garden is finished';
   const p = placementOf(s);
   const short = p.hand.length - p.spare;
-  if (short > 0) return short === 1 ? 'Place 1 more number' : `Place ${short} more numbers`;
+  if (short > 0) return short === 1 ? 'Plant 1 more number' : `Plant ${short} more numbers`;
   return null;
 }
 
@@ -334,7 +334,7 @@ function conflictLine(page: Page, values: readonly number[], cell: number, n: nu
 
 /** Tools are named for what they do. */
 export const TOOL_NAMES: Record<ToolId, string> = {
-  lens: 'Hint', quill: 'Extra', gilder: 'Double', eraser: 'Erase', inkwell: 'Refill',
+  lens: 'Hint', quill: 'Extra', gilder: 'Double', eraser: 'Dig', inkwell: 'Refill',
 };
 
 function spend(s: RunState, tool: ToolId): string | null {
@@ -345,7 +345,7 @@ function spend(s: RunState, tool: ToolId): string | null {
 }
 
 export function act(prev: RunState, a: RunAction): ActResult {
-  if (prev.phase !== 'arrange') return refuse(prev, 'The run is over');
+  if (prev.phase !== 'arrange') return refuse(prev, 'This garden is finished');
   const s = clone(prev);
   const page = runPage(s);
   switch (a.type) {
@@ -354,8 +354,8 @@ export function act(prev: RunState, a: RunAction): ActResult {
       if (!t) return refuse(prev, 'No such number');
       if (a.cell === t.cell) return { state: prev, ok: true };
       if (a.cell < 0) { t.cell = -1; return { state: s, ok: true }; }
-      if (a.cell >= CELLS) return refuse(prev, 'Off the page');
-      if (page.stones[a.cell]) return refuse(prev, 'That number is printed on the page');
+      if (a.cell >= CELLS) return refuse(prev, 'Off the garden');
+      if (page.stones[a.cell]) return refuse(prev, 'A stone sits there');
       const values = valuesOf(prev);
       const from = t.cell;
       if (from >= 0) values[from] = 0;
@@ -369,9 +369,9 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'lens': {
-      if (a.cell < 0 || a.cell >= CELLS || page.stones[a.cell]) return refuse(prev, 'Choose an empty cell');
-      if (tokenAt(s, a.cell)) return refuse(prev, 'Choose an empty cell');
-      if (s.revealed.includes(a.cell)) return refuse(prev, 'Hint has already shown that cell');
+      if (a.cell < 0 || a.cell >= CELLS || page.stones[a.cell]) return refuse(prev, 'Choose an empty square');
+      if (tokenAt(s, a.cell)) return refuse(prev, 'Choose an empty square');
+      if (s.revealed.includes(a.cell)) return refuse(prev, 'Hint has already shown that square');
       const why = spend(s, 'lens');
       if (why) return refuse(prev, why);
       s.revealed.push(a.cell);
@@ -379,7 +379,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'quill': {
-      if (s.round === s.setup.rounds) return refuse(prev, 'The final round has every number already');
+      if (s.round === s.setup.rounds) return refuse(prev, 'The last week has every number already');
       if (bagCount(s.bag) <= RUN.finalReserve) return refuse(prev, 'No spare numbers are left to draw');
       const why = spend(s, 'quill');
       if (why) return refuse(prev, why);
@@ -395,7 +395,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
         s.tokens = [...s.tokens, ...giveTokens(s, drawn)];
         return { state: s, ok: true };
       }
-      return refuse(prev, 'No extra number would keep all three commissions possible');
+      return refuse(prev, 'No extra number would keep all three requests possible');
     }
 
     case 'gilder': {
@@ -407,7 +407,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'inkwell': {
-      if (s.ink >= s.setup.startInk) return refuse(prev, 'Your ink is already full');
+      if (s.ink >= s.setup.startInk) return refuse(prev, 'Your watering can is already full');
       const why = spend(s, 'inkwell');
       if (why) return refuse(prev, why);
       s.ink++;
@@ -415,7 +415,7 @@ export function act(prev: RunState, a: RunAction): ActResult {
     }
 
     case 'eraser': {
-      if (a.cell < 0 || a.cell >= CELLS || !page.stones[a.cell]) return refuse(prev, 'Choose a printed number');
+      if (a.cell < 0 || a.cell >= CELLS || !page.stones[a.cell]) return refuse(prev, 'Choose a stone');
       const why = spend(s, 'eraser');
       if (why) return refuse(prev, why);
       // The printed number becomes one of yours: it stays where it was, and can move like any other.
@@ -430,14 +430,14 @@ export function act(prev: RunState, a: RunAction): ActResult {
       const v = viewOf(next, s.proof ?? []);
       if (!s.proof || !s.posted.every((p) => isMet(p.c, v))) {
         const found = findLayout(next, holding, s.posted.map((p) => p.c), check);
-        if (!found) return refuse(prev, 'Erasing that number would make a commission impossible');
+        if (!found) return refuse(prev, 'Digging up that stone would make a request impossible');
         s.proof = found;
       }
       return { state: s, ok: true };
     }
 
     case 'clear': {
-      if (!s.tokens.some((t) => t.cell >= 0)) return refuse(prev, 'None of your numbers are on the page');
+      if (!s.tokens.some((t) => t.cell >= 0)) return refuse(prev, 'None of your numbers are planted');
       for (const t of s.tokens) t.cell = -1;
       return { state: s, ok: true };
     }

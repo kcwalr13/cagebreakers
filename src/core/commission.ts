@@ -77,12 +77,15 @@ const lineName = (axis: Axis, line: number) => `${axis === 'row' ? 'Row' : 'Colu
 const touches = (page: Page, cage: number, axis: Axis, line: number) =>
   page.cages[cage]!.cells.some((c) => (axis === 'row' ? rowOf(c) : colOf(c)) === line);
 
-/** A cage's label as printed, with its row when another cage shares the label. */
+/**
+ * A cage's label as printed, with its row when another cage shares the label. Player-facing words
+ * follow the garden: a cage is a plot, and a sealed cage is a plot in bloom.
+ */
 export function cageName(page: Page, id: number): string {
   const cage = page.cages[id]!;
   const label = `${cage.target}${cage.op}`;
   const twins = page.cages.filter((c) => `${c.target}${c.op}` === label).length;
-  return twins > 1 ? `the ${label} cage in row ${rowOf(cage.cells[0]!) + 1}` : `the ${label} cage`;
+  return twins > 1 ? `the ${label} plot in row ${rowOf(cage.cells[0]!) + 1}` : `the ${label} plot`;
 }
 
 // ---- Judging ----------------------------------------------------------------------------------
@@ -143,22 +146,22 @@ export function describe(c: Commission, page: Page): string {
     case 'line-max': return `${lineName(c.axis, c.line)} adds to ${c.max} or less`;
     case 'no-number': return `No ${c.n} in ${lineName(c.axis, c.line).toLowerCase()}`;
     case 'zone': return `Every ${c.n} sits in the ${ZONE_WORD[c.zone]}`;
-    case 'seal-count': return `Seal ${c.count} ${c.count === 1 ? 'cage' : 'cages'}`;
-    case 'seal-op': return `Seal a ${OP_WORD[c.op]} cage`;
-    case 'seal-cage': return `Seal ${cageName(page, c.cage)}`;
+    case 'seal-count': return `Make ${c.count} ${c.count === 1 ? 'plot' : 'plots'} bloom`;
+    case 'seal-op': return `Make a ${OP_WORD[c.op]} plot bloom`;
+    case 'seal-cage': return `Make ${cageName(page, c.cage)} bloom`;
     case 'empty-cage': return `Leave ${cageName(page, c.cage)} empty`;
     case 'line-count-max': return `${lineName(c.axis, c.line)} holds ${c.max} ${c.max === 1 ? 'number' : 'numbers'} or fewer`;
     case 'fill-line': return `Fill ${lineName(c.axis, c.line).toLowerCase()}`;
     case 'equal-lines': return `${c.axis === 'row' ? 'Rows' : 'Columns'} ${c.a + 1} and ${c.b + 1} add to the same total, ${c.min} or more`;
-    case 'no-seal-line': return `No sealed cage touches ${lineName(c.axis, c.line).toLowerCase()}`;
+    case 'no-seal-line': return `No blooming plot touches ${lineName(c.axis, c.line).toLowerCase()}`;
     case 'diagonal-min': return `The long diagonal adds to ${c.min} or more`;
     case 'rising': return `Column ${c.line + 1} rises from top to bottom, ${c.count} numbers or more`;
     case 'parity-line': return `Only ${c.even ? 'even' : 'odd'} numbers in ${lineName(c.axis, c.line).toLowerCase()}, ${c.count} or more`;
-    case 'fill-page': return 'Fill every cell';
-    case 'seal-all': return 'Seal every cage';
+    case 'fill-page': return 'Fill every square';
+    case 'seal-all': return 'Make every plot bloom';
     case 'corners-min': return `The four corners add to ${c.min} or more`;
     case 'quarter-min': return `The ${QUARTER_WORD[c.quarter]} quarter adds to ${c.min} or more`;
-    case 'seal-op-count': return `Seal ${c.count} ${OP_WORD[c.op]} cages`;
+    case 'seal-op-count': return `Make ${c.count} ${OP_WORD[c.op]} plots bloom`;
   }
 }
 
@@ -167,20 +170,20 @@ export function readout(c: Commission, v: View): string {
   const m = measure(c, v);
   switch (c.kind) {
     case 'line-min': case 'line-max': case 'diagonal-min': case 'corners-min': case 'quarter-min': return `now ${m}`;
-    case 'seal-op-count': return `${m} sealed`;
+    case 'seal-op-count': return `${m} in bloom`;
     case 'line-count-max': return `${m} now`;
-    case 'seal-count': return `${m} sealed`;
+    case 'seal-count': return `${m} in bloom`;
     case 'no-number': return m ? 'clear' : `a ${c.n} is there`;
     case 'zone': {
       let all = 0, inside = 0;
       for (let x = 0; x < CELLS; x++) if (v.values[x] === c.n) { all++; if (IN_ZONE[c.zone](x)) inside++; }
       return all ? `${inside} of ${all}` : `no ${c.n} yet`;
     }
-    case 'seal-op': case 'seal-cage': return m ? 'sealed' : 'not yet';
+    case 'seal-op': case 'seal-cage': return m ? 'in bloom' : 'not yet';
     case 'empty-cage': return m ? 'empty' : 'not empty';
     case 'fill-line': return `${filled(v, lineCells(c.axis, c.line))} of ${SIZE}`;
     case 'equal-lines': return `${total(v, lineCells(c.axis, c.a))} and ${total(v, lineCells(c.axis, c.b))}`;
-    case 'no-seal-line': return m ? 'clear' : 'a seal touches it';
+    case 'no-seal-line': return m ? 'clear' : 'a bloom touches it';
     case 'rising': case 'parity-line': return m ? 'yes' : 'not yet';
     case 'fill-page': return `${v.values.filter((n) => n).length} of ${CELLS}`;
     case 'seal-all': return `${v.sealed.size} of ${v.page.cages.length}`;

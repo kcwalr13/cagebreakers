@@ -19,17 +19,17 @@ group('commission sentences', () => {
     expect(describe({ kind: 'line-max', axis: 'col', line: 4, max: 9 }, page)).toBe('Column 5 adds to 9 or less');
     expect(describe({ kind: 'no-number', axis: 'row', line: 0, n: 6 }, page)).toBe('No 6 in row 1');
     expect(describe({ kind: 'zone', n: 1, zone: 'left' }, page)).toBe('Every 1 sits in the left half');
-    expect(describe({ kind: 'seal-count', count: 3 }, page)).toBe('Seal 3 cages');
-    expect(describe({ kind: 'seal-op', op: '×' }, page)).toBe('Seal a × cage');
+    expect(describe({ kind: 'seal-count', count: 3 }, page)).toBe('Make 3 plots bloom');
+    expect(describe({ kind: 'seal-op', op: '×' }, page)).toBe('Make a × plot bloom');
     expect(describe({ kind: 'line-count-max', axis: 'col', line: 1, max: 2 }, page)).toBe('Column 2 holds 2 numbers or fewer');
     expect(describe({ kind: 'fill-line', axis: 'row', line: 3 }, page)).toBe('Fill row 4');
     expect(describe({ kind: 'equal-lines', axis: 'row', a: 1, b: 4, min: 10 }, page)).toBe('Rows 2 and 5 add to the same total, 10 or more');
-    expect(describe({ kind: 'no-seal-line', axis: 'row', line: 1 }, page)).toBe('No sealed cage touches row 2');
+    expect(describe({ kind: 'no-seal-line', axis: 'row', line: 1 }, page)).toBe('No blooming plot touches row 2');
     expect(describe({ kind: 'diagonal-min', min: 15 }, page)).toBe('The long diagonal adds to 15 or more');
     expect(describe({ kind: 'rising', line: 2, count: 3 }, page)).toBe('Column 3 rises from top to bottom, 3 numbers or more');
     expect(describe({ kind: 'parity-line', axis: 'row', line: 5, even: true, count: 2 }, page)).toBe('Only even numbers in row 6, 2 or more');
-    expect(describe({ kind: 'fill-page' }, page)).toBe('Fill every cell');
-    expect(describe({ kind: 'seal-all' }, page)).toBe('Seal every cage');
+    expect(describe({ kind: 'fill-page' }, page)).toBe('Fill every square');
+    expect(describe({ kind: 'seal-all' }, page)).toBe('Make every plot bloom');
   });
 
   it('names a cage by its label, adding its row when two cages share one', () => {

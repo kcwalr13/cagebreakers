@@ -3,7 +3,8 @@ import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { execSync } from 'node:child_process';
 
-// Relative base so the same build works on GitHub Pages (/cagebreakers/) and inside a
+// Relative base so the same build works on GitHub Pages (/cagebreakers/, the repo's name from before
+// the game became Plot Twist) and inside a
 // future app-store wrapper (served from the app bundle root).
 const commit = (() => {
   try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; }
@@ -23,15 +24,15 @@ export default defineConfig({
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {
         id: './',
-        name: 'Cagebreakers',
-        short_name: 'Cagebreakers',
-        description: 'An offline number puzzle: one KenKen page, filled in over eight rounds.',
+        name: 'Plot Twist',
+        short_name: 'Plot Twist',
+        description: 'An offline number garden: one KenKen-style garden, grown over eight weeks.',
         start_url: './',
         scope: './',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#E2D3B4',
-        theme_color: '#E2D3B4',
+        background_color: '#E6E9D8',
+        theme_color: '#E6E9D8',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },

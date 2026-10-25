@@ -11,13 +11,13 @@ import { readJson, writeJson } from './storage';
 interface Tip { id: string; text: string; when: (s: RunState) => boolean }
 
 const TIPS: Tip[] = [
-  { id: 'latin', when: (s) => s.round === 1 && !onPage(s).length, text: 'Drag a number onto the page, or tap it, then a cell. Bright cells can take it; shaded ones can\'t.' },
-  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the page are this round\'s commissions. Miss the required one and you spill a drop of ink; the other two pay gold. All three can always be met at once, with every number placed: finding how is the puzzle. Tap one to see where it applies.' },
-  { id: 'seal', when: (s) => viewNow(s).sealed.size > 0, text: 'Sealed! A full cage that makes its red target turns gold, and pays 1 gold every round you ink it sealed.' },
-  { id: 'ink', when: (s) => s.round === 1 && inkBlocker(s) === null, text: `Place all your numbers, or all but one, then Ink it. Placing every one pays ${RUN.fullHandGold} bonus gold; a number you keep is dealt again later.` },
-  { id: 'move', when: (s) => s.round === 2, text: 'Everything on the page can move. Drag numbers around to meet this round\'s commissions, or tap All to hand to start the page over.' },
-  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= TOOLS.lens, text: 'Gold buys tools: Hint shows the right number for one empty cell. The scriptorium sells more to carry. Tap a tool to see what it does.' },
-  { id: 'final', when: (s) => s.round === s.setup.rounds, text: 'The final round: every number still to come is dealt now, and all of them go in. Fill the page to finish the run.' },
+  { id: 'latin', when: (s) => s.round === 1 && !onPage(s).length, text: 'Drag a number into the garden, or tap it, then a square. Bright squares can take it; shaded ones can\'t.' },
+  { id: 'commissions', when: (s) => s.round === 1 && onPage(s).length > 0, text: 'Above the garden are this week\'s requests. Miss the required one and a drop of water dries up; the other two pay coins. All three can always be met at once, with every number planted: finding how is the puzzle. Tap one to see where it applies.' },
+  { id: 'seal', when: (s) => viewNow(s).sealed.size > 0, text: 'In bloom! A full plot that makes its target blooms, and pays 1 coin every week you water it in bloom.' },
+  { id: 'ink', when: (s) => s.round === 1 && inkBlocker(s) === null, text: `Plant all your numbers, or all but one, then Water it. Planting every one pays ${RUN.fullHandGold} bonus ${RUN.fullHandGold === 1 ? 'coin' : 'coins'}; a number you keep is dealt again later.` },
+  { id: 'move', when: (s) => s.round === 2, text: 'Everything in the garden can move. Drag numbers around to meet this week\'s requests, double-tap one to pick it up, or tap Pick up all to start over.' },
+  { id: 'tools', when: (s) => s.round >= 3 && s.gold >= TOOLS.lens, text: 'Coins buy tools: Hint shows the right number for one empty square. The Potting Shed sells more to carry. Tap a tool to see what it does.' },
+  { id: 'final', when: (s) => s.round === s.setup.rounds, text: 'Harvest week: every number still to come is dealt now, and all of them go in. Fill the garden to harvest it.' },
 ];
 
 const KEY = 'cagebreakers.coach';
@@ -35,11 +35,11 @@ export const tip = computed<Tip | null>(() => {
   return TIPS.find((t) => !coachSeen.value.includes(t.id) && t.when(s)) ?? null;
 });
 
-/** Tips for the scriptorium's screens, shown once each on first visit. */
+/** Tips for the map, the Potting Shed and the Herbarium, shown once each on first visit. */
 export const SCREEN_TIPS = {
-  map: 'Each station is a page with a twist. Fill one to open the stations beyond it; the score marks earn stars, and every new star pays extra gold leaf.',
-  shop: 'Gold leaf buys things that stay: tools to carry, upgrades for every map run, and styles. Choose which tools to carry when you begin a station.',
-  library: 'Every page you fill is bound here, with its score and stars.',
+  map: 'Each garden on the map has a twist. Finish one to open the gardens beyond it; the score marks earn stars, and every new star saves extra seeds.',
+  shop: 'Seeds buy things that stay: tools to carry, upgrades for every garden on the map, and new looks. Choose your tools when you start a garden.',
+  library: 'Every garden you finish is pressed here, with its score and stars.',
 } as const;
 
 /** The screen tip to show, if it hasn't been seen and tips are on. */

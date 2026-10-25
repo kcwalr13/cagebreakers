@@ -123,9 +123,9 @@ export function recordRun(p: Profile, s: RunState, when: string): Profile {
 /** Why an item can't be bought now, or null when it can. */
 export function cantBuy(p: Profile, item: Item): string | null {
   if (owns(p, item.id)) return 'Already yours';
-  if (item.after && !p.filled.includes(item.after)) return `Opens when you fill ${stationById(item.after)!.name}`;
+  if (item.after && !p.filled.includes(item.after)) return `Opens when you finish ${stationById(item.after)!.name}`;
   if (item.needs && !owns(p, item.needs)) return `Needs ${ITEMS.find((i) => i.id === item.needs)!.name}`;
-  if (p.leaf < item.price) return `Costs ${item.price} leaf`;
+  if (p.leaf < item.price) return `Costs ${item.price} seeds`;
   return null;
 }
 

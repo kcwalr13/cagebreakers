@@ -1,8 +1,8 @@
 {
   "appId": "io.github.kcwalr13.cagebreakers",
-  "appName": "Cagebreakers",
+  "appName": "Plot Twist",
   "webDir": "dist",
-  "backgroundColor": "#E2D3B4",
+  "backgroundColor": "#E6E9D8",
   "ios": { "contentInset": "never" },
   "android": { "allowMixedContent": false }
 }

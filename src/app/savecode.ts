@@ -35,7 +35,7 @@ export async function exportCode(): Promise<string> {
 /** Restores a save code. Returns why it couldn't, or null on success. */
 export async function importCode(code: string): Promise<string | null> {
   const text = code.replace(/\s+/g, '');
-  if (!text.startsWith(PREFIX)) return "That doesn't look like a Cagebreakers save code.";
+  if (!text.startsWith(PREFIX)) return "That doesn't look like a Plot Twist save code.";
   try {
     let bytes: Uint8Array = fromB64(text.slice(PREFIX.length + 1));
     if (text[PREFIX.length] === 'Z') {
@@ -43,7 +43,7 @@ export async function importCode(code: string): Promise<string | null> {
       bytes = await pipe(bytes, new DecompressionStream('deflate-raw'));
     }
     const parsed = JSON.parse(new TextDecoder().decode(bytes)) as { app?: string; data?: Record<string, string> };
-    if (parsed.app !== 'cagebreakers' || !parsed.data) return "That doesn't look like a Cagebreakers save code.";
+    if (parsed.app !== 'cagebreakers' || !parsed.data) return "That doesn't look like a Plot Twist save code.";
     for (const k of KEYS) storage.remove(k);
     for (const [k, v] of Object.entries(parsed.data)) if (KEYS.includes(k)) storage.set(k, v);
     return null;

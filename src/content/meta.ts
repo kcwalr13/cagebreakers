@@ -1,5 +1,6 @@
 /**
- * The scriptorium's economy: what a page earns in gold leaf, and what leaf buys. The rules that
+ * The Potting Shed's economy (the scriptorium in code): what a garden earns in seeds (`leaf` in
+ * code), and what seeds buy. The rules that
  * use these numbers live in src/core/meta.ts.
  */
 import type { StationId } from './stations';
@@ -25,21 +26,21 @@ export interface Item {
 }
 
 export const ITEMS: readonly Item[] = [
-  { id: 'quill', kind: 'tool', name: 'Extra', price: 20, text: 'Draw one extra number this round.' },
-  { id: 'gilder', kind: 'tool', name: 'Double', price: 25, text: 'This round, sealed cages pay double.' },
-  { id: 'eraser', kind: 'tool', name: 'Erase', price: 30, after: 'cloister', text: 'Turn a printed number into one of yours, free to move like any other.' },
-  { id: 'inkwell', kind: 'tool', name: 'Refill', price: 40, after: 'long-night', text: 'Refill a drop of ink.' },
-  { id: 'purse-1', kind: 'upgrade', name: "Patron's Purse", price: 20, text: 'Start every map run with 3 gold.' },
-  { id: 'purse-2', kind: 'upgrade', name: "Patron's Purse II", price: 40, needs: 'purse-1', text: 'Start every map run with 6 gold.' },
-  { id: 'bounty-hunter', kind: 'upgrade', name: 'Bounty Hunter', price: 40, after: 'counting-house', text: 'Each bounty pays 1 more gold.' },
-  { id: 'deeper-inkwell', kind: 'upgrade', name: 'Deeper Inkwell', price: 60, after: 'long-night', text: 'Start every map run with one more drop of ink.' },
-  { id: 'second-strap', kind: 'upgrade', name: 'Second Strap', price: 50, after: 'grand-folio', text: 'Carry a fourth tool.' },
-  { id: 'newsprint', kind: 'style', name: 'Newsprint', price: 30, after: 'bare-vellum', text: 'Black ink and one spot colour: an in-flight-magazine puzzle page.' },
-  { id: 'neon', kind: 'style', name: 'Neon Abacus', price: 30, after: 'grand-folio', text: 'A dark page with glowing numerals.' },
+  { id: 'quill', kind: 'tool', name: 'Extra', price: 20, text: 'Draw one extra number this week.' },
+  { id: 'gilder', kind: 'tool', name: 'Double', price: 25, text: 'This week, blooming plots pay double.' },
+  { id: 'eraser', kind: 'tool', name: 'Dig', price: 30, after: 'cloister', text: 'Dig up a stone: it becomes one of your numbers, free to move like any other.' },
+  { id: 'inkwell', kind: 'tool', name: 'Refill', price: 40, after: 'long-night', text: 'Refill a drop of water.' },
+  { id: 'purse-1', kind: 'upgrade', name: 'Seed Money', price: 20, text: 'Start every map garden with 3 coins.' },
+  { id: 'purse-2', kind: 'upgrade', name: 'Seed Money II', price: 40, needs: 'purse-1', text: 'Start every map garden with 6 coins.' },
+  { id: 'bounty-hunter', kind: 'upgrade', name: 'Green Thumb', price: 40, after: 'counting-house', text: 'Each bonus request pays 1 more coin.' },
+  { id: 'deeper-inkwell', kind: 'upgrade', name: 'Bigger Can', price: 60, after: 'long-night', text: 'Start every map garden with one more drop of water.' },
+  { id: 'second-strap', kind: 'upgrade', name: 'Second Pocket', price: 50, after: 'grand-folio', text: 'Carry a fourth tool.' },
+  { id: 'newsprint', kind: 'style', name: 'Cottage Garden', price: 30, after: 'bare-vellum', text: 'A sunny cottage look: soft pastels, petal pinks and rounded type.' },
+  { id: 'neon', kind: 'style', name: 'Greenhouse', price: 30, after: 'grand-folio', text: 'A clean, modern look: crisp white, deep green and a coral accent.' },
 ];
 
 /** What the upgrades give. */
 export const PERKS = { purse1Gold: 3, purse2Gold: 6, bountyHunter: 1, deeperInkwell: 1 } as const;
 
-/** How many filled pages the library keeps, newest first. */
+/** How many finished gardens the Herbarium (library in code) keeps, newest first. */
 export const LIBRARY_SIZE = 100;

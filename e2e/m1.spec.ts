@@ -110,7 +110,7 @@ test('tapping an empty cell explains its cage', async ({ page: p }, info) => {
   const pg = await hooks(p).page();
   const cell = pg.stones.findIndex((v) => v === 0);
   await tapCell(p, cell);
-  await expect(p.getByRole('dialog')).toContainText('in');
+  await expect(p.getByRole('dialog')).toContainText('plot of');
   await expect(p.locator('.combo').first()).toBeVisible();
   await p.screenshot({ path: info.outputPath('05-cage-sheet.png') });
 });
@@ -138,12 +138,12 @@ test('a whole page can be sealed', async ({ page: p }, info) => {
     sol.forEach((n, c) => { if (!stones[c]) cb.place(c, n); });
   }, pg.solution);
   expect((await h.sealed()).length).toBe(pg.cages.length);
-  await expect(p.getByText('Page sealed')).toBeVisible();
+  await expect(p.getByText('Every plot in bloom')).toBeVisible();
   await p.waitForTimeout(1200);
   await p.screenshot({ path: info.outputPath('06-complete.png') });
 });
 
-test('night vellum', async ({ page: p }, info) => {
+test('night garden', async ({ page: p }, info) => {
   await p.emulateMedia({ colorScheme: 'dark' });
   await open(p);
   await expect(p.locator('html')).toHaveClass(/theme-dark/);

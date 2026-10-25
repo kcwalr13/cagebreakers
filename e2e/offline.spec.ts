@@ -16,11 +16,11 @@ test('loads and plays with the network off after one visit', async ({ page, cont
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('svg.board')).toBeVisible();
-  await expect(page.getByText('Page 7KQ2X4')).toBeVisible();
+  await expect(page.getByText('Garden 7KQ2X4')).toBeVisible();
   await page.getByRole('button', { name: 'Number 3', exact: true }).click();
-  await expect(page.locator('.status')).toContainText('Placing 3s');
+  await expect(page.locator('.status')).toContainText('Planting 3s');
   // Fonts must come from the cache too: the numerals are the game.
-  const fontsOk = await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('800 20px Alegreya'); });
+  const fontsOk = await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('800 20px Fraunces'); });
   expect(fontsOk).toBe(true);
   await context.setOffline(false);
 });
@@ -33,12 +33,12 @@ test('a run can be started and played with the network off', async ({ page, cont
   await context.setOffline(true);
   await page.reload();
   await page.getByRole('button', { name: /The Map/ }).click();
-  await page.getByRole('button', { name: /The Copy Desk/ }).click();
+  await page.getByRole('button', { name: /The Kitchen Garden/ }).click();
   await page.getByRole('button', { name: 'Begin' }).click();
   await expect(page.locator('.commission')).toHaveCount(3);
   // Equal numbers stack, so count every number in every stack.
   await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('.hand-slot')].reduce((n, el) => n + Number((el as HTMLElement).dataset.count ?? 1), 0))).toBe(4);
   await page.locator('.hand-slot').first().click();
-  await expect(page.locator('.status')).toContainText(/Bright cells take the \d/);
+  await expect(page.locator('.status')).toContainText(/Bright squares take the \d/);
   await context.setOffline(false);
 });

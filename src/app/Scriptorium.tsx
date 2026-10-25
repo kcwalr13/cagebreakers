@@ -22,11 +22,11 @@ import { loadSlot, run, slot, startStation } from './run/state';
 import { type ThemeChoice, theme } from './state';
 
 const STATION_ICON: Record<StationId, IconName> = {
-  'copy-desk': 'scriptorium', cloister: 'church', 'bare-vellum': 'vellum', 'counting-house': 'bounty', 'long-night': 'candle', 'grand-folio': 'folio',
+  'copy-desk': 'kitchen', cloister: 'rocks', 'bare-vellum': 'fallow', 'counting-house': 'market', 'long-night': 'dry', 'grand-folio': 'season',
 };
 const ITEM_ICON: Record<ItemId, IconName> = {
   quill: 'quill', gilder: 'gilder', eraser: 'eraser', inkwell: 'inkwell', 'purse-1': 'purse', 'purse-2': 'purse',
-  'bounty-hunter': 'bounty', 'deeper-inkwell': 'ink', 'second-strap': 'strap', newsprint: 'palette', neon: 'palette',
+  'bounty-hunter': 'bounty', 'deeper-inkwell': 'inkwell', 'second-strap': 'strap', newsprint: 'palette', neon: 'palette',
 };
 /** An example of each commission a station brings, for its sheet. */
 const BRINGS_EXAMPLE = {
@@ -36,7 +36,7 @@ const BRINGS_EXAMPLE = {
 } as const;
 
 function Leaf({ n }: { n: number }) {
-  return <span class="leaf-count" aria-label={`${n} gold leaf`}><Icon name="leaf" class="ico leaf" /><b>{n}</b></span>;
+  return <span class="leaf-count" aria-label={`${n} ${n === 1 ? 'seed' : 'seeds'}`}><Icon name="leaf" class="ico leaf" /><b>{n}</b></span>;
 }
 
 function Stars({ n, label }: { n: number; label?: boolean }) {
@@ -138,19 +138,19 @@ export function StationSheet({ id }: { id: StationId }) {
       <p>{st.twist}</p>
       {st.brings || forSale.length ? (
         <p class="muted-sm">
-          {st.brings ? <>Brings a new commission: “{describe(BRINGS_EXAMPLE[st.brings as keyof typeof BRINGS_EXAMPLE] as never, pageOf('ANYPGE'))}”. </> : null}
+          {st.brings ? <>Brings a new request: “{describe(BRINGS_EXAMPLE[st.brings as keyof typeof BRINGS_EXAMPLE] as never, pageOf('ANYPGE'))}”. </> : null}
           {forSale.length ? <>Filling it puts {forSale.map((i) => (i.kind === 'tool' ? i.name : `the ${i.name}`)).join(' and ')} on sale.</> : null}
         </p>
       ) : null}
       <ul class="star-marks">
-        <li class={have >= 1 ? 'on' : ''}><Stars n={1} label={false} /> Fill the page</li>
+        <li class={have >= 1 ? 'on' : ''}><Stars n={1} label={false} /> Fill the garden</li>
         <li class={have >= 2 ? 'on' : ''}><Stars n={2} label={false} /> Score {st.stars[0]}</li>
         <li class={have >= 3 ? 'on' : ''}><Stars n={3} label={false} /> Score {st.stars[1]}</li>
       </ul>
       {p.best[st.id] ? <p class="muted-sm">Your best here: {p.best[st.id]} points.</p> : null}
       {open ? (
         <>
-          <div class="section-label">Your satchel: {p.satchel.length} of {size} tools</div>
+          <div class="section-label">Your tool belt: {p.satchel.length} of {size} tools</div>
           <div class="satchel" role="group" aria-label="Tools to carry">
             {tools.map((t) => (
               <button key={t} class="satchel-tool" aria-pressed={p.satchel.includes(t)} onClick={() => toggle(t)} disabled={!p.satchel.includes(t) && p.satchel.length >= size}>
@@ -158,13 +158,13 @@ export function StationSheet({ id }: { id: StationId }) {
               </button>
             ))}
           </div>
-          {live ? <p class="warn-text">Beginning here ends your run in round {live.round}.</p> : null}
+          {live ? <p class="warn-text">Starting here abandons the garden you're growing, in week {live.round}.</p> : null}
           <div class="row-btns">
             <button class="btn primary wide" onClick={() => { startStation(st.id); sheet.value = null; screen.value = 'run'; }}>Begin</button>
           </div>
         </>
       ) : (
-        <p class="warn-text">Opens when you fill {st.after.map((a) => stationById(a)!.name).join(' or ')}.</p>
+        <p class="warn-text">Opens when you finish {st.after.map((a) => stationById(a)!.name).join(' or ')}.</p>
       )}
     </>
   );
@@ -192,7 +192,7 @@ function ItemRow({ item }: { item: Item }) {
           <button class="pill-btn" aria-pressed={theme.value === style} onClick={() => (theme.value = theme.value === style ? 'system' : style)}>{theme.value === style ? 'In use' : 'Use'}</button>
         ) : <span class="shop-owned"><Icon name="check" class="ico" />Yours</span>
       ) : (
-        <button class="pill-btn buy" disabled={!!why} aria-label={`Buy ${item.name} for ${item.price} leaf`} onClick={() => buy(item.id)}>
+        <button class="pill-btn buy" disabled={!!why} aria-label={`Buy ${item.name} for ${item.price} seeds`} onClick={() => buy(item.id)}>
           <Icon name="leaf" class="ico leaf xs" />{item.price}
         </button>
       )}
@@ -202,13 +202,13 @@ function ItemRow({ item }: { item: Item }) {
 
 export function ShopScreen() {
   const sections: [Item['kind'], string, string][] = [
-    ['tool', 'Tools', 'Carry them into a run in your satchel; each costs gold when you use it.'],
-    ['upgrade', 'Upgrades', 'They stay with you for every map run.'],
-    ['style', 'Styles', 'Skins for the whole game.'],
+    ['tool', 'Tools', 'Carry them into a garden on your tool belt; each costs coins when you use it.'],
+    ['upgrade', 'Upgrades', 'They stay with you for every garden on the map.'],
+    ['style', 'Looks', 'New looks for the whole garden.'],
   ];
   return (
     <div class="column shop-screen">
-      <Header title="The Scriptorium" sub="Gold leaf buys things that stay with you" />
+      <Header title="The Potting Shed" sub="Seeds buy things that stay with you" />
       <div class="scroll">
         {sections.map(([kind, title, note]) => (
           <section key={kind}>
@@ -235,15 +235,15 @@ function boardOf(e: LibraryEntry) {
   return { page, pieces, sealed: sealedCages(page, e.values) };
 }
 
-const entryTitle = (e: LibraryEntry) => (e.station ? stationById(e.station)?.name ?? 'A page' : e.daily ? `Daily Page, ${e.daily}` : 'A page');
+const entryTitle = (e: LibraryEntry) => (e.station ? stationById(e.station)?.name ?? 'A garden' : e.daily ? `Daily Garden, ${e.daily}` : 'A garden');
 
 export function LibraryScreen() {
   const books = profile.value.library;
   return (
     <div class="column library-screen">
-      <Header title="The Library" sub={`${books.length} ${books.length === 1 ? 'page' : 'pages'} bound`} />
+      <Header title="The Herbarium" sub={`${books.length} ${books.length === 1 ? 'garden' : 'gardens'} pressed`} />
       <div class="scroll">
-        {!books.length ? <p class="muted-sm center">Fill a page and it's bound here.</p> : null}
+        {!books.length ? <p class="muted-sm center">Finish a garden and it's pressed here.</p> : null}
         <div class="shelf">
           {books.map((e) => {
             const { page, pieces, sealed } = boardOf(e);
@@ -270,8 +270,8 @@ export function BookSheet({ id }: { id: string }) {
   return (
     <>
       <div class="sheet-head"><h2>{entryTitle(e)}</h2><button class="icon-btn" aria-label="Close" onClick={() => (sheet.value = null)}><Icon name="close" /></button></div>
-      <div class="book-big"><PageView id="book" page={page} pieces={pieces} sealed={sealed} label={`${entryTitle(e)}, filled`} /></div>
-      <p>{e.score} points{e.station ? `, ${e.stars} of 3 stars` : ''}. Filled {e.when}. Page code <strong class="code">{e.seed}</strong>.</p>
+      <div class="book-big"><PageView id="book" page={page} pieces={pieces} sealed={sealed} label={`${entryTitle(e)}, finished`} /></div>
+      <p>{e.score} points{e.station ? `, ${e.stars} of 3 stars` : ''}. Finished {e.when}. Garden code <strong class="code">{e.seed}</strong>.</p>
     </>
   );
 }

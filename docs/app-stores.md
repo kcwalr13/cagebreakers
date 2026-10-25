@@ -1,4 +1,4 @@
-# Getting Cagebreakers into the app stores
+# Getting Plot Twist into the app stores
 
 The game ships today as an installable web app. Everything needed to wrap the same build as a
 native iPhone and Android app is in place; what remains needs a Mac with Xcode, Android Studio and
@@ -35,6 +35,6 @@ the two developer accounts, so it is a step for a person rather than for CI.
 
 - **Privacy:** the app collects nothing and makes no network calls. Both stores' privacy forms can
   answer "no data collected".
-- **Age rating:** fantasy combat with no blood, no purchases and no ads.
+- **Age rating:** a number puzzle with no violence, no purchases and no ads.
 - **Identifier:** `io.github.kcwalr13.cagebreakers` in `capacitor.config.json`, a placeholder until
   there's a domain or a developer name to use instead. It can't change after the first upload.

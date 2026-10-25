@@ -22,7 +22,7 @@ const toyHandlers: PressHandlers = {
     if (from.kind === 'cell' && placed.value[from.cell]) {
       const n = placed.value[from.cell];
       removeAt(from.cell);
-      say(`Took the ${n} off the page.`);
+      say(`Picked up the ${n}.`);
     }
   },
   tapItem(key) {
@@ -49,7 +49,7 @@ function Header() {
     <header class="header">
       <button class="icon-btn" aria-label="Back" onClick={goBack}><Icon name="back" /></button>
       <div class="title">
-        <div class="title-page">Page {p.seed}</div>
+        <div class="title-page">Garden {p.seed}</div>
         <div class="title-sub">{sealed.value.size} of {p.cages.length} cages sealed</div>
       </div>
       <button class="icon-btn" aria-label="Undo" disabled={!history.value.length} onClick={undo}><Icon name="undo" /></button>
@@ -74,7 +74,7 @@ function Status() {
       </div>
     );
   }
-  if (sel?.kind === 'tray') return <div class="status">Placing {sel.n}s. Bright cells take it; gold ones seal a cage.</div>;
+  if (sel?.kind === 'tray') return <div class="status">Planting {sel.n}s. Bright squares take it; flowering ones make a plot bloom.</div>;
   return <div class="status" role="status" />;
 }
 
@@ -102,10 +102,10 @@ function Complete() {
   return (
     <div class="tray done-row">
       <div style="flex: 1">
-        <div class="done-title">Page sealed</div>
-        <div class="muted-sm">All {p.cages.length} cages, with {placedCount.value} numbers placed.</div>
+        <div class="done-title">Every plot in bloom</div>
+        <div class="muted-sm">All {p.cages.length} plots, with {placedCount.value} numbers planted.</div>
       </div>
-      <button class="btn primary" onClick={() => newPage()}>New page</button>
+      <button class="btn primary" onClick={() => newPage()}>New garden</button>
     </div>
   );
 }
@@ -120,7 +120,7 @@ export function ToyScreen() {
       {complete.value ? <Complete /> : (
         <>
           {!seenIntro.value ? (
-            <div class="tray-label">Drag a number onto the page. When a cage's numbers make its red target, it seals in gold.</div>
+            <div class="tray-label">Drag a number into the garden. When a plot's numbers make its target, it blooms.</div>
           ) : null}
           <Tray />
         </>

@@ -71,7 +71,7 @@ const handlers: PressHandlers = {
 
 function Ink({ ink, max }: { ink: number; max: number }) {
   return (
-    <span class="hud-ink" role="img" aria-label={`${ink} ${ink === 1 ? 'drop' : 'drops'} of ink`}>
+    <span class="hud-ink" role="img" aria-label={`${ink} ${ink === 1 ? 'drop' : 'drops'} of water`}>
       {Array.from({ length: Math.max(max, ink) }, (_, i) => <Icon key={i} name="ink" class={`ico drop${i < ink ? '' : ' spent'}`} />)}
     </span>
   );
@@ -83,9 +83,9 @@ function Hud() {
   return (
     <header class="header hud-row">
       <button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button>
-      <span class="hud-round">{final ? 'Final round' : <>Round <b>{s.round}</b> of {s.setup.rounds}</>}</span>
+      <span class="hud-round">{final ? 'Harvest week' : <>Week <b>{s.round}</b> of {s.setup.rounds}</>}</span>
       <Ink ink={s.ink} max={s.setup.startInk} />
-      <span class="hud-stat" aria-label={`${s.gold} gold`}><Icon name="gold" class="ico gold" /><b>{s.gold}</b></span>
+      <span class="hud-stat" aria-label={`${s.gold} ${s.gold === 1 ? 'coin' : 'coins'}`}><Icon name="gold" class="ico gold" /><b>{s.gold}</b></span>
       <button class="icon-btn" aria-label="Menu" onClick={() => (sheet.value = { kind: 'menu' })}><Icon name="menu" /></button>
     </header>
   );
@@ -94,7 +94,7 @@ function Hud() {
 function Commissions() {
   const s = run.value!, p = page.value!, v = view.value!;
   return (
-    <ol class="commissions" aria-label="This round's commissions">
+    <ol class="commissions" aria-label="This week's requests">
       {s.posted.map((c, i) => {
         const ok = met.value[i];
         const on = focus.value === i;
@@ -123,7 +123,7 @@ function Commissions() {
   );
 }
 
-/** A tip from the teaching rounds, laid over the bottom of the page until dismissed. */
+/** A tip from the teaching rounds, laid over the bottom of the garden until dismissed. */
 function Coach() {
   const t = tip.value;
   if (!t) return null;
@@ -162,7 +162,7 @@ function Board() {
         id="run" svgRef={setBoardElement} page={p} pieces={pieces} sealed={sealed.value} flashing={justSealed.value}
         hints={aim.value ? undefined : hints.value} blockers={aim.value ? undefined : blockers.value} hover={hover} refused={refused.value}
         revealed={revealed.value} targets={aimTargets} marked={marked}
-        label={`Your page: ${s.tokens.filter((t) => t.cell >= 0).length} numbers placed, ${sealed.value.size} of ${p.cages.length} cages sealed`}
+        label={`Your garden: ${s.tokens.filter((t) => t.cell >= 0).length} numbers planted, ${sealed.value.size} of ${p.cages.length} plots in bloom`}
       />
     </div>
   );
@@ -187,8 +187,8 @@ function Status() {
     return (
       <div class="status holding">
         <span>{open
-          ? <>Bright cells take the <b>{h.n}</b>. Shaded ones have a {h.n} in their row or column.</>
-          : <>No cell can take the <b>{h.n}</b> right now. Move one of the ringed {h.n}s first.</>}</span>
+          ? <>Bright squares take the <b>{h.n}</b>. Shaded ones have a {h.n} in their row or column.</>
+          : <>No square can take the <b>{h.n}</b> right now. Move one of the ringed {h.n}s first.</>}</span>
         {lifting ? <button class="pill-btn" onClick={() => { placeToken(h.id, -1); selection.value = null; }}>To hand</button> : null}
       </div>
     );
@@ -198,7 +198,7 @@ function Status() {
       <span role="status">{roundStatus(s, blocker.value)}</span>
       {canPutBack.value
         ? <button class="pill-btn page-all" onClick={putBack}>Put back</button>
-        : <button class="pill-btn page-all" disabled={!s.tokens.some((t) => t.cell >= 0)} onClick={clearPage}>All to hand</button>}
+        : <button class="pill-btn page-all" disabled={!s.tokens.some((t) => t.cell >= 0)} onClick={clearPage}>Pick up all</button>}
     </div>
   );
 }
@@ -206,11 +206,11 @@ function Status() {
 /** What the round still needs before it can be inked, in plain words. */
 function roundStatus(s: RunState, why: string | null): string {
   const p = placementOf(s);
-  if (s.round === s.setup.rounds) return why ? `${why} to fill the page.` : 'The page is full. Finish the run.';
-  const bonus = `${p.bonus} bonus gold`;
+  if (s.round === s.setup.rounds) return why ? `${why} to fill the garden.` : 'The garden is full. Harvest it.';
+  const bonus = `${p.bonus} bonus ${p.bonus === 1 ? 'coin' : 'coins'}`;
   if (why) return `${why}, or all ${p.hand.length} for ${bonus}.`;
-  if (p.full) return `Every number is placed: ${bonus} when you ink.`;
-  return `Ready to ink. Keep the ${p.hand[0]} for later, or place it for ${bonus}.`;
+  if (p.full) return `Every number is planted: ${bonus} when you water.`;
+  return `Ready to water. Keep the ${p.hand[0]} for later, or plant it for ${bonus}.`;
 }
 
 /** Numbers in hand grouped by value, smallest first. */
@@ -225,7 +225,7 @@ function Hand() {
   const hand = inHand(s);
   const sel = selection.value;
   return (
-    <div class="hand" role="toolbar" aria-label="Your numbers">
+    <div class="hand" role="toolbar" aria-label="Your numbers to plant">
       <div class="hand-tokens">
         {stacks(hand).map(([n, ts]) => {
           // Equal numbers share one stack; pressing it takes one of them.
@@ -235,7 +235,7 @@ function Hand() {
               key={n}
               class={`hand-slot${sel === t.id ? ' selected' : ''}`}
               data-count={ts.length}
-              aria-label={ts.length > 1 ? `Number ${n}, ${ts.length} in your hand` : `Number ${n}`}
+              aria-label={ts.length > 1 ? `Number ${n}, ${ts.length} in your basket` : `Number ${n}`}
               aria-pressed={sel === t.id}
               onPointerDown={(e) => pressItem(e as unknown as PointerEvent, String(t.id))}
             >
@@ -244,7 +244,7 @@ function Hand() {
             </button>
           );
         })}
-        {!hand.length ? <span class="hand-empty">All your numbers are on the page. Double-tap one to take it back.</span> : null}
+        {!hand.length ? <span class="hand-empty">Every number is planted. Double-tap one to pick it up.</span> : null}
       </div>
     </div>
   );
@@ -271,7 +271,7 @@ function Controls() {
         <button
           key={tool}
           class={`btn tool${tool === 'gilder' && s.gilded ? ' toggled' : ''}`}
-          aria-label={`${TOOL_NAME[tool]}, ${TOOLS[tool]} gold`}
+          aria-label={`${TOOL_NAME[tool]}, ${TOOLS[tool]} coins`}
           onClick={() => { aim.value = null; sheet.value = { kind: 'tool', tool }; }}
         >
           <span class="tool-top"><Icon name={TOOL_ICON[tool]} /><span class="tool-cost"><Icon name="gold" class="ico gold xs" />{TOOLS[tool]}</span></span>
@@ -279,7 +279,7 @@ function Controls() {
         </button>
       ))}
       <button class={`btn primary grow${blocker.value ? ' waiting' : ''}`} onClick={ink}>
-        <Icon name="ink" />{final ? 'Finish' : 'Ink it'}
+        <Icon name="ink" />{final ? 'Harvest' : 'Water it'}
       </button>
     </div>
   );

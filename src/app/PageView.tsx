@@ -6,18 +6,31 @@ import { BOARD_PX, CELL_PX, INSET_PX } from './input';
 import { TokenShape } from './Token';
 
 export const cellX = (cell: number) => INSET_PX + colOf(cell) * CELL_PX;
+
+/** A pebble for a stone (a printed number), about 36 by 32 around its centre. */
+const PEBBLE = 'M-17 2C-18-10-6-16 5-15C15-14 19-5 18 4C17 13 6 17-4 16C-13 15-16 9-17 2Z';
+
+/** A five-petal flower, about 18 across around its centre: the mark of a plot in bloom. */
+function Flower({ x, y }: { x: number; y: number }) {
+  return (
+    <g class="bloom-flower" transform={`translate(${x} ${y})`}>
+      <circle class="petal" cx="0" cy="-4.6" r="3.9" /><circle class="petal" cx="4.4" cy="-1.4" r="3.9" />
+      <circle class="petal" cx="2.7" cy="3.8" r="3.9" /><circle class="petal" cx="-2.7" cy="3.8" r="3.9" />
+      <circle class="petal" cx="-4.4" cy="-1.4" r="3.9" /><circle class="heart" cx="0" cy="0" r="2.6" />
+    </g>
+  );
+}
 export const cellY = (cell: number) => INSET_PX + rowOf(cell) * CELL_PX;
 
 /**
- * Where the number in hand can go, cell by cell: open (bright), open and sealing its cage (gold),
- * a swap with the number standing there, or blocked by the Latin rule (shaded).
+ * Where the number in hand can go, cell by cell: open (bright), open and making its plot bloom
+ * (green), a swap with the number standing there, or blocked by the Latin rule (shaded).
  */
 export type CellHint = 'open' | 'seals' | 'swap' | 'blocked';
 
 export interface PieceView {
   key: string;
   n: number;
-  /** Dealt this round, so marked in red until inked. */
   cls?: string;
 }
 
@@ -101,6 +114,7 @@ export function PageView(props: PageViewProps) {
           <g clip-path={`url(#${id}-cage-${cage.id})`}>
             <rect class="sheen" x="0" y="0" width={BOARD_PX} height={BOARD_PX} fill={`url(#${id}-sheen)`} />
           </g>
+          {sealed.has(cage.id) ? <Flower x={cellX(cage.cells[0]!) + CELL_PX - 11} y={y(cage.cells[0]!) + 11} /> : null}
         </g>
       ))}
 
@@ -124,7 +138,10 @@ export function PageView(props: PageViewProps) {
       ))}
 
       {p.stones.map((v, c) => v ? (
-        <text key={c} class={`stone${sealed.has(p.cageOf[c]!) ? ' on-gold' : ''}`} x={cellX(c) + CELL_PX / 2} y={y(c) + CELL_PX / 2 + 10}>{v}</text>
+        <g key={c}>
+          <path class="pebble" d={PEBBLE} transform={`translate(${cellX(c) + CELL_PX / 2 + 2} ${y(c) + CELL_PX / 2 + 4}) rotate(${(c * 67) % 360})`} />
+          <text class={`stone${sealed.has(p.cageOf[c]!) ? ' on-gold' : ''}`} x={cellX(c) + CELL_PX / 2 + 2} y={y(c) + CELL_PX / 2 + 13}>{v}</text>
+        </g>
       ) : null)}
 
       {props.revealed ? [...props.revealed].map(([c, v]) => (props.pieces[c] || p.stones[c] ? null : (
@@ -149,7 +166,7 @@ export function PageView(props: PageViewProps) {
       ) : null))}
 
       {props.blockers ? [...props.blockers].map((c) => (
-        <circle key={`x${c}`} class="blocker" cx={cellX(c) + CELL_PX / 2 + (p.stones[c] ? 0 : 2)} cy={y(c) + CELL_PX / 2 + (p.stones[c] ? 0 : 4)} r={pieceRadius + 3} />
+        <circle key={`x${c}`} class="blocker" cx={cellX(c) + CELL_PX / 2 + 2} cy={y(c) + CELL_PX / 2 + 4} r={pieceRadius + 3} />
       )) : null}
 
       {hover ? (
