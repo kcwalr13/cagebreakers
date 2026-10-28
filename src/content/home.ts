@@ -8,7 +8,8 @@ export type PlantId =
   | 'apple-blossom' | 'cornflower' | 'cosmos' | 'rose' | 'camellia' | 'dahlia' | 'bluebell'
   | 'sweet-pea' | 'grape-hyacinth' | 'moonflower' | 'iris' | 'peony' | 'orange-blossom' | 'tulip'
   | 'wild-rose' | 'honeysuckle' | 'buttercup' | 'fern' | 'snowdrop' | 'foxglove'
-  | 'forget-me-not' | 'water-lily';
+  | 'forget-me-not' | 'water-lily'
+  | 'hosta' | 'strawberry' | 'pansy' | 'runner-bean' | 'clematis' | 'moss-rose' | 'chamomile';
 
 /**
  * How a plant looks in bloom, drawn by the app: the shape of its flower, how many petals, and its
@@ -53,6 +54,13 @@ export const SPECIES: Record<PlantId, Species> = {
   foxglove: { id: 'foxglove', name: 'Foxglove', shape: 'spike', petals: 6, colour: '#c75aa8', heart: '#8f3378' },
   'forget-me-not': { id: 'forget-me-not', name: 'Forget-me-not', shape: 'round', petals: 5, colour: '#7fb4ec', heart: '#f2d548' },
   'water-lily': { id: 'water-lily', name: 'Water lily', shape: 'pointed', petals: 10, colour: '#fbe3ee', heart: '#f2c230' },
+  hosta: { id: 'hosta', name: 'Hosta', shape: 'spike', petals: 6, colour: '#c9b6ea', heart: '#9a83c8' },
+  strawberry: { id: 'strawberry', name: 'Strawberry', shape: 'round', petals: 5, colour: '#fffdf6', heart: '#e8c02a' },
+  pansy: { id: 'pansy', name: 'Pansy', shape: 'round', petals: 5, colour: '#7d4fc0', heart: '#f2c230' },
+  'runner-bean': { id: 'runner-bean', name: 'Runner bean', shape: 'spike', petals: 7, colour: '#e2412c', heart: '#a82a1c' },
+  clematis: { id: 'clematis', name: 'Clematis', shape: 'star', petals: 6, colour: '#9a6ad8', heart: '#f4e7a8' },
+  'moss-rose': { id: 'moss-rose', name: 'Moss rose', shape: 'round', petals: 5, colour: '#f05a8e', heart: '#f2c230' },
+  chamomile: { id: 'chamomile', name: 'Chamomile', shape: 'round', petals: 14, colour: '#fbfaf3', heart: '#f0b81e' },
 };
 
 /** What the Daily Gardens and the Weekly Garden give. Map gardens give their own (see stations.ts). */

@@ -1,11 +1,12 @@
 # Plot Twist: notes for Claude
 
-Plot Twist was called Cagebreakers until M8. Players see garden words (plot, bloom, week, water, coins,
-seeds, garden, request, Potting Shed, Herbarium, tool belt, path, home garden, journal; the twists are fences,
-lost labels, crossed paths and Zen gardens); the code, storage keys, save-code id and web
-address keep the original names (cage, seal, round, ink, gold, leaf, page, commission, scriptorium, library,
-satchel, `cagebreakers.*`). Write player-facing text in garden words; the design doc's Garden words table maps
-the two. Fonts are bundled open fonts: Fraunces and Alegreya Sans, Nunito (Cottage Garden), DM Sans (Greenhouse).
+Plot Twist was called Cagebreakers until M8. Players see garden words (plot, bloom, week, water, coins, seeds,
+garden, request, Potting Shed, Herbarium, tool belt, path, home garden, journal, garden diary; the twists are
+fences, lost labels, crossed paths, shade, runners, bean poles, elbow room, tidy plots and Zen gardens); the
+code, storage keys, save-code id and web address keep the original names (cage, seal, round, ink, gold, leaf,
+page, commission, scriptorium, library, satchel, `cagebreakers.*`). Write player-facing text in garden words;
+the design doc's Garden words table maps the two. Fonts are bundled open fonts: Fraunces and Alegreya Sans,
+Nunito (Cottage Garden), DM Sans (Greenhouse).
 
 Kyle is the visionary; Claude builds. The design doc is the source of truth:
 https://claude.ai/artifact/NJVkJZeMok9X2xViKNu7mY. Read it (docs tools) before changing gameplay, keep
@@ -30,6 +31,10 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   returns the posted commissions and a `proof` layout of every number meeting all three; it lives in
   `RunState.proof`, and any tool that changes your numbers or the page (Extra, Dig) must keep one or be
   refused for free.
+- Requests never fight right play: no posted kind may be broken by adding a right number (`RETIRED_KINDS` in
+  `src/content/commissions.ts` lists the kinds that could, kept only so old saves read), and the required request
+  is chosen so that layouts of every number you hold in right squares meet it (`DIFFICULTY.requiredRight`).
+  After a change to posting, `npx tsx lab/friction.ts 40` must pass too.
 - Right numbers stay: `RunState.rooted` lists cells holding their right (hidden-solution) number when the round
   began, and every proof leaves them in place (`Holding.rooted`, honored by `sampleLayout` and `findLayout`).
   No request may ever need a right number moved. Nothing on screen marks which numbers are right.
@@ -41,8 +46,12 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   live in `SEASONS` in `src/content/stations.ts`; `standardSetup(size)` is each size's Daily Garden.
 - Twists live on the page: `Page.fences` (greater-than signs between neighbours, drawn from the solution),
   `Page.hidden` (plots show only their target; `makes`/`isSealed(cage, values, hidden)` accept any operation, and
-  operation requests are never posted) and `Page.diagonal` (both long diagonals count: `peersOf(page)`). `isLegal`
-  enforces fences and diagonals like the Latin rule, and `solve` knows all three, so twisted pages have one solution too.
+  operation requests are never posted), `Page.diagonal` (both long diagonals count), `Page.shade` (even numbers
+  only), `Page.runners` (neighbours one apart), `Page.poles` (numbers climb from root to tip), `Page.elbow` (no
+  number touches itself at a corner) and `Page.tidy` (no repeats in a plot). Every twist is a rule about one square
+  or a pair, drawn from the solution, so any subset of the solution keeps it. `src/core/twists.ts` compiles them
+  once per page (`constraintsOf`): `isLegal`, `brokenBy` (the refusal's reason) and `solve` all read it, so twisted
+  pages have one solution too. A new page variant must leave the existing variants' pages unchanged.
 - A Zen garden is `RunSetup.zen`: one week with every number, no commissions (the proof is the solution), no water;
   blooms pay `ZEN.bloomGold` and full bloom `ZEN.perfectGold`. Its stars are finish, full bloom, full bloom without Hint.
 - A run carries its `RunSetup` (station, page variant, rounds, deal, ink, gold, tools, enabled kinds). Read the
@@ -53,7 +62,8 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   (`src/core/home.ts`). The app passes dates in as 'YYYY-MM-DD' strings; `src/core/calendar.ts` does the arithmetic.
   `migrateProfile` reads v1 profiles and keeps every garden that was open as a bought path. Regions and gardens live
   in `src/content/stations.ts`, the shop in `src/content/meta.ts`, the home garden in `src/content/home.ts`, and goals,
-  the daily bonus and the Weekly Garden in `src/content/journal.ts`.
+  the daily bonus and the Weekly Garden in `src/content/journal.ts`. A finished garden's `LibraryEntry.diary` keeps
+  each week's requests and whether they were met (`RoundRecord.asked`).
 - After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets, and on a change that
   touches other sizes, `npx tsx lab/runs.ts 200 all 5` (and 7, 8) too. After a
   station, price, leaf, goal or home-garden change: `npx tsx lab/meta.ts` must pass too. A new map garden's star marks

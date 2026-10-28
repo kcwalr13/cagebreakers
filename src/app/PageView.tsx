@@ -48,6 +48,53 @@ function FenceMark({ page, a, b }: { page: Page; a: number; b: number }) {
   return <g class="fence"><path class="fence-halo" d={d} /><path class="fence-mark" d={d} /></g>;
 }
 
+/** The middle of the edge two neighbouring squares share. */
+function edgeMid(size: number, a: number, b: number) {
+  const g = gridOf(size);
+  const across = g.rowOf(a) === g.rowOf(b);
+  const first = Math.min(a, b), second = Math.max(a, b);
+  return across
+    ? { x: cellX(second, size), y: cellY(first, size) + CELL_PX / 2 + 4 }
+    : { x: cellX(first, size) + CELL_PX / 2 + 2, y: cellY(second, size) };
+}
+
+/** A runner between two squares: a little strawberry on their shared edge (numbers one apart). */
+function RunnerMark({ page, a, b }: { page: Page; a: number; b: number }) {
+  const { x, y } = edgeMid(page.size, a, b);
+  return (
+    <g class="runner" transform={`translate(${x} ${y})`}>
+      <path class="runner-berry" d="M0 7.2C-3.4 6.2-6.2 2.6-6 -.6C-5.8-3.6-3-4.8 0-4.2C3-4.8 5.8-3.6 6-.6C6.2 2.6 3.4 6.2 0 7.2Z" />
+      <path class="runner-cap" d="M-4.4-3.6L-1.6-3.2L0-6.4L1.6-3.2L4.4-3.6L2.2-1.4L0-2.4L-2.2-1.4Z" />
+      <circle class="runner-seed" cx="-2.2" cy="1" r=".75" /><circle class="runner-seed" cx="2.2" cy="1" r=".75" /><circle class="runner-seed" cx="0" cy="3.6" r=".75" />
+    </g>
+  );
+}
+
+/** A bean pole: a vine through its squares from a root bulb (the smallest number) to a leaf at its tip. */
+function PoleMark({ page, cells }: { page: Page; cells: readonly number[] }) {
+  const n = page.size;
+  const pts = cells.map((c) => ({ x: cellX(c, n) + CELL_PX / 2 + 2, y: cellY(c, n) + CELL_PX / 2 + 4 }));
+  const d = pts.map((pt, i) => `${i ? 'L' : 'M'}${pt.x} ${pt.y}`).join('');
+  const root = pts[0]!, tip = pts[pts.length - 1]!, before = pts[pts.length - 2]!;
+  const angle = (Math.atan2(tip.y - before.y, tip.x - before.x) * 180) / Math.PI;
+  return (
+    <g class="pole">
+      <path class="pole-vine" d={d} />
+      <circle class="pole-root" cx={root.x} cy={root.y} r="15" />
+      <path class="pole-leaf" transform={`translate(${tip.x} ${tip.y}) rotate(${angle})`} d="M8 0C12-7 21-8 25-4C21 3 13 5 8 0Z" />
+    </g>
+  );
+}
+
+/** Elbow room: a small knot where four squares meet, as a reminder that corners count. */
+function ElbowKnots({ size }: { size: number }) {
+  const out = [];
+  for (let r = 1; r < size; r++) for (let c = 1; c < size; c++) {
+    out.push(<circle key={`${r}-${c}`} cx={INSET_PX + c * CELL_PX} cy={INSET_PX + r * CELL_PX} r="2.6" />);
+  }
+  return <g class="elbow-knots" aria-hidden="true">{out}</g>;
+}
+
 export interface PieceView {
   key: string;
   n: number;
@@ -107,7 +154,7 @@ export function PageView(props: PageViewProps) {
   const y = (c: number) => INSET_PX + gridOf(p.size).rowOf(c) * CELL_PX;
 
   return (
-    <svg ref={props.svgRef} class={`board size-${p.size}${p.hidden ? ' hidden-signs' : ''} ${props.class ?? ''}`} data-size={p.size} viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`} role="img" aria-label={props.label}>
+    <svg ref={props.svgRef} class={`board size-${p.size}${p.hidden ? ' hidden-signs' : ''}${p.tidy ? ' tidy' : ''} ${props.class ?? ''}`} data-size={p.size} viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`} role="img" aria-label={props.label}>
       <defs>
         <linearGradient id={`${id}-gold`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" class="g0" /><stop offset=".45" class="g1" /><stop offset=".55" class="g2" /><stop offset="1" class="g3" />
@@ -118,6 +165,9 @@ export function PageView(props: PageViewProps) {
           <stop offset=".62" stop-color="var(--sheen)" stop-opacity="0" />
         </linearGradient>
         <pattern id={`${id}-tool`} width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r=".9" class="tooling" /></pattern>
+        {p.shade?.length ? (
+          <pattern id={`${id}-shade`} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="shade-line" width="3.2" height="9" /></pattern>
+        ) : null}
         {p.cages.map((cage) => (
           <clipPath id={`${id}-cage-${cage.id}`} key={cage.id}>
             {cage.cells.map((c) => <rect key={c} x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} />)}
@@ -143,6 +193,15 @@ export function PageView(props: PageViewProps) {
       ))}
 
 
+      {p.shade?.map((c) => (
+        <g key={`sh${c}`} class="shady">
+          <rect class="shade-tint" x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} />
+          <rect x={cellX(c)} y={y(c)} width={CELL_PX} height={CELL_PX} fill={`url(#${id}-shade)`} />
+        </g>
+      ))}
+
+      {p.poles?.map((cells) => <PoleMark key={`p${cells[0]}`} page={p} cells={cells} />)}
+
       {hints?.map((h, c) => (h === 'open' || h === 'seals' ? (
         <rect key={`h${c}`} class={h === 'seals' ? 'hint-seals' : 'hint-open'} x={cellX(c) + 3} y={y(c) + 3} width={CELL_PX - 6} height={CELL_PX - 6} rx="6" />
       ) : null))}
@@ -162,6 +221,8 @@ export function PageView(props: PageViewProps) {
       <rect class="frame" x={INSET_PX} y={INSET_PX} width={span} height={span} />
 
       {p.fences?.map((f) => <FenceMark key={`f${f.a}-${f.b}`} page={p} a={f.a} b={f.b} />)}
+      {p.runners?.map((r) => <RunnerMark key={`r${r.a}-${r.b}`} page={p} a={r.a} b={r.b} />)}
+      {p.elbow ? <ElbowKnots size={p.size} /> : null}
 
       {p.cages.map((cage) => (
         <text key={cage.id} class={`target${sealed.has(cage.id) ? ' on-gold' : ''}`} x={cellX(cage.cells[0]!) + 5} y={y(cage.cells[0]!) + 15}>

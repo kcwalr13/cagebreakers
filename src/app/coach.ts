@@ -17,6 +17,11 @@ const TIPS: Tip[] = [
   { id: 'fences', when: (s) => !!page(s).fences?.length, text: 'Fences: a < or > on the edge between two squares opens towards the bigger number, as in 5 > 3. A number that breaks a fence can\'t go in.' },
   { id: 'hidden', when: (s) => !!page(s).hidden, text: 'Lost labels: plots show only their target. Adding, taking away, multiplying or dividing can make it; taking away and dividing only in two-square plots.' },
   { id: 'diagonal', when: (s) => !!page(s).diagonal, text: 'Crossed paths: the two dotted long diagonals count like rows, so no number repeats on either of them.' },
+  { id: 'shade', when: (s) => !!page(s).shade?.length, text: 'Shade: the hatched squares are shady, and shady squares take only even numbers.' },
+  { id: 'runners', when: (s) => !!page(s).runners?.length, text: 'Runners: a strawberry on the edge between two squares joins numbers one apart, like 3 and 4. Squares without one can hold anything.' },
+  { id: 'poles', when: (s) => !!page(s).poles?.length, text: 'Bean poles: numbers climb each green pole from its round root to its leafy tip, every one bigger than the one before.' },
+  { id: 'elbow', when: (s) => !!page(s).elbow, text: 'Elbow room: no number may touch the same number, not even at a corner.' },
+  { id: 'tidy', when: (s) => !!page(s).tidy, text: 'Tidy plots: no number repeats inside a plot, even one that bends round a corner.' },
   { id: 'commissions', when: (s) => !s.setup.zen && s.round === 1 && onPage(s).length > 0, text: 'Above the garden are this week\'s requests. Miss the required one and a drop of water dries up; the other two pay coins. All three can always be met at once, with every number planted: finding how is the puzzle. Tap one to see where it applies.' },
   { id: 'seal', when: (s) => !s.setup.zen && viewNow(s).sealed.size > 0, text: 'In bloom! A full plot that makes its target blooms, and pays 1 coin every week you water it in bloom.' },
   { id: 'ink', when: (s) => !s.setup.zen && s.round === 1 && inkBlocker(s) === null, text: `Plant all your numbers, or all but one, then Water it. Planting every one pays ${RUN.fullHandGold} bonus ${RUN.fullHandGold === 1 ? 'coin' : 'coins'}; a number you keep is dealt again later.` },
@@ -42,7 +47,7 @@ export const tip = computed<Tip | null>(() => {
 
 /** Tips for the map, the Potting Shed and the Herbarium, shown once each on first visit. */
 export const SCREEN_TIPS = {
-  map: 'The map has four regions. Finish a garden, then spend seeds to open a path to one beyond it. Stars open new regions, score marks earn them, and a few gardens are hidden until you find them.',
+  map: 'The map has five regions. Finish a garden, then spend seeds to open a path to one beyond it. Stars open new regions, score marks earn them, and a few gardens are hidden until you find them.',
   home: 'Every garden you finish leaves a seed packet. Tap a packet, then a bed, to plant it; it grows with every week you water, in any garden. Tap a square to build there.',
   journal: 'Goals to aim for, each worth seeds. Claim them here once they\'re done.',
   shop: 'Seeds buy things that stay: tools to carry, upgrades for every garden on the map, and new looks. Choose your tools when you start a garden.',

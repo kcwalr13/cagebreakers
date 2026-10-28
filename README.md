@@ -2,9 +2,9 @@
 
 An offline number puzzle for phones on airplanes: one KenKen garden, planted over a few weeks. Gardens run from 5×5 to 8×8, and every one has exactly one solution.
 
-No number may repeat in a row or column, and an outlined plot blooms only when its numbers hit the target in its corner. Each week deals a few more numbers and brings three requests ("Row 3 adds to 12 or more", "Make a × plot bloom", "No 6 in column 2"). Anything in the garden can move, but a number in its right square never has to: the requests steer where each week's numbers go, and when one seems to need a number moved, that number is wrong. Miss the required one and a drop of water dries up; bonus requests and blooming plots pay coins. In harvest week the last numbers go in, and the garden is full.
+No number may repeat in a row or column, and an outlined plot blooms only when its numbers hit the target in its corner. Each week deals a few more numbers and brings three requests ("Row 3 adds to 12 or more", "Make a × plot bloom", "Plant a 5 in row 2"). Anything in the garden can move, but a number in its right square never has to: requests only ever ask for more, never for a square left empty, and planting your numbers where they truly go meets the required one. When a request seems to need a number moved, that number is wrong. Miss the required one and a drop of water dries up; bonus requests and blooming plots pay coins. In harvest week the last numbers go in, and the garden is full.
 
-Between gardens, a finished garden earns seeds. The map has four regions of gardens, 27 in all, each with a twist: stars open each region, seeds open the paths between gardens, and four gardens stay hidden until you find them. Some gardens twist the puzzle itself: fences (a < or > between two squares), lost labels (plots show only their target), crossed paths (the long diagonals count) and Zen gardens (no requests, no water, just the puzzle). Every finished garden leaves a seed packet for your home garden, where plants grow with every week you water. There's a Daily Garden of each size with a streak bonus, a Weekly Garden with a new twist every Monday, a journal of goals worth seeds, the Potting Shed's tools, upgrades, looks and garden ornaments, and the Herbarium keeps every garden you've grown.
+Between gardens, a finished garden earns seeds. The map has five regions of gardens, 34 in all, each with a twist: stars open each region, seeds open the paths between gardens, and five gardens stay hidden until you find them. Some gardens twist the puzzle itself: fences (a < or > between two squares), lost labels (plots show only their target), crossed paths (the long diagonals count), and in the Botanic Garden shade (even numbers only), runners (two numbers one apart), bean poles (numbers climb from root to tip), elbow room (no number touches itself, even at a corner) and tidy plots (no repeats in a plot); Zen gardens have no requests and no water, just the puzzle. Every finished garden leaves a seed packet for your home garden, where plants grow with every week you water. There's a Daily Garden of each size with a streak bonus, a Weekly Garden with a new twist every Monday, a journal of goals worth seeds, the Potting Shed's tools, upgrades, looks and garden ornaments, and the Herbarium keeps every garden you've grown, with a diary of each week's requests.
 
 **Play:** https://kcwalr13.github.io/cagebreakers/ — open it once with a connection, add it to your home screen, and it works in airplane mode from then on.
 
@@ -24,7 +24,7 @@ The game was called Cagebreakers until M8. The code, the web address, save codes
 | M6 · Commissions | The battle is retired: numbers are the only pieces, each round deals more of them under three commissions, and the final round fills the page | Built |
 | M7 · The Scriptorium | Gold leaf, a map of six stations with stars, a shop of tools, upgrades and styles, the satchel and the library | Built |
 | M8 · Plot Twist | The whole game becomes a garden with the same rules: plots that bloom, weeks, water, coins and seeds, and four looks (Botanical, Night Garden, Cottage Garden and Greenhouse); right numbers never have to move, a season is six weeks, gardens of 5×5, 7×7 and 8×8 with a Daily Garden of each size, and every page has one solution | Built |
-| M9 · The Grounds | Four regions with paths bought with seeds and hidden gardens; fences, lost labels, crossed paths and Zen gardens; a daily streak with a grace day; the Weekly Garden; a journal of goals; and a home garden that grows as you play | Built |
+| M9 · The Grounds | Four regions with paths bought with seeds and hidden gardens; fences, lost labels, crossed paths and Zen gardens; a daily streak with a grace day; the Weekly Garden; a journal of goals; and a home garden that grows as you play. A second build: requests that never fight right play, a garden diary, and the Botanic Garden with five more twists | Built |
 
 ## Working on it
 
@@ -38,6 +38,7 @@ npx tsx lab/runs.ts 400   # three bots play full runs: the balance report, check
 npx tsx lab/runs.ts 200 all 8  # the same on another size of garden (5, 7 or 8)
 npx tsx lab/meta.ts       # every garden for the bots, and how fast a Careful player progresses across the map
 npx tsx lab/calibrate.ts 120 espalier  # star marks for a map garden
+npx tsx lab/friction.ts 40     # how often requests fight a player who plants numbers where they truly go
 npm run assets      # re-copy fonts and regenerate the icon module
 node scripts/app-icons.mjs  # re-render home-screen icons
 ```

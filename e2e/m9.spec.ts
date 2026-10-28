@@ -138,15 +138,16 @@ test('the Daily Garden pays its bonus and starts a streak; the Weekly Garden bri
   await p.screenshot({ path: info.outputPath('m9-08-title.png') });
   await p.getByRole('button', { name: /Weekly Garden/ }).click();
   const page = await R(p, '(r) => r.state().setup.page') as string;
-  expect(page).toMatch(/fences|hidden|diagonal/);
+  expect(page).toMatch(/fences|hidden|diagonal|shade|runners|poles|elbow|tidy/);
   expect(await R(p, '(r) => !!r.state().weekly')).toBe(true);
   await p.screenshot({ path: info.outputPath('m9-09-weekly.png') });
 });
 
-test('the map scrolls through its four regions; a closed region says how many stars it needs', async ({ page: p }, info) => {
+test('the map scrolls through its five regions; a closed region says how many stars it needs', async ({ page: p }, info) => {
   await fresh(p);
   await go(p, 'map');
-  await expect(p.locator('.region.closed')).toHaveCount(3);
+  await expect(p.locator('.region.closed')).toHaveCount(4);
+  await expect(p.locator('.region').nth(2)).toContainText('Opens with 20 stars');
   await expect(p.locator('.region').nth(1)).toContainText('Opens with 8 stars');
   await p.getByRole('button', { name: 'A hidden garden' }).first().click();
   await expect(p.getByRole('dialog')).toContainText('Earn all 3 stars at The Rock Garden');

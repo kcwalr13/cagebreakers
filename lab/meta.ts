@@ -92,8 +92,9 @@ function campaign(c: number, dailies: boolean) {
     leaf.push(p.earned - earnedBefore);
     if (p.earned - p.leaf > spentBefore) { quiet.push(run - lastSpend); lastSpend = run; }
     if (firstBuy < 0 && p.earned - p.leaf > 0) firstBuy = run;
-    // Every path the player could have found: a map-only player never keeps a daily streak for the Orangery.
-    if (allPaths < 0 && STATIONS.every((s2) => stationOpen(p, s2) || (!dailies && s2.reveal?.kind === 'streak'))) allPaths = run;
+    // Every path the player could have found: a map-only player never keeps a daily streak for the Orangery,
+    // and these players never play the Weekly Garden that finds the Physic Garden.
+    if (allPaths < 0 && STATIONS.every((s2) => stationOpen(p, s2) || (!dailies && s2.reveal?.kind === 'streak') || s2.reveal?.kind === 'weeklies')) allPaths = run;
     if (allItems < 0 && ITEMS.every((i) => p.owned.includes(i.id))) allItems = run;
     if (allPaths > 0 && allItems > 0) break;
   }
@@ -108,7 +109,7 @@ for (const mode of ['map', 'daily'] as const) {
   const all = rs.flatMap((r) => r.leaf);
   console.log(`  seeds per day: median ${quant(all, 0.5)}, mean ${(all.reduce((a, b) => a + b, 0) / all.length).toFixed(1)}, p90 ${quant(all, 0.9)}`);
   console.log(`  first purchase after day ${quant(rs.map((r) => r.firstBuy), 0.5)}; days between purchases: median ${quant(rs.flatMap((r) => r.quiet), 0.5)}, p90 ${quant(rs.flatMap((r) => r.quiet), 0.9)}`);
-  console.log(`  every path ${mode === 'map' ? '(but the Orangery, found by a daily streak) ' : ''}open after ${quant(rs.map((r) => r.allPaths), 0.5)} days (median; -1 = not within 200), every shop item after ${quant(rs.map((r) => r.allItems), 0.5)}`);
+  console.log(`  every path ${mode === 'map' ? '(but the Orangery and the Physic Garden, found by a daily streak and Weekly Gardens) ' : '(but the Physic Garden, found by Weekly Gardens) '}open after ${quant(rs.map((r) => r.allPaths), 0.5)} days (median; -1 = not within 200), every shop item after ${quant(rs.map((r) => r.allItems), 0.5)}`);
   console.log(`  at the end: ${quant(rs.map((r) => r.stars), 0.5)} stars, ${quant(rs.map((r) => r.goals), 0.5)} of ${GOALS.length} goals, ${quant(rs.map((r) => r.found), 0.5)} hidden gardens found, best streak ${quant(rs.map((r) => r.streak), 0.5)}`);
 }
 

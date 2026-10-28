@@ -1,32 +1,14 @@
 import { gridOf, gridOfValues } from './grid';
-import { type Cage, type Fence, type Page, makes } from './page';
+import { type Cage, type Page, makes } from './page';
+import { brokenBy, constraintsOf, twistsKept } from './twists';
 
-/** The cells that may not share a number with each cell: its row and column, and the long diagonals on a diagonal page. */
-export const peersOf = (page: Pick<Page, 'size' | 'diagonal'>) => (page.diagonal ? gridOf(page.size).crossPeers : gridOf(page.size).peers);
+export { brokenBy, twistsKept } from './twists';
 
-const fencesAt = new WeakMap<readonly Fence[], Map<number, Fence[]>>();
-/** The fences touching each cell. */
-export function fencesOf(page: Pick<Page, 'fences'>, cell: number): readonly Fence[] {
-  if (!page.fences?.length) return [];
-  let by = fencesAt.get(page.fences);
-  if (!by) {
-    by = new Map();
-    for (const f of page.fences) for (const c of [f.a, f.b]) by.set(c, [...(by.get(c) ?? []), f]);
-    fencesAt.set(page.fences, by);
-  }
-  return by.get(cell) ?? [];
-}
+/** The cells that may not share a number with each cell: its row and column, and whatever the page's twists add. */
+export const peersOf = (page: Page) => constraintsOf(page).peers;
 
-/** A fence `n` at `cell` would break, against the numbers around it, or null. `ignore` is a cell to treat as empty. */
-export function brokenFence(page: Page, values: readonly number[], cell: number, n: number, ignore = -1): { fence: Fence; other: number } | null {
-  for (const f of fencesOf(page, cell)) {
-    const other = f.a === cell ? f.b : f.a;
-    const v = other === ignore ? 0 : values[other]!;
-    if (!v) continue;
-    if (f.a === cell ? n <= v : n >= v) return { fence: f, other };
-  }
-  return null;
-}
+/** True when every fence (and every other twist) holds between the filled squares. */
+export const fencesKept = (page: Page, values: readonly number[]) => twistsKept(page, values);
 
 /**
  * A board is the numbers standing on the page: stones plus whatever the player has placed.
@@ -40,13 +22,12 @@ export function boardValues(page: Page, placed: readonly number[]): number[] {
 
 /**
  * The Latin rule: a number may stand in a cell only if no other number in its row or column
- * is the same (or on a long diagonal through it, when the page counts them), and it keeps every
- * fence beside it. `ignore` is a cell to treat as empty (the origin of a number being moved).
+ * is the same, and it keeps every twist of the page (src/core/twists.ts). `ignore` is a cell to
+ * treat as empty (the origin of a number being moved).
  */
 export function isLegal(page: Page, values: readonly number[], cell: number, n: number, ignore = -1): boolean {
   if (page.stones[cell]) return false;
-  for (const p of peersOf(page)[cell]!) if (p !== ignore && values[p] === n) return false;
-  return !brokenFence(page, values, cell, n, ignore);
+  return !brokenBy(page, values, cell, n, ignore);
 }
 
 /** Whether a plot is in bloom: every square filled, and its numbers make the target (by any operation when the page hides them). */
@@ -130,7 +111,4 @@ export function boardIsLatin(values: readonly number[], diagonal = false): boole
   return true;
 }
 
-/** True when every fence holds between the filled squares on either side of it. */
-export function fencesKept(page: Pick<Page, 'fences'>, values: readonly number[]): boolean {
-  return (page.fences ?? []).every((f) => !values[f.a] || !values[f.b] || values[f.a]! > values[f.b]!);
-}
+

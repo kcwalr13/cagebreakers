@@ -1,6 +1,7 @@
 import { type Grid, gridOf } from './grid';
 import { type Rng, stream } from './rng';
 import { solve } from './solve';
+import { latinPeers } from './twists';
 
 export type Op = '+' | '×' | '−' | '÷';
 
@@ -17,6 +18,9 @@ export interface Cage {
  * number at `b`. Fences are drawn from the hidden solution, so it keeps every one.
  */
 export interface Fence { a: number; b: number }
+
+/** Two neighbouring squares joined by a runner: their numbers are one apart. */
+export interface Runner { a: number; b: number }
 
 /** A generated page. Plain data, safe to serialize. */
 export interface Page {
@@ -39,6 +43,15 @@ export interface Page {
   hidden?: boolean;
   fences?: Fence[];
   diagonal?: boolean;
+  /** More twists (see src/core/twists.ts): no number touches the same number at a corner; no number repeats in a plot. */
+  elbow?: boolean;
+  tidy?: boolean;
+  /** Bean poles, each a path of neighbouring squares from root to tip whose numbers climb. */
+  poles?: number[][];
+  /** Runners joining neighbouring squares whose numbers are one apart. */
+  runners?: Runner[];
+  /** Shady squares, which take even numbers. */
+  shade?: number[];
 }
 
 export interface PageRules {
@@ -63,6 +76,12 @@ export interface PageRules {
   hidden?: boolean;
   fences?: readonly [number, number];
   diagonal?: boolean;
+  /** More twists: elbow room, tidy plots, and how many bean poles, runners and shady squares to draw. */
+  elbow?: boolean;
+  tidy?: boolean;
+  poles?: readonly [number, number];
+  runners?: readonly [number, number];
+  shade?: readonly [number, number];
 }
 
 export const DEFAULT_PAGE_RULES: PageRules = {
@@ -103,12 +122,15 @@ export function makes(cage: Cage, values: readonly number[], hidden = false): bo
   return hidden ? makesAny(values, cage.target) : evaluate(cage.op, values) === cage.target;
 }
 
-/** A random Latin square of the grid's size by randomized backtracking; with `diagonal`, both long diagonals hold every number once too. */
-export function latinSquare(rng: Rng, g: Grid = gridOf(6), diagonal = false): number[] {
+/**
+ * A random Latin square of the grid's size by randomized backtracking; with `diagonal`, both long
+ * diagonals hold every number once too, and with `elbow`, no number touches itself at a corner.
+ */
+export function latinSquare(rng: Rng, g: Grid = gridOf(6), diagonal = false, elbow = false): number[] {
   const grid = new Array<number>(g.cells).fill(0);
-  const peers = diagonal ? g.crossPeers : g.peers;
-  // Only the diagonal search gets a budget: plain squares fill quickly, and keep the pages they always made.
-  const BUDGET = diagonal ? 200_000 : Infinity;
+  const peers = latinPeers(g.size, diagonal, elbow);
+  // Only a twisted search gets a budget: plain squares fill quickly, and keep the pages they always made.
+  const BUDGET = diagonal || elbow ? 200_000 : Infinity;
   let budget = BUDGET;
   const fill = (i: number): boolean => {
     if (i === g.cells) return true;
@@ -146,11 +168,64 @@ function drawFences(rng: Rng, solution: readonly number[], g: Grid, count: numbe
   return out.sort((p, q) => Math.min(p.a, p.b) - Math.min(q.a, q.b) || Math.max(p.a, p.b) - Math.max(q.a, q.b));
 }
 
-/** Splits the page into connected cages of 2–4 cells. Returns null when an attempt fails. */
-function tryPartition(rng: Rng, rules: PageRules, g: Grid): number[][] | null {
+/** Draws runners between neighbouring squares whose numbers are one apart. */
+function drawRunners(rng: Rng, solution: readonly number[], g: Grid, count: number): Runner[] {
+  const pairs: [number, number][] = [];
+  for (const c of g.all) for (const n of g.neighbors[c]!) if (n > c && Math.abs(solution[c]! - solution[n]!) === 1) pairs.push([c, n]);
+  const load = new Array<number>(g.cells).fill(0);
+  const out: Runner[] = [];
+  for (const [a, b] of rng.shuffle(pairs)) {
+    if (out.length === count) break;
+    if (load[a]! >= 2 || load[b]! >= 2) continue;
+    load[a]!++; load[b]!++;
+    out.push({ a, b });
+  }
+  return out.sort((p, q) => p.a - q.a || p.b - q.b);
+}
+
+/** Draws bean poles: paths of 3 or 4 neighbouring squares whose numbers climb from root to tip, never sharing a square. */
+function drawPoles(rng: Rng, solution: readonly number[], g: Grid, count: number): number[][] {
+  const used = new Set<number>();
+  const out: number[][] = [];
+  for (let attempt = 0; attempt < 400 && out.length < count; attempt++) {
+    const start = rng.pick(g.all.filter((c) => !used.has(c)));
+    const want = rng.int(3, 4);
+    const path = [start];
+    while (path.length < want) {
+      const tip = path[path.length - 1]!;
+      const up = g.neighbors[tip]!.filter((n) => !used.has(n) && !path.includes(n) && solution[n]! > solution[tip]!);
+      if (!up.length) break;
+      path.push(rng.pick(up));
+    }
+    if (path.length < 3) continue;
+    for (const c of path) used.add(c);
+    out.push(path);
+  }
+  return out;
+}
+
+/** Picks shady squares among those the solution fills with even numbers, at most two in a row or column. */
+function drawShade(rng: Rng, solution: readonly number[], g: Grid, count: number): number[] {
+  const perRow = new Array<number>(g.size).fill(0), perCol = new Array<number>(g.size).fill(0);
+  const out: number[] = [];
+  for (const c of rng.shuffle(g.all.filter((x) => solution[x]! % 2 === 0))) {
+    if (out.length === count) break;
+    if (perRow[g.rowOf(c)]! >= 2 || perCol[g.colOf(c)]! >= 2) continue;
+    perRow[g.rowOf(c)]!++; perCol[g.colOf(c)]!++;
+    out.push(c);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/**
+ * Splits the page into connected cages of 2–4 cells. Returns null when an attempt fails. With
+ * `tidy` (the hidden solution), a cage never takes in a square whose number it already holds.
+ */
+function tryPartition(rng: Rng, rules: PageRules, g: Grid, tidy?: readonly number[]): number[][] | null {
   const neighbors = (c: number) => g.neighbors[c]!;
   const owner = new Array<number>(g.cells).fill(-1);
   const cages: number[][] = [];
+  const fits = (cage: readonly number[], c: number) => !tidy || !cage.some((x) => tidy[x] === tidy[c]);
   for (const start of rng.shuffle(Array.from({ length: g.cells }, (_, i) => i))) {
     if (owner[start] !== -1) continue;
     const want = rng.weighted(rules.sizeWeights);
@@ -158,7 +233,7 @@ function tryPartition(rng: Rng, rules: PageRules, g: Grid): number[][] | null {
     const cage = [start];
     owner[start] = id;
     while (cage.length < want) {
-      const frontier = [...new Set(cage.flatMap(neighbors))].filter((c) => owner[c] === -1);
+      const frontier = [...new Set(cage.flatMap(neighbors))].filter((c) => owner[c] === -1 && fits(cage, c));
       if (frontier.length === 0) break;
       const next = rng.pick(frontier);
       owner[next] = id;
@@ -172,7 +247,7 @@ function tryPartition(rng: Rng, rules: PageRules, g: Grid): number[][] | null {
     if (cage.length !== 1) continue;
     const cell = cage[0]!;
     const hosts = [...new Set(neighbors(cell).map((n) => owner[n]!))].filter(
-      (h) => h !== id && cages[h]!.length >= 2 && cages[h]!.length < 4,
+      (h) => h !== id && cages[h]!.length >= 2 && cages[h]!.length < 4 && fits(cages[h]!, cell),
     );
     if (hosts.length === 0) return null;
     const host = rng.pick(hosts);
@@ -245,14 +320,18 @@ export function generatePage(seed: string, rules: PageRules = DEFAULT_PAGE_RULES
   const opRng = stream(seed, 'page.ops');
   const stoneRng = stream(seed, 'page.stones');
   const fenceRng = stream(seed, 'page.fences');
-  /** The twists a page of these rules carries, besides its fences. */
-  const twists = { ...(rules.hidden ? { hidden: true } : {}), ...(rules.diagonal ? { diagonal: true } : {}) };
+  const twistRng = stream(seed, 'page.twists');
+  /** The twists a page of these rules carries, besides those drawn from its solution. */
+  const twists = {
+    ...(rules.hidden ? { hidden: true } : {}), ...(rules.diagonal ? { diagonal: true } : {}),
+    ...(rules.elbow ? { elbow: true } : {}), ...(rules.tidy ? { tidy: true } : {}),
+  };
 
   /** Cages and stones over one solution, `tries` times; null if none of them has only that solution. */
   const build = (solution: number[], tries: number): Page | null => {
     for (let attempt = 0; attempt < tries; attempt++) {
       let cells: number[][] | null = null;
-      for (let i = 0; i < 500 && !cells; i++) cells = tryPartition(cageRng, rules, g);
+      for (let i = 0; i < 500 && !cells; i++) cells = tryPartition(cageRng, rules, g, rules.tidy ? solution : undefined);
       if (!cells) throw new Error(`could not partition page ${seed}`);
       // Order cages top-to-bottom, left-to-right by their first cell so ids read naturally.
       cells.sort((a, b) => a[0]! - b[0]!);
@@ -267,7 +346,17 @@ export function generatePage(seed: string, rules: PageRules = DEFAULT_PAGE_RULES
       });
 
       const fenced = rules.fences ? { fences: drawFences(fenceRng, solution, g, fenceRng.int(rules.fences[0], rules.fences[1])) } : {};
-      const shape = { seed, size: g.size, solution, cages, cageOf, ...twists, ...fenced };
+      const drawn = {
+        ...(rules.poles ? { poles: drawPoles(twistRng, solution, g, twistRng.int(rules.poles[0], rules.poles[1])) } : {}),
+        ...(rules.runners ? { runners: drawRunners(twistRng, solution, g, twistRng.int(rules.runners[0], rules.runners[1])) } : {}),
+        ...(rules.shade ? { shade: drawShade(twistRng, solution, g, twistRng.int(rules.shade[0], rules.shade[1])) } : {}),
+      };
+      // A rare solution can't carry enough of a twist (one with no three neighbours that climb has no
+      // bean poles): then the hidden solution is drawn again.
+      const short = (rules.poles && drawn.poles!.length < rules.poles[0]) || (rules.runners && drawn.runners!.length < rules.runners[0])
+        || (rules.shade && drawn.shade!.length < rules.shade[0]);
+      if (short) return null;
+      const shape = { seed, size: g.size, solution, cages, cageOf, ...twists, ...fenced, ...drawn };
       let stones: number[] | null = null;
       for (let i = 0; i < 200 && !stones; i++) {
         stones = placeStones(stoneRng, solution, cageOf, cells, rules, g);
@@ -283,13 +372,13 @@ export function generatePage(seed: string, rules: PageRules = DEFAULT_PAGE_RULES
   };
 
   // A page that must have one solution gets fresh cages when stones alone can't settle it.
-  const first = build(latinSquare(stream(seed, 'page.latin'), g, rules.diagonal), rules.unique === undefined ? 1 : 200);
+  const first = build(latinSquare(stream(seed, 'page.latin'), g, rules.diagonal, rules.elbow), rules.unique === undefined ? 1 : 200);
   if (first) return first;
   // Some solutions almost never come out unique without stones (a stoneless Fallow Field page, say):
   // then the hidden solution itself is drawn again, as many times as it takes.
   const more = stream(seed, 'page.latin.more');
   for (let round = 0; round < 500; round++) {
-    const page = build(latinSquare(more, g, rules.diagonal), 40);
+    const page = build(latinSquare(more, g, rules.diagonal, rules.elbow), 40);
     if (page) return page;
   }
   throw new Error(`could not make page ${seed} unique`);

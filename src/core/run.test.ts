@@ -4,13 +4,13 @@ import { RUN, TOOLS, ZEN } from '../content/balance';
 import { isMet, viewOf } from './commission';
 import { gridOf } from './grid';
 import { createRng } from './rng';
-import { boardIsLatin, fencesKept } from './rules';
+import { boardIsLatin, twistsKept } from './rules';
 import {
   type RunAction, type RunSetup, type RunState, STANDARD_SETUP, act, bagCount, dealtThisRound, inkBlocker, legalCells, migrateRun, newRun, standardSetup,
   pageOf, placementOf, replay, runPage, scoreOf, valuesOf, viewNow,
 } from './run';
 import { STATIONS } from '../content/stations';
-import { NEW_PROFILE, setupFor } from './meta';
+import { NEW_PROFILE, newProfile, setupFor } from './meta';
 
 const CELLS = gridOf(6).cells;
 
@@ -47,7 +47,7 @@ function checkInvariants(s: RunState) {
   expect(new Set(cells).size).toBe(cells.length);
   expect(cells.every((c) => !p.stones[c])).toBe(true);
   expect(boardIsLatin(valuesOf(s), p.diagonal)).toBe(true);
-  expect(fencesKept(p, valuesOf(s))).toBe(true);
+  expect(twistsKept(p, valuesOf(s))).toBe(true);
   expect(s.gold).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeGreaterThanOrEqual(0);
   expect(s.ink).toBeLessThanOrEqual(s.setup.startInk);
@@ -60,7 +60,7 @@ function checkProof(s: RunState) {
   const proof = s.proof!;
   expect(proof).toHaveLength(p.stones.length);
   expect(boardIsLatin(proof, p.diagonal)).toBe(true);
-  expect(fencesKept(p, proof)).toBe(true);
+  expect(twistsKept(p, proof)).toBe(true);
   for (let c = 0; c < p.stones.length; c++) if (p.stones[c]) expect(proof[c]).toBe(p.stones[c]);
   const placed = proof.filter((n, c) => n && !p.stones[c]).sort();
   expect(placed, 'the proof places every number you hold, and no others').toEqual(s.tokens.map((t) => t.n).sort());
@@ -268,6 +268,31 @@ describe('a run', () => {
       expect(s.phase).toBe('done');
     }
   });
+
+  it.each(['shade-garden', 'strawberry-patch', 'bean-rows', 'parterre', 'topiary', 'physic-garden', 'knot-garden'] as const)(
+    'grows the %s to harvest, every week perfect and every twist kept', (id) => {
+      for (const seed of ['TWAAAA', 'TWBBBB']) {
+        let s = newRun(seed, { setup: setupFor(newProfile(), id) });
+        while (s.phase === 'arrange') {
+          checkInvariants(s);
+          const page = runPage(s), proof = s.proof!, right = new Set(s.rooted ?? []);
+          const free = new Map<number, number[]>();
+          for (let c = 0; c < page.stones.length; c++) if (proof[c] && !page.stones[c] && !right.has(c)) free.set(proof[c]!, [...(free.get(proof[c]!) ?? []), c]);
+          // Lift everything first, so a number never waits on a square its twin still holds.
+          for (const t of s.tokens) if (t.cell >= 0 && !right.has(t.cell)) s = act(s, { type: 'place', id: t.id, cell: -1 }).state;
+          for (const t of s.tokens) {
+            if (t.cell >= 0) continue;
+            const r = act(s, { type: 'place', id: t.id, cell: free.get(t.n)!.shift()! });
+            expect(r.ok, r.reason).toBe(true);
+            s = r.state;
+          }
+          expect(s.posted.every((p) => isMet(p.c, viewNow(s)))).toBe(true);
+          s = act(s, { type: 'ink' }).state;
+        }
+        expect(s.phase).toBe('done');
+        expect(valuesOf(s)).toEqual(runPage(s).solution);
+      }
+    }, 30_000);
 
   it('shows a hidden number with the Lens', () => {
     let s = { ...newRun('LENSES'), gold: 5 };

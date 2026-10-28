@@ -37,7 +37,12 @@ export type Commission =
   | { kind: 'seal-all' }
   | { kind: 'corners-min'; min: number }
   | { kind: 'quarter-min'; quarter: Quarter; min: number }
-  | { kind: 'seal-op-count'; op: Op; count: number };
+  | { kind: 'seal-op-count'; op: Op; count: number }
+  // Requests that only ever ask you to plant: a number in its right square never breaks one.
+  | { kind: 'place-line'; axis: Axis; line: number; n: number }
+  | { kind: 'line-count-min'; axis: Axis; line: number; min: number }
+  | { kind: 'seal-line'; axis: Axis; line: number }
+  | { kind: 'seal-big'; size: number };
 
 export type Quarter = 'tl' | 'tr' | 'bl' | 'br';
 
@@ -171,6 +176,10 @@ export function measure(c: Commission, v: View): number {
     case 'corners-min': return total(v, sh.corners);
     case 'quarter-min': return total(v, sh.quarters[c.quarter]);
     case 'seal-op-count': return [...sealed].filter((id) => page.cages[id]!.op === c.op).length;
+    case 'place-line': return lineCells(c.axis, c.line).some((x) => values[x] === c.n) ? 1 : 0;
+    case 'line-count-min': return filled(v, lineCells(c.axis, c.line));
+    case 'seal-line': return [...sealed].some((id) => touches(page, id, c.axis, c.line)) ? 1 : 0;
+    case 'seal-big': return [...sealed].some((id) => page.cages[id]!.cells.length >= c.size) ? 1 : 0;
   }
 }
 
@@ -179,6 +188,7 @@ export function isMet(c: Commission, v: View): boolean {
   switch (c.kind) {
     case 'line-min': case 'diagonal-min': case 'corners-min': case 'quarter-min': return m >= c.min;
     case 'line-max': case 'line-count-max': return m <= c.max;
+    case 'line-count-min': return m >= c.min;
     case 'seal-count': case 'seal-op-count': return m >= c.count;
     default: return m === 1;
   }
@@ -207,6 +217,10 @@ export function describe(c: Commission, page: Page): string {
     case 'corners-min': return `The four corners add to ${c.min} or more`;
     case 'quarter-min': return `${quarterWord(c.quarter, page.size)} adds to ${c.min} or more`;
     case 'seal-op-count': return `Make ${c.count} ${OP_WORD[c.op]} plots bloom`;
+    case 'place-line': return `Plant a ${c.n} in ${lineName(c.axis, c.line).toLowerCase()}`;
+    case 'line-count-min': return `${lineName(c.axis, c.line)} holds ${c.min} numbers or more`;
+    case 'seal-line': return `Make a plot touching ${lineName(c.axis, c.line).toLowerCase()} bloom`;
+    case 'seal-big': return `Make a plot of ${c.size} or more squares bloom`;
   }
 }
 
@@ -234,6 +248,9 @@ export function readout(c: Commission, v: View): string {
     case 'rising': case 'parity-line': return m ? 'yes' : 'not yet';
     case 'fill-page': return `${v.values.filter((n) => n).length} of ${v.values.length}`;
     case 'seal-all': return `${v.sealed.size} of ${v.page.cages.length}`;
+    case 'place-line': return m ? 'planted' : 'not yet';
+    case 'line-count-min': return `${m} now`;
+    case 'seal-line': case 'seal-big': return m ? 'in bloom' : 'not yet';
   }
 }
 
@@ -253,6 +270,9 @@ export function cellsOf(c: Commission, page: Page): number[] {
     case 'zone': return gridOf(page.size).all.filter(sh.inZone[c.zone]);
     case 'seal-cage': case 'empty-cage': return page.cages[c.cage]!.cells.slice();
     case 'seal-op': return page.cages.filter((g) => g.op === c.op).flatMap((g) => g.cells);
+    case 'place-line': case 'line-count-min': return [...lineCells(c.axis, c.line)];
+    case 'seal-line': return page.cages.filter((g) => touches(page, g.id, c.axis, c.line)).flatMap((g) => g.cells);
+    case 'seal-big': return page.cages.filter((g) => g.cells.length >= c.size).flatMap((g) => g.cells);
     default: return [];
   }
 }
@@ -353,6 +373,18 @@ function candidates(page: Page, round: number, enabled: readonly CommissionKind[
     for (const b of lines) if (b > line) for (const min of VARIANTS.equalLinesMin) {
       add('equal-lines', 'bool', () => ({ kind: 'equal-lines', axis, a: line, b, min }));
     }
+    const cells = lineCells(page.size, axis, line);
+    // A number for a line, where the line's square for it is open.
+    for (let n = 1; n <= page.size; n++) {
+      if (cells.some((c) => !page.stones[c] && page.solution[c] === n)) add('place-line', 'bool', () => ({ kind: 'place-line', axis, line, n }));
+    }
+    add('line-count-min', 'min', (t) => ({ kind: 'line-count-min', axis, line, min: t }));
+    if (page.cages.some((g) => touches(page, g.id, axis, line) && g.cells.some((c) => !page.stones[c]))) {
+      add('seal-line', 'bool', () => ({ kind: 'seal-line', axis, line }));
+    }
+  }
+  for (const size of VARIANTS.bigPlot) {
+    if (page.cages.some((g) => g.cells.length >= size && g.cells.some((c) => !page.stones[c]))) add('seal-big', 'bool', () => ({ kind: 'seal-big', size }));
   }
   for (const line of lines) for (const count of VARIANTS.risingCount) add('rising', 'bool', () => ({ kind: 'rising', line, count }));
   for (let n = 1; n <= page.size; n++) for (const zone of ['top', 'bottom', 'left', 'right'] as Zone[]) {
@@ -379,6 +411,8 @@ const fromTop = (sorted: number[], share: number) => sorted[Math.min(sorted.leng
 
 interface Judged {
   c: Commission; kind: CommissionKind; worstRate: number; bestRate: number; meanRate: number; metNow: boolean;
+  /** The share of all-right layouts of every number you hold that meet it (required commissions only). */
+  fullRate?: number;
   /** Indexes of the sampled layouts that meet it (bounties only). */
   meetsIn?: number[];
 }
@@ -396,20 +430,27 @@ function rateStats(stats: number[][], meets: (m: number) => boolean) {
 }
 
 /**
- * Sets a required commission's threshold and measures how often sampled layouts meet it.
+ * Sets a required commission's threshold so that planting numbers in right squares meets it: at
+ * least `share` of the all-right layouts of every number you hold (set `full` of `stats`), and at
+ * least `keepShare` of those with one number kept back. Every sampled layout is all-right (each
+ * number in a square where the hidden solution has it), so this measures what right play does.
  * `stats` holds, for each set of numbers you could hold, the candidate's measure on each layout.
  */
-function judgeRequired(cand: Candidate, stats: number[][], now: View): Judged | null {
+function judgeRequired(cand: Candidate, stats: number[][], now: View, share: number, keepShare: number, full: number): Judged | null {
+  const want = (i: number) => (i === full ? share : keepShare);
   let t = 0;
   if (cand.dir !== 'bool') {
-    const per = stats.map((s) => fromTop(s.slice().sort((a, b) => (cand.dir === 'min' ? b - a : a - b)), DIFFICULTY.requiredShare));
-    // It must suit the worst set of numbers you could keep.
+    const per = stats.map((s, i) => fromTop(s.slice().sort((a, b) => (cand.dir === 'min' ? b - a : a - b)), want(i)));
+    // It must suit every set of numbers you could keep.
     t = cand.dir === 'min' ? Math.min(...per) : Math.max(...per);
     const [lo, hi] = THRESHOLD_RANGE[cand.kind]!.required;
     if (t < lo || t > hi) return null;
   }
+  const meets = meetsFn(cand.dir, t);
+  const rates = stats.map((s) => s.filter(meets).length / s.length);
+  if (rates.some((r, i) => r < want(i))) return null;
   const c = cand.make(t);
-  return { c, kind: cand.kind, ...rateStats(stats, meetsFn(cand.dir, t)), metNow: isMet(c, now) };
+  return { c, kind: cand.kind, ...rateStats(stats, meets), metNow: isMet(c, now), fullRate: rates[full] };
 }
 
 /**
@@ -519,14 +560,19 @@ function planFrom(input: PostInput, rng: Rng, samples: number): RoundPlan {
     return given;
   };
 
-  // The required commission: possible whichever dealt numbers you keep, and not a given. Late in
-  // a season most of your numbers may be right and rooted, leaving the new ones little room; then
-  // one that every layout of the right numbers meets will do, so the week still asks for something.
-  const requiredUpTo = (maxRate: number) => choose(pool.filter((c) => c.req), input.lastRequired, (cand) => {
-    const j = judgeRequired(cand, statsOf(cand), now);
-    return j && j.worstRate >= DIFFICULTY.requiredMinRate && j.worstRate <= maxRate ? j : null;
-  }, () => 1);
-  const required = requiredUpTo(DIFFICULTY.requiredMaxRate) ?? requiredUpTo(1);
+  // The required commission: one that planting every number in a right square meets, whichever
+  // right squares you choose, and that the page doesn't meet yet. When no such commission exists
+  // this week, one met by nearly every all-right layout will do, and then one already met (so right
+  // play never costs water). Every sampled layout is all-right, so these shares measure right play.
+  const sizes = choices(holding).map((set) => set.length);
+  const full = sizes.indexOf(Math.max(...sizes));
+  const requiredAt = (share: number, fresh: boolean) => choose(pool.filter((c) => c.req), input.lastRequired, (cand) => {
+    const j = judgeRequired(cand, statsOf(cand), now, share, Math.min(share, DIFFICULTY.requiredKeepBack), full);
+    return j && (!fresh || !j.metNow) ? j : null;
+  }, (j) => j.fullRate ?? 1);
+  let required: Judged | null = null;
+  for (const share of DIFFICULTY.requiredRight) if ((required = requiredAt(share, true))) break;
+  required ??= requiredAt(DIFFICULTY.requiredRight[0]!, false);
   const meetsRequired = required ? all.flatMap((v, i) => (isMet(required.c, v) ? [i] : [])) : all.map((_, i) => i);
 
   // Two bounties of other kinds, each ambitious, all three met together by some sampled layout.
@@ -606,6 +652,7 @@ function closeness(c: Commission, v: View): number {
     case 'corners-min': case 'quarter-min': return m / c.min;
     case 'line-max': return c.max / Math.max(1, m);
     case 'line-count-max': return c.max / Math.max(1, m);
+    case 'line-count-min': return m / c.min;
     default: return 0;
   }
 }

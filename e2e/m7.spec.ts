@@ -28,11 +28,11 @@ async function noSmallButtons(p: PWPage) {
 test('the map: begin in the Kitchen Garden, finish it, save seeds and buy a path to the next garden', async ({ page: p }, info) => {
   await fresh(p);
   await p.getByRole('button', { name: /The Map/ }).click();
-  await expect(p.locator('.station')).toHaveCount(27);
-  // The Kitchen Garden and the Window Box are open from the start; four gardens are hidden.
+  await expect(p.locator('.station')).toHaveCount(34);
+  // The Kitchen Garden and the Window Box are open from the start; five gardens are hidden.
   await expect(p.locator('.station.open')).toHaveCount(2);
-  await expect(p.locator('.station.hidden')).toHaveCount(4);
-  await expect(p.locator('.region')).toHaveCount(4);
+  await expect(p.locator('.station.hidden')).toHaveCount(5);
+  await expect(p.locator('.region')).toHaveCount(5);
   await noSmallButtons(p);
   await p.screenshot({ path: info.outputPath('m7-01-map.png') });
   await p.getByRole('button', { name: /The Kitchen Garden/ }).click();

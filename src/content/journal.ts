@@ -25,18 +25,25 @@ export const WEEKLY_GARDENS: readonly { page: PageVariant; twist: string }[] = [
   { page: 'seven-hidden', twist: 'Lost labels, 7×7' },
   { page: 'seven-diagonal-fences', twist: 'Fences and crossed paths, 7×7' },
   { page: 'eight-diagonal', twist: 'Crossed paths, 8×8' },
+  { page: 'six-shade', twist: 'Shade' },
+  { page: 'six-runners', twist: 'Runners' },
+  { page: 'six-poles', twist: 'Bean poles' },
+  { page: 'six-elbow', twist: 'Elbow room' },
+  { page: 'six-tidy', twist: 'Tidy plots' },
+  { page: 'seven-elbow', twist: 'Elbow room, 7×7' },
+  { page: 'seven-tidy-poles', twist: 'Tidy plots and bean poles, 7×7' },
 ];
 
 /** What a goal counts. The core measures each one from the profile. */
 export type GoalMeasure =
   | 'finished' | 'full-bloom' | 'no-spill' | 'perfect-season' | 'daily-four' | 'streak' | 'sizes'
-  | 'twist-fences' | 'twist-hidden' | 'twist-diagonal' | 'twist-zen' | 'zen-perfect' | 'stars' | 'regions'
+  | 'twist-fences' | 'twist-hidden' | 'twist-diagonal' | 'twist-zen' | 'twist-botanic' | 'twist-every' | 'zen-perfect' | 'stars' | 'regions'
   | 'found' | 'planted' | 'in-bloom' | 'weeklies' | 'ornaments' | 'paths';
 
 export type GoalId =
   | 'first-harvest' | 'ten-harvests' | 'fifty-harvests' | 'full-bloom' | 'not-a-drop' | 'perfect-season'
   | 'daily-four' | 'streak-3' | 'streak-7' | 'streak-30' | 'every-size'
-  | 'fences' | 'lost-labels' | 'crossed-paths' | 'zen' | 'zen-master'
+  | 'fences' | 'lost-labels' | 'crossed-paths' | 'zen' | 'zen-master' | 'botanist' | 'every-twist'
   | 'stars-10' | 'stars-30' | 'stars-60' | 'wild-wood' | 'hidden-1' | 'hidden-all'
   | 'planter' | 'gardener' | 'first-bloom' | 'bouquet' | 'weekly-1' | 'weekly-5' | 'collector' | 'explorer';
 
@@ -68,14 +75,16 @@ export const GOALS: readonly Goal[] = [
   { id: 'lost-labels', name: 'Lost labels', text: 'Finish a garden whose plots show only their target.', measure: 'twist-hidden', of: 1, reward: 8 },
   { id: 'crossed-paths', name: 'Crossed paths', text: 'Finish a garden where the long diagonals count.', measure: 'twist-diagonal', of: 1, reward: 8 },
   { id: 'zen', name: 'Quiet hour', text: 'Finish a Zen garden.', measure: 'twist-zen', of: 1, reward: 8 },
+  { id: 'botanist', name: 'Botanist', text: 'Finish gardens with shade, runners, bean poles, elbow room and tidy plots.', measure: 'twist-botanic', of: 5, reward: 20 },
+  { id: 'every-twist', name: 'Every twist in the book', text: 'Finish a garden with each of the nine twists.', measure: 'twist-every', of: 9, reward: 30 },
   { id: 'zen-master', name: 'Raked smooth', text: 'Finish a Zen garden in full bloom without a Hint.', measure: 'zen-perfect', of: 1, reward: 15 },
   { id: 'stars-10', name: 'Ten stars', text: 'Earn 10 stars on the map.', measure: 'stars', of: 10, reward: 10 },
   { id: 'stars-30', name: 'Thirty stars', text: 'Earn 30 stars on the map.', measure: 'stars', of: 30, reward: 25 },
   { id: 'stars-60', name: 'Sixty stars', text: 'Earn 60 stars on the map.', measure: 'stars', of: 60, reward: 50 },
-  { id: 'wild-wood', name: 'Into the wood', text: 'Open every region of the map.', measure: 'regions', of: 4, reward: 30 },
+  { id: 'wild-wood', name: 'Into the wood', text: 'Open every region of the map.', measure: 'regions', of: 5, reward: 30 },
   { id: 'explorer', name: 'Explorer', text: 'Open 15 paths on the map.', measure: 'paths', of: 15, reward: 25 },
   { id: 'hidden-1', name: 'Off the path', text: 'Find a hidden garden.', measure: 'found', of: 1, reward: 10 },
-  { id: 'hidden-all', name: 'Every secret', text: 'Find all four hidden gardens.', measure: 'found', of: 4, reward: 30 },
+  { id: 'hidden-all', name: 'Every secret', text: 'Find all five hidden gardens.', measure: 'found', of: 5, reward: 30 },
   { id: 'planter', name: 'Planter', text: 'Plant 5 plants in your home garden.', measure: 'planted', of: 5, reward: 8 },
   { id: 'gardener', name: 'Gardener', text: 'Plant 20 plants in your home garden.', measure: 'planted', of: 20, reward: 20 },
   { id: 'first-bloom', name: 'First flower', text: 'Grow a plant at home until it blooms.', measure: 'in-bloom', of: 1, reward: 10 },

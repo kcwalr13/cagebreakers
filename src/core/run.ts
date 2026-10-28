@@ -7,11 +7,11 @@
 import { BASE_TOOLS, RUN, TOOLS, type ToolId, ZEN } from '../content/balance';
 import type { CommissionKind } from '../content/commissions';
 import { PAGE_VARIANTS, type PageVariant, SEASONS } from '../content/stations';
-import { type Holding, type Posted, type View, findLayout, isMet, planRound, viewOf } from './commission';
+import { type Commission, type Holding, type Posted, type View, findLayout, isMet, planRound, viewOf } from './commission';
 import { type Size, gridOf } from './grid';
 import { type Page, generatePage } from './page';
 import { type Rng, stream } from './rng';
-import { boardValues, brokenFence, isLegal, peersOf } from './rules';
+import { boardValues, brokenBy, isLegal } from './rules';
 
 export interface Token {
   id: number;
@@ -37,7 +37,17 @@ export interface RoundRecord {
   /** In a Zen garden: every plot bloomed, and what that paid. (Absent elsewhere.) */
   perfect?: boolean;
   perfectGold?: number;
+  /** The week's requests and whether each was met when it was watered: the garden diary. */
+  asked?: Asked[];
+  /**
+   * Numbers that stood in their right square when the week began and didn't at watering: right
+   * numbers moved during the week. Kept for the diary's record, never shown during play.
+   */
+  movedRight?: number;
 }
+
+/** A request as the diary keeps it. */
+export interface Asked { c: Commission; required: boolean; met: boolean }
 
 export type RunPhase = 'arrange' | 'done' | 'ruined';
 
@@ -360,17 +370,26 @@ const clone = (s: RunState): RunState => ({
 
 const refuse = (s: RunState, reason: string): ActResult => ({ state: s, ok: false, reason });
 
-/** Says which line already holds a number, for a refused placement. */
+/** Says why a number can't go in a cell, for a refused placement, in the garden's words. */
 function conflictLine(page: Page, values: readonly number[], cell: number, n: number): string {
   const g = gridOf(page.size);
-  for (const p of peersOf(page)[cell]!) {
-    if (values[p] !== n) continue;
-    if (g.rowOf(p) === g.rowOf(cell)) return `There's already a ${n} in row ${g.rowOf(cell) + 1}`;
-    if (g.colOf(p) === g.colOf(cell)) return `There's already a ${n} in column ${g.colOf(cell) + 1}`;
-    return `There's already a ${n} on that long diagonal`;
+  const b = brokenBy(page, values, cell, n);
+  if (!b) return `A ${n} can't go there`;
+  switch (b.by) {
+    case 'peer':
+      switch (b.why) {
+        case 'row': return `There's already a ${n} in row ${g.rowOf(cell) + 1}`;
+        case 'col': return `There's already a ${n} in column ${g.colOf(cell) + 1}`;
+        case 'diagonal': return `There's already a ${n} on that long diagonal`;
+        case 'corner': return `A ${n} touches it at a corner`;
+        case 'plot': return `There's already a ${n} in that plot`;
+      }
+      break;
+    case 'fence': return b.greater ? `The fence says more than the ${values[b.other]} beside it` : `The fence says less than the ${values[b.other]} beside it`;
+    case 'pole': return b.greater ? `The bean pole climbs: it must be more than the ${values[b.other]} below it` : `The bean pole climbs: it must be less than the ${values[b.other]} above it`;
+    case 'runner': return `The runner joins it to the ${values[b.other]}: it must be one more or one less`;
+    case 'shade': return 'Shady squares take even numbers';
   }
-  const broken = brokenFence(page, values, cell, n);
-  if (broken) return broken.fence.a === cell ? `The fence says more than the ${values[broken.other]} beside it` : `The fence says less than the ${values[broken.other]} beside it`;
   return `A ${n} can't go there`;
 }
 
@@ -500,6 +519,10 @@ export function act(prev: RunState, a: RunAction): ActResult {
         seals: view.sealed.size, sealGold: view.sealed.size * RUN.sealGold * (s.gilded ? 2 : 1),
         fullHand: placement.full, fullHandGold: placement.full ? placement.bonus : 0,
       };
+      if (s.posted.length) {
+        record.asked = s.posted.map((p) => ({ c: p.c, required: p.required, met: isMet(p.c, view) }));
+        record.movedRight = (s.rooted ?? []).filter((c) => view.values[c] !== page.solution[c]).length;
+      }
       if (s.setup.zen) {
         // Blooms are what a Zen garden pays for, and a garden in full bloom pays a bonus.
         record.sealGold = view.sealed.size * ZEN.bloomGold * (s.gilded ? 2 : 1);

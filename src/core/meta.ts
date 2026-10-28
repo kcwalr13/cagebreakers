@@ -10,7 +10,8 @@ import { DAILY_PLANT, HOME, HOME_ITEMS, type HomeItemId, type PlantId, WEEKLY_PL
 import { DAILY, GOALS, type Goal, type GoalId, WEEKLY, WEEKLY_GARDENS } from '../content/journal';
 import { ITEMS, type Item, type ItemId, LEAF, LIBRARY_SIZE, PERKS } from '../content/meta';
 import {
-  PAGE_VARIANTS, type PageVariant, REGIONS, type Region, SEASONS, STATIONS, type Station, type StationId, regionById, sizeOfPage, stationById,
+  BOTANIC_TWISTS, type PageVariant, REGIONS, type Region, SEASONS, STATIONS, type Station, type StationId, regionById, sizeOfPage, stationById,
+  TWISTS, type Twist, twistsOf,
 } from '../content/stations';
 import { dailyParts, dayNumber, dayOf } from './calendar';
 import type { Size } from './grid';
@@ -18,7 +19,7 @@ import {
   type Home, type HomeResult, cantBuyHome, givePlant, inBloom, layItem, migrateHome, moveTile, newHome, ownedCount, pickUp, plantIn, stockItem,
 } from './home';
 import { stream } from './rng';
-import { type RunSetup, type RunState, STANDARD_SETUP, runPage, scoreOf, standardSetup, valuesOf } from './run';
+import { type Asked, type RunSetup, type RunState, STANDARD_SETUP, runPage, scoreOf, standardSetup, valuesOf } from './run';
 import { dailySeed } from './seed';
 
 /** A filled page, bound into the library. */
@@ -36,9 +37,14 @@ export interface LibraryEntry {
   stars: number;
   /** When it was filled, as the app wrote it. */
   when: string;
+  /** The garden diary: each week's requests and whether they were met. (Older gardens, and Zen gardens, have none.) */
+  diary?: DiaryWeek[];
 }
 
-export type Twist = 'fences' | 'hidden' | 'diagonal' | 'zen';
+/** A week of the garden diary. */
+export interface DiaryWeek { asked: Asked[]; movedRight: number }
+
+export type { Twist } from '../content/stations';
 
 /** Counts kept for the journal. */
 export interface Stats {
@@ -184,6 +190,7 @@ function revealNow(p: Profile, st: Station): boolean {
     case 'streak': return p.daily.best >= r.days;
     case 'zen-perfect': return p.stats.zenPerfect > 0;
     case 'blooms': return inBloom(p.home, p.stats.weeks) >= r.plants;
+    case 'weeklies': return p.stats.weeklies >= r.count;
   }
 }
 
@@ -199,6 +206,7 @@ export function clueOf(st: Station): string {
     case 'streak': return `Keep a daily streak for ${r.days} days to find it.`;
     case 'zen-perfect': return 'Finish a Zen garden in full bloom without a Hint to find it.';
     case 'blooms': return `Grow ${r.plants} plants at home until they bloom to find it.`;
+    case 'weeklies': return `Finish ${r.count} Weekly Gardens to find it.`;
   }
 }
 
@@ -346,13 +354,7 @@ export function rewardFor(p: Profile, s: RunState): Reward {
 
 /** The twists of a finished garden, for the journal. */
 function twistsOfRun(s: RunState): Twist[] {
-  const rules = PAGE_VARIANTS[s.setup.page];
-  const out: Twist[] = [];
-  if (rules.fences) out.push('fences');
-  if (rules.hidden) out.push('hidden');
-  if (rules.diagonal) out.push('diagonal');
-  if (s.setup.zen) out.push('zen');
-  return out;
+  return [...(s.setup.zen ? ['zen' as const] : []), ...twistsOf(s.setup.page)];
 }
 
 function statsAfter(st: Stats, s: RunState): Stats {
@@ -393,6 +395,9 @@ export function recordRun(p: Profile, s: RunState, when: string): Profile {
     const entry: LibraryEntry = {
       id: s.id, seed: s.seed, station, ...(s.daily ? { daily: s.daily } : {}), ...(s.weekly ? { weekly: s.weekly } : {}), page: s.setup.page,
       erased: s.erased.slice(), values: valuesOf(s), score, stars: r.stars, when,
+      ...(s.records.some((w) => w.asked?.length)
+        ? { diary: s.records.map((w) => ({ asked: w.asked ?? [], movedRight: w.movedRight ?? 0 })) }
+        : {}),
     };
     next.library = [entry, ...p.library].slice(0, LIBRARY_SIZE);
   }
@@ -489,6 +494,8 @@ export function goalProgress(p: Profile, g: Goal): number {
     case 'twist-hidden': return st.twists.includes('hidden') ? 1 : 0;
     case 'twist-diagonal': return st.twists.includes('diagonal') ? 1 : 0;
     case 'twist-zen': return st.twists.includes('zen') ? 1 : 0;
+    case 'twist-botanic': return BOTANIC_TWISTS.filter((t) => st.twists.includes(t)).length;
+    case 'twist-every': return TWISTS.filter((t) => st.twists.includes(t)).length;
     case 'zen-perfect': return st.zenPerfect;
     case 'stars': return starCount(p).have;
     case 'regions': return REGIONS.filter((r) => regionOpen(p, r)).length;

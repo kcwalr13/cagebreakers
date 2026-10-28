@@ -6,6 +6,7 @@ import { DEFAULT_PAGE_RULES, evaluate, generatePage } from './page';
 import { boardIsLatin, boardValues, completions, isSealed, sealedCages } from './rules';
 import { SEED_ALPHABET } from './seed';
 import { solve } from './solve';
+import { latinPeers, twistsKept } from './twists';
 
 const { cells: CELLS, size: SIZE, colOf, rowOf } = gridOf(6);
 const neighbors = (c: number) => gridOf(6).neighbors[c]!;
@@ -99,6 +100,8 @@ describe('pages of every size', () => {
     'five', 'six', 'six-rocks', 'six-fallow', 'six-market', 'seven', 'eight',
     'six-fences', 'six-hidden', 'six-diagonal', 'six-hidden-fences', 'seven-fences', 'seven-hidden', 'seven-diagonal-fences',
     'seven-hidden-diagonal', 'eight-gentle', 'eight-diagonal', 'eight-fences', 'eight-all', 'five-all',
+    'six-shade', 'six-runners', 'six-poles', 'six-elbow', 'six-tidy', 'six-shade-runners', 'seven-poles-runners',
+    'seven-elbow', 'seven-tidy-poles',
   ];
   it.each(variants)('%s: a valid page with exactly one solution', (variant) => {
     const rules = PAGE_VARIANTS[variant];
@@ -119,6 +122,40 @@ describe('pages of every size', () => {
           expect(page.solution[f.a]!).toBeGreaterThan(page.solution[f.b]!);
         }
       } else expect(page.fences).toBeUndefined();
+      // Every twist is drawn from the hidden solution, so the solution keeps all of them.
+      expect(twistsKept(page, page.solution)).toBe(true);
+      expect(!!page.elbow).toBe(!!rules.elbow);
+      expect(!!page.tidy).toBe(!!rules.tidy);
+      if (rules.shade) {
+        expect(page.shade!.length).toBeGreaterThanOrEqual(rules.shade[0]);
+        expect(page.shade!.length).toBeLessThanOrEqual(rules.shade[1]);
+        for (const c of page.shade!) expect(page.solution[c]! % 2).toBe(0);
+      } else expect(page.shade).toBeUndefined();
+      if (rules.runners) {
+        expect(page.runners!.length).toBeGreaterThanOrEqual(rules.runners[0]);
+        expect(page.runners!.length).toBeLessThanOrEqual(rules.runners[1]);
+        for (const r of page.runners!) {
+          expect(g.neighbors[r.a]).toContain(r.b);
+          expect(Math.abs(page.solution[r.a]! - page.solution[r.b]!)).toBe(1);
+        }
+      } else expect(page.runners).toBeUndefined();
+      if (rules.poles) {
+        expect(page.poles!.length).toBeGreaterThanOrEqual(rules.poles[0]);
+        expect(page.poles!.length).toBeLessThanOrEqual(rules.poles[1]);
+        const used = page.poles!.flat();
+        expect(new Set(used).size).toBe(used.length);
+        for (const pole of page.poles!) {
+          expect(pole.length).toBeGreaterThanOrEqual(3);
+          for (let i = 1; i < pole.length; i++) {
+            expect(g.neighbors[pole[i - 1]!]).toContain(pole[i]!);
+            expect(page.solution[pole[i]!]!).toBeGreaterThan(page.solution[pole[i - 1]!]!);
+          }
+        }
+      } else expect(page.poles).toBeUndefined();
+      if (rules.elbow) {
+        for (let c = 0; c < g.cells; c++) for (const p of latinPeers(rules.size, rules.diagonal, true)[c]!) expect(page.solution[p]).not.toBe(page.solution[c]);
+      }
+      if (rules.tidy) for (const cage of page.cages) expect(new Set(cage.cells.map((c) => page.solution[c])).size).toBe(cage.cells.length);
       const covered = page.cages.flatMap((c) => c.cells).sort((a, b) => a - b);
       expect(covered).toEqual(g.all);
       expect(page.cages.length).toBeGreaterThanOrEqual(rules.minCages);
@@ -143,7 +180,14 @@ describe('pages of every size', () => {
     expect(solve(page, 2).found).toEqual([page.solution]);
   });
 
-  it('keeps the 6×6 pages from before for saved gardens', () => {
+  it('draws the hidden solution again when it can\'t carry a twist, so a bean-pole page always has its poles', () => {
+    // This seed's first solution has no three neighbours whose numbers climb.
+    const page = generatePage('JP9YXU', PAGE_VARIANTS['six-poles']);
+    expect(page.poles!.length).toBeGreaterThanOrEqual(PAGE_VARIANTS['six-poles'].poles![0]);
+    expect(solve(page, 2).found).toEqual([page.solution]);
+  });
+
+    it('keeps the 6×6 pages from before for saved gardens', () => {
     expect(PAGE_VARIANTS.standard.unique).toBeUndefined();
     expect(generatePage('7KQ2X4', PAGE_VARIANTS.standard)).toEqual(generatePage('7KQ2X4'));
   });

@@ -58,12 +58,18 @@ const used = {
   birdHouse: 'bird-house', frog: 'frog', lantern: 'lantern', scarecrow: 'scarecrow', bench: 'park-bench', butterflies: 'butterfly',
   sundial: 'sundial', beehive: 'beehive', mushroomHouse: 'mushroom-house', fruitTree: 'fruit-tree', bonsai: 'bonsai-tree', swing: 'tree-swing',
   well: 'well', fountain: 'fountain', bridge: 'japanese-bridge',
+  // The Botanic Garden's twists and gardens
+  shade: 'umbrella', runners: 'strawberry', poles: 'beanstalk', elbow: 'checkered-flag', tidy: 'broom',
+  hosta: 'leaf-swirl', berryBush: 'berry-bush', beanRows: 'curling-vines', parterre: 'vine-flower', topiary: 'gardening-shears',
+  moss: 'ground-sprout', physic: 'pestle-mortar',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));
 const custom = {
   // A garden square crossed by its two long diagonals.
   diagonal: '<rect x="88" y="88" width="336" height="336" rx="28" fill="none" stroke="currentColor" stroke-width="40"/><path d="M150 150l212 212M362 150L150 362" fill="none" stroke="currentColor" stroke-width="44" stroke-linecap="round"/>',
+  // Two squares that touch only at a corner, each holding a number.
+  elbow: '<rect x="76" y="76" width="168" height="168" rx="22" fill="none" stroke="currentColor" stroke-width="36"/><rect x="268" y="268" width="168" height="168" rx="22" fill="none" stroke="currentColor" stroke-width="36"/><circle cx="160" cy="160" r="34"/><circle cx="352" cy="352" r="34"/>',
   back: '<path d="M318 86L148 256l170 170" fill="none" stroke="currentColor" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 const body = Object.entries(used)

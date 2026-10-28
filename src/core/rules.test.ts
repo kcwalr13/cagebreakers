@@ -3,7 +3,7 @@ import fc from 'fast-check';
 import { gridOf } from './grid';
 import { generatePage } from './page';
 import { PAGE_VARIANTS } from '../content/stations';
-import { boardIsLatin, boardValues, brokenFence, combinationSets, completions, fencesKept, hintFor, isLegal, isSealed, sealedCages } from './rules';
+import { boardIsLatin, boardValues, brokenBy, combinationSets, completions, fencesKept, hintFor, isLegal, isSealed, sealedCages } from './rules';
 import { SEED_ALPHABET } from './seed';
 
 const CELLS = gridOf(6).cells;
@@ -114,6 +114,47 @@ describe('the twists', () => {
     fc.assert(twisted(PAGE_VARIANTS['seven-diagonal-fences']), { numRuns: 60 });
   });
 
+  it('never lets a placement break shade, a runner, a bean pole, elbow room or a tidy plot', () => {
+    for (const v of ['six-shade', 'six-runners', 'six-poles', 'six-elbow', 'six-tidy', 'seven-poles-runners'] as const) {
+      fc.assert(twisted(PAGE_VARIANTS[v]), { numRuns: 40 });
+    }
+  });
+
+  it('says which twist keeps a number out', () => {
+    const bare = (variant: Parameters<typeof generatePage>[1], seed: string) => ({ ...generatePage(seed, variant), stones: new Array<number>(36).fill(0) });
+    const g = gridOf(6);
+    // Shade takes only even numbers.
+    const shady = bare(PAGE_VARIANTS['six-shade'], 'SHADEA');
+    const sc = shady.shade![0]!;
+    const none = new Array<number>(36).fill(0);
+    expect(brokenBy(shady, none, sc, 3)).toEqual({ by: 'shade' });
+    expect(brokenBy(shady, none, sc, 4)).toBeNull();
+    // A runner joins numbers one apart.
+    const run = bare(PAGE_VARIANTS['six-runners'], 'RUNNRA');
+    const r = run.runners![0]!;
+    const rv = none.slice(); rv[r.b] = 3;
+    expect(brokenBy(run, rv, r.a, 5)).toEqual({ by: 'runner', other: r.b });
+    expect(brokenBy(run, rv, r.a, 4)).toBeNull();
+    expect(brokenBy(run, rv, r.a, 2)).toBeNull();
+    // Numbers climb a bean pole from root to tip, past squares between them too.
+    const poled = bare(PAGE_VARIANTS['six-poles'], 'POLESA');
+    const pole = poled.poles![0]!;
+    const pv = none.slice(); pv[pole[0]!] = 4;
+    expect(brokenBy(poled, pv, pole[2]!, 4)).toMatchObject({ by: 'pole', other: pole[0] });
+    expect(brokenBy(poled, pv, pole[2]!, 6)).toBeNull();
+    // Elbow room: a number may not touch itself at a corner.
+    const elbow = bare(PAGE_VARIANTS['six-elbow'], 'ELBOWA');
+    const ev = none.slice(); ev[g.cellAt(2, 2)] = 5;
+    expect(brokenBy(elbow, ev, g.cellAt(3, 3), 5)).toEqual({ by: 'peer', why: 'corner', other: g.cellAt(2, 2) });
+    expect(brokenBy({ ...elbow, elbow: false }, ev, g.cellAt(3, 3), 5)).toBeNull();
+    // Tidy plots: no number repeats inside a plot.
+    const tidy = bare(PAGE_VARIANTS['six-tidy'], 'TIDYAA');
+    const bent = tidy.cages.find((c) => c.cells.some((x) => g.rowOf(x) !== g.rowOf(c.cells[0]!)) && c.cells.some((x) => g.colOf(x) !== g.colOf(c.cells[0]!)))!;
+    const [a, b] = [bent.cells[0]!, bent.cells.find((x) => g.rowOf(x) !== g.rowOf(bent.cells[0]!) && g.colOf(x) !== g.colOf(bent.cells[0]!))!];
+    const tv = none.slice(); tv[a] = 2;
+    expect(brokenBy(tidy, tv, b, 2)).toEqual({ by: 'peer', why: 'plot', other: a });
+  });
+
   it('refuses a number that breaks a fence, and one already on the long diagonal', () => {
     const page = generatePage('FENCEQ', PAGE_VARIANTS['six-fences']);
     const f = page.fences!.find((x) => !page.stones[x.a] && !page.stones[x.b])!;
@@ -121,7 +162,7 @@ describe('the twists', () => {
     placed[f.b] = page.solution[f.b]!;
     const values = boardValues(page, placed);
     for (let v = 1; v <= 6; v++) if (v <= values[f.b]!) expect(isLegal(page, values, f.a, v)).toBe(false);
-    expect(brokenFence(page, values, f.a, values[f.b]!)).not.toBeNull();
+    expect(brokenBy(page, values, f.a, values[f.b]!)).not.toBeNull();
     // On a bare diagonal page, a number in one corner keeps it out of the opposite corner: they share the long diagonal but no row or column.
     const diag = { ...generatePage('DIAGQQ', PAGE_VARIANTS['six-diagonal']), stones: new Array<number>(36).fill(0) };
     const dPlaced = new Array<number>(36).fill(0);

@@ -169,6 +169,14 @@ describe('the scriptorium', () => {
     expect(after.filled).toEqual(['copy-desk']);
     expect(after.stars['copy-desk']).toBe(r.stars);
     expect(after.library[0]).toMatchObject({ seed: 'LEAFAA', station: 'copy-desk', score: scoreOf(s).total });
+    // The garden diary keeps every week's requests and whether they were met.
+    const diary = after.library[0]!.diary!;
+    expect(diary).toHaveLength(s.records.length);
+    for (const [i, w] of diary.entries()) {
+      expect(w.asked.filter((x) => x.required).map((x) => x.met)).toEqual([s.records[i]!.required]);
+      expect(w.asked.filter((x) => !x.required && x.met)).toHaveLength(s.records[i]!.bounties);
+      expect(w.movedRight).toBeGreaterThanOrEqual(0);
+    }
     // Counted once, however often it's recorded.
     expect(recordRun(after, s, '2026-10-24')).toBe(after);
     // Stars already earned pay nothing the second time.

@@ -1,6 +1,6 @@
 import { describe as group, expect, it } from 'vitest';
 import { RUN } from '../content/balance';
-import { FINAL_SEALS } from '../content/commissions';
+import { FINAL_SEALS, RETIRED_KINDS } from '../content/commissions';
 import {
   type Commission, type Holding, cageName, cellsOf, choices, describe, isMet, possible, postCommissions, readout, sampleLayout, viewOf,
 } from './commission';
@@ -59,6 +59,8 @@ group('commission sentences', () => {
       { kind: 'line-min', axis: 'row', line: 0, min: 10 }, { kind: 'zone', n: 3, zone: 'top' },
       { kind: 'seal-cage', cage: 0 }, { kind: 'empty-cage', cage: 1 }, { kind: 'equal-lines', axis: 'col', a: 0, b: 5, min: 8 },
       { kind: 'rising', line: 0, count: 3 }, { kind: 'fill-page' }, { kind: 'seal-all' },
+      { kind: 'place-line', axis: 'row', line: 1, n: 5 }, { kind: 'line-count-min', axis: 'col', line: 2, min: 4 },
+      { kind: 'seal-line', axis: 'row', line: 3 }, { kind: 'seal-big', size: 3 },
     ];
     for (const c of all) {
       expect(readout(c, empty).length).toBeGreaterThan(0);
@@ -160,6 +162,26 @@ group('proving commissions possible', () => {
       }
     }
     expect(checked).toBe(6 * RUN.rounds);
+  });
+
+  it('posts a required request that planting numbers in right squares meets, and nothing that keeps a number out', () => {
+    let weeks = 0, rate = 0;
+    for (const seed of ['RGTAAA', 'RGTBBB', 'RGTCCC', 'RGTDDD', 'RGTEEE', 'RGTFFF', 'RGTGGG', 'RGTHHH']) {
+      for (const s of rounds(seed)) {
+        if (s.round >= s.setup.rounds) continue;
+        const p = pageOf(seed);
+        for (const x of s.posted) expect(RETIRED_KINDS, describe(x.c, p)).not.toContain(x.c.kind);
+        const required = s.posted.find((x) => x.required)!;
+        // Every number you hold, each planted in a right square, whichever ones.
+        const set = [...s.tokens.filter((t) => t.round < s.round).map((t) => t.n), ...dealtThisRound(s).map((t) => t.n)];
+        const rng = stream(seed, `right:${s.round}`);
+        let met = 0;
+        for (let i = 0; i < 100; i++) if (isMet(required.c, viewOf(p, sampleLayout(p, set, rng, s.rooted ?? [])))) met++;
+        expect(met, `${seed} week ${s.round}: ${describe(required.c, p)}`).toBeGreaterThanOrEqual(65);
+        weeks++; rate += met / 100;
+      }
+    }
+    expect(rate / weeks).toBeGreaterThan(0.9);
   });
 
   it('posts three commissions even on a thin first page, all met at once by the proof', () => {

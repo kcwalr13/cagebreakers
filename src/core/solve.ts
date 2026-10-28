@@ -2,34 +2,39 @@
  * A KenKen solver for whole pages: every solution that agrees with the stones, up to a limit.
  * Used to make generated pages have exactly one solution. Depth-first search, always filling the
  * square with the fewest numbers left, where a square's numbers are those that some way of
- * finishing its cage still allows. It knows the twists: hidden operations (any of the four makes
- * a plot bloom), greater-than fences, and pages where the long diagonals count too.
+ * finishing its cage still allows. It knows every twist (src/core/twists.ts): hidden operations,
+ * crossed paths, elbow room, tidy plots, fences, bean poles, runners and shade.
  */
 import { gridOf } from './grid';
 import { type Cage, type Page, makes } from './page';
+import { type Constraints, constraintsOf } from './twists';
 
 /**
- * Every way to fill a cage that hits its target, keeps the Latin rule (and any fence) inside it,
- * and agrees with the stones.
+ * Every way to fill a cage that hits its target, keeps every rule between its own squares, and
+ * agrees with the stones.
  */
-function cageTuples(page: Page, cage: Cage, stones: readonly number[]): number[][] {
-  const peers = page.diagonal ? gridOf(page.size).crossPeers : gridOf(page.size).peers;
-  const k = cage.cells.length;
+function cageTuples(page: Page, k: Constraints, cage: Cage, stones: readonly number[]): number[][] {
+  const cells = cage.cells;
+  const n = cells.length;
   const out: number[][] = [];
-  const t = new Array<number>(k).fill(0);
-  const inner = (page.fences ?? []).filter((f) => cage.cells.includes(f.a) && cage.cells.includes(f.b));
+  const t = new Array<number>(n).fill(0);
+  const at = (c: number) => cells.indexOf(c);
   const walk = (i: number) => {
-    if (i === k) {
-      if (!makes(cage, t, page.hidden)) return;
-      for (const f of inner) if (t[cage.cells.indexOf(f.a)]! <= t[cage.cells.indexOf(f.b)]!) return;
-      out.push(t.slice());
-      return;
-    }
-    const c = cage.cells[i]!;
+    if (i === n) { if (makes(cage, t, page.hidden)) out.push(t.slice()); return; }
+    const c = cells[i]!;
     for (let v = 1; v <= page.size; v++) {
       if (stones[c] && stones[c] !== v) continue;
+      if (!(k.allow[c]! & (1 << v))) continue;
       let ok = true;
-      for (let j = 0; j < i; j++) if (t[j] === v && peers[c]!.includes(cage.cells[j]!)) { ok = false; break; }
+      for (let j = 0; j < i && ok; j++) if (t[j] === v && k.peers[c]!.includes(cells[j]!)) ok = false;
+      for (const [o, greater] of k.order[c]!) {
+        const j = at(o);
+        if (j >= 0 && j < i && (greater ? v <= t[j]! : v >= t[j]!)) ok = false;
+      }
+      for (const o of k.near[c]!) {
+        const j = at(o);
+        if (j >= 0 && j < i && Math.abs(v - t[j]!) !== 1) ok = false;
+      }
       if (!ok) continue;
       t[i] = v;
       walk(i + 1);
@@ -49,8 +54,9 @@ const popcount = (m: number) => { let n = 0; while (m) { m &= m - 1; n++; } retu
 export function solve(page: Page, limit = 2): { found: number[][]; settled: boolean } {
   const g = gridOf(page.size);
   const n = page.size;
+  const k = constraintsOf(page);
   const values = page.stones.slice();
-  // Numbers used in each row, column and (on a diagonal page) long diagonal, as bit masks.
+  // Numbers used in each row, column and (on a page of crossed paths) long diagonal, as bit masks.
   const rowMask = new Array<number>(n).fill(0), colMask = new Array<number>(n).fill(0), diagMask = [0, 0];
   const onDown = (c: number) => page.diagonal && g.rowOf(c) === g.colOf(c);
   const onUp = (c: number) => page.diagonal && g.rowOf(c) + g.colOf(c) === n - 1;
@@ -63,17 +69,16 @@ export function solve(page: Page, limit = 2): { found: number[][]; settled: bool
     if (onUp(c)) diagMask[1] = set(diagMask[1]!);
   };
   for (let c = 0; c < g.cells; c++) if (values[c]) mark(c, values[c]!, true);
-  // For each cell, the fences beside it as [other cell, true when this cell must be the greater].
-  const fenceAt: [number, boolean][][] = g.all.map(() => []);
-  for (const f of page.fences ?? []) { fenceAt[f.a]!.push([f.b, true]); fenceAt[f.b]!.push([f.a, false]); }
-  const fenceOk = (c: number, v: number) => {
-    for (const [o, greater] of fenceAt[c]!) {
-      const w = values[o]!;
-      if (w && (greater ? v <= w : v >= w)) return false;
-    }
+  // Peers the masks don't cover: corner neighbours (elbow room) and plot-mates (tidy plots).
+  const extra = g.all.map((c) => k.peers[c]!.filter((p) => g.rowOf(p) !== g.rowOf(c) && g.colOf(p) !== g.colOf(c)
+    && !(onDown(c) && onDown(p)) && !(onUp(c) && onUp(p))));
+  const fits = (c: number, v: number) => {
+    for (const p of extra[c]!) if (values[p] === v) return false;
+    for (const [o, greater] of k.order[c]!) { const w = values[o]!; if (w && (greater ? v <= w : v >= w)) return false; }
+    for (const o of k.near[c]!) { const w = values[o]!; if (w && Math.abs(v - w) !== 1) return false; }
     return true;
   };
-  const tuples = page.cages.map((cage) => cageTuples(page, cage, page.stones));
+  const tuples = page.cages.map((cage) => cageTuples(page, k, cage, page.stones));
   const out: number[][] = [];
   let budget = 2_000_000;
 
@@ -91,7 +96,7 @@ export function solve(page: Page, limit = 2): { found: number[][]; settled: bool
         for (let i = 0; i < cells.length; i++) {
           const c = cells[i]!, v = t[i]!;
           if (values[c]) { if (values[c] !== v) { ok = false; break; } }
-          else if (used(c) & (1 << v) || !fenceOk(c, v)) { ok = false; break; }
+          else if (used(c) & (1 << v) || !fits(c, v)) { ok = false; break; }
         }
         if (!ok) continue;
         for (let i = 0; i < cells.length; i++) if (!values[cells[i]!]) allow[i]! |= 1 << t[i]!;

@@ -6,13 +6,14 @@ import type { ToolId } from '../content/balance';
 import { TOOLS } from '../content/balance';
 import { ITEMS, type Item, type ItemId } from '../content/meta';
 import { useState } from 'preact/hooks';
-import { REGIONS, STATIONS, type Station, type StationId, sizeOfPage, stationById, twistsOf } from '../content/stations';
+import { REGIONS, STATIONS, type Station, type StationId, type Twist, sizeOfPage, stationById, twistsOf } from '../content/stations';
 import { describe } from '../core/commission';
 import {
-  type LibraryEntry, cantBuy, clueOf, isFound, ownedTools, pathBlocker, reachable, regionOpen, satchelSize, stationOpen,
+  type DiaryWeek, type LibraryEntry, cantBuy, clueOf, isFound, ownedTools, pathBlocker, reachable, regionOpen, satchelSize, stationOpen,
 } from '../core/meta';
 import { TOOL_NAMES, pageOf } from '../core/run';
 import { sealedCages } from '../core/rules';
+import type { Page } from '../core/page';
 import { dismissTip, screenTip } from './coach';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -33,6 +34,8 @@ const STATION_ICON: Record<StationId, IconName> = {
   'herb-spiral': 'herbs', 'bee-garden': 'bees', espalier: 'espalier', 'lost-labels': 'labels', 'knot-garden': 'knot', 'tea-garden': 'tea',
   'secret-garden': 'secret', vineyard: 'vineyard', 'moon-garden': 'moonGarden', 'stone-garden': 'stones', orangery: 'orangery', maze: 'maze',
   bramble: 'bramble', hedgerow: 'hedgerow', meadow: 'meadow', 'fern-hollow': 'fern', 'old-oak': 'oak', 'fairy-ring': 'fairy',
+  'shade-garden': 'hosta', 'strawberry-patch': 'berryBush', 'bean-rows': 'beanRows', parterre: 'parterre', topiary: 'topiary',
+  'moss-garden': 'moss', 'physic-garden': 'physic',
 };
 export { STATION_ICON };
 const ITEM_ICON: Record<ItemId, IconName> = {
@@ -87,15 +90,25 @@ export { Header, Tip };
 
 // ---- The map -----------------------------------------------------------------------------------
 
+/** Each twist of the page, as a tag: its icon and its name. */
+export const TWIST_TAG: Record<Exclude<Twist, 'zen'>, { icon: IconName; text: string }> = {
+  fences: { icon: 'fences', text: 'Fences' },
+  hidden: { icon: 'labels', text: 'Lost labels' },
+  diagonal: { icon: 'diagonal', text: 'Crossed paths' },
+  shade: { icon: 'shade', text: 'Shade' },
+  runners: { icon: 'runners', text: 'Runners' },
+  poles: { icon: 'poles', text: 'Bean poles' },
+  elbow: { icon: 'elbow', text: 'Elbow room' },
+  tidy: { icon: 'tidy', text: 'Tidy plots' },
+};
+
 /** The twists of a garden, as short tags for its sheet. */
 export function twistTags(st: Pick<Station, 'page' | 'zen' | 'rounds'>): { icon: IconName; text: string }[] {
   const t = twistsOf(st.page);
   const size = sizeOfPage(st.page);
   const out: { icon: IconName; text: string }[] = [{ icon: 'page', text: `${size}×${size}${st.zen ? '' : `, ${st.rounds ?? 6} weeks`}` }];
   if (st.zen) out.push({ icon: 'zen', text: 'Zen' });
-  if (t.fences) out.push({ icon: 'fences', text: 'Fences' });
-  if (t.hidden) out.push({ icon: 'labels', text: 'Lost labels' });
-  if (t.diagonal) out.push({ icon: 'diagonal', text: 'Crossed paths' });
+  for (const twist of t) out.push(TWIST_TAG[twist]);
   return out;
 }
 
@@ -384,7 +397,32 @@ export function BookSheet({ id }: { id: string }) {
       <div class="sheet-head"><h2>{entryTitle(e)}</h2><button class="icon-btn" aria-label="Close" onClick={() => (sheet.value = null)}><Icon name="close" /></button></div>
       <div class="book-big"><PageView id="book" page={page} pieces={pieces} sealed={sealed} label={`${entryTitle(e)}, finished`} /></div>
       <p>{e.score} points{e.station ? `, ${e.stars} of 3 stars` : ''}. Finished {e.when}. Garden code <strong class="code">{e.seed}</strong>.</p>
+      {e.diary?.length ? <Diary weeks={e.diary} page={page} /> : null}
     </>
+  );
+}
+
+/** The garden diary: each week's requests, and whether they were met when it was watered. */
+function Diary({ weeks, page }: { weeks: readonly DiaryWeek[]; page: Page }) {
+  return (
+    <section class="diary" aria-label="Garden diary">
+      <div class="section-label">Garden diary</div>
+      <ol class="diary-weeks">
+        {weeks.map((w, i) => (
+          <li key={i} class="diary-week">
+            <span class="diary-num">{i + 1}</span>
+            <ul class="diary-asks">
+              {w.asked.map((a, j) => (
+                <li key={j} class={`diary-ask${a.met ? ' met' : ' missed'}${a.required ? ' required' : ''}`}>
+                  <Icon name={a.met ? 'check' : 'close'} class="ico" />
+                  <span>{a.required ? <b>Required: </b> : null}{describe(a.c, page)}</span>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

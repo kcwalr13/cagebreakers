@@ -186,6 +186,16 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .fence-halo { fill: none; stroke: var(--paper); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
 .fence-mark { fill: none; stroke: var(--rubric); stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
 .diagonals path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 1 7; stroke-linecap: round; opacity: .8; }
+/* The Botanic Garden's twists: shade, runners, bean poles and elbow room */
+.shade-tint { fill: var(--ink); opacity: .07; }
+.shade-line { fill: var(--ink); opacity: .1; }
+.runner-berry { fill: #D8463B; stroke: var(--paper); stroke-width: 1.6; }
+.runner-cap { fill: var(--leaf); }
+.runner-seed { fill: #F6D36B; }
+.pole-vine { fill: none; stroke: var(--leaf); stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: .38; }
+.pole-root { fill: var(--leaf); opacity: .38; }
+.pole-leaf { fill: var(--leaf); opacity: .6; }
+.elbow-knots circle { fill: var(--accent); opacity: .75; }
 .muted-sm { color: var(--ink-soft); font-size: 14px; }
 .warn-text { color: var(--rubric); margin-top: -6px; }
 .code { font-family: var(--font-display); letter-spacing: .06em; }
@@ -459,6 +469,15 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .book-name { font-family: var(--font-display); font-weight: 800; font-size: 15px; line-height: 1.15; }
 .book-score { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink-soft); }
 .book-big { width: min(100%, 320px); margin: 4px auto; }
+.diary-weeks { list-style: none; margin: 0; padding: 0; }
+.diary-week { display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); }
+.diary-num { font-family: var(--font-display); font-weight: 800; font-size: 18px; text-align: center; color: var(--ink-soft); }
+.diary-asks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.diary-ask { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; font-size: 14.5px; line-height: 1.25; }
+.diary-ask .ico { width: 16px; height: 16px; margin-top: 1px; }
+.diary-ask.met .ico { fill: var(--accent); }
+.diary-ask.missed .ico { fill: var(--ink-soft); }
+.diary-ask.missed.required .ico { fill: var(--rubric); }
 
 /* What a run earned */
 .leaf-panel { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--accent); background: var(--paper-hi); text-align: center; display: flex; flex-direction: column; gap: 4px; align-items: center; flex: none; }
