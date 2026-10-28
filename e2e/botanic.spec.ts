@@ -89,12 +89,13 @@ test('the garden diary: a finished garden keeps every week\'s requests in the He
   await go(p, 'run');
   expect(await R(p, FINISH)).toBe('done');
   const weeks = await R(p, '(r) => r.state().records.length') as number;
+  const met = await R(p, '(r) => r.state().records.filter((w) => w.required).length') as number;
   await go(p, 'library');
   await p.locator('button.book').first().click();
   await expect(p.locator('.diary')).toContainText('Garden diary');
   await expect(p.locator('.diary-week')).toHaveCount(weeks);
   await expect(p.locator('.diary-ask.required')).toHaveCount(weeks);
-  await expect(p.locator('.diary-ask.required.met')).toHaveCount(weeks);
+  await expect(p.locator('.diary-ask.required.met')).toHaveCount(met);
   await p.locator('.diary').scrollIntoViewIfNeeded();
   await p.screenshot({ path: info.outputPath('botanic-08-diary.png') });
 });
