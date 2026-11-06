@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { RUN } from '../content/balance';
 import { stationById } from '../content/stations';
 import { Icon } from './Icon';
@@ -18,6 +18,11 @@ import { Sheets } from './Sheets';
 import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
 import { ToyScreen } from './Toy';
+import { mode } from './mode';
+import { WatchScreen } from './watch/WatchScreen';
+import { pestLine, startWatch, watch, watchBest } from './watch/state';
+import { WATCH } from '../content/watch';
+import { pestsOf } from '../core/watch/run';
 
 function Ghost() {
   const d = drag.value;
@@ -89,6 +94,33 @@ function WeeklyCard() {
   );
 }
 
+/** The title's menu for Night Watch: keep watch, or begin a season. */
+function WatchMenu() {
+  const s = watch.value;
+  const live = s && s.phase === 'plan' ? s : null;
+  const [sure, setSure] = useState(false);
+  return (
+    <nav class="title-menu">
+      <button class="menu-card primary" onClick={() => { if (!live) startWatch(); screen.value = 'watch'; }}>
+        <span class="mc-title"><Icon name="night" class="ico inline-ico big" /> {live ? 'Keep watch' : 'A new season'}</span>
+        <span class="mc-sub">{live
+          ? `Night ${live.night} of ${WATCH.nights}: ${pestLine(pestsOf(live.night))} tonight. ${live.seedlings} ${live.seedlings === 1 ? 'seedling' : 'seedlings'}, ${live.coins} ${live.coins === 1 ? 'coin' : 'coins'}.`
+          : `${WATCH.nights} nights of pests on a hidden trail. Read the counts, mark the trail, and plant frogs, hedgehogs and thrushes where it runs.${watchBest.value ? ` Best season ${watchBest.value}.` : ''}`}</span>
+      </button>
+      {live ? (
+        <button class={`menu-card${sure ? ' warn' : ''}`} onClick={() => { if (!sure) { setSure(true); return; } startWatch(); screen.value = 'watch'; }}>
+          <span class="mc-title">{sure ? 'Tap again to start over' : 'Start over'}</span>
+          <span class="mc-sub">Leave this season and begin a new one.{watchBest.value ? ` Best season ${watchBest.value}.` : ''}</span>
+        </button>
+      ) : null}
+      <button class="menu-card" onClick={() => (sheet.value = { kind: 'watch-help' })}>
+        <span class="mc-title"><Icon name="help" class="ico inline-ico big" /> How to play</span>
+        <span class="mc-sub">The clues, the defenders and the night, in four short paragraphs.</span>
+      </button>
+    </nav>
+  );
+}
+
 function Title() {
   const d = new Date();
   const streak = streakNow(profile.value.daily, today());
@@ -106,9 +138,13 @@ function Title() {
         <span class="wm-twist" aria-hidden="true">Twist</span>
       </h1>
       <Vine />
-      <p class="tagline">A number garden, grown over {RUN.rounds} weeks.</p>
+      <div class="seg mode-seg" role="group" aria-label="Game">
+        <button aria-pressed={mode.value === 'garden'} onClick={() => (mode.value = 'garden')}>Number Garden</button>
+        <button aria-pressed={mode.value === 'watch'} onClick={() => (mode.value = 'watch')}><Icon name="night" class="ico inline-ico" /> Night Watch</button>
+      </div>
+      <p class="tagline">{mode.value === 'watch' ? 'Read the clues, find the hidden trail, and guard the seedlings through the night.' : `A number garden, grown over ${RUN.rounds} weeks.`}</p>
       <div class="spacer" />
-      <nav class="title-menu">
+      {mode.value === 'watch' ? <WatchMenu /> : <nav class="title-menu">
         {live ? (
           <button class="menu-card primary" onClick={() => { openSlot('main'); screen.value = 'run'; }}>
             <span class="mc-title">Keep growing</span>
@@ -118,7 +154,7 @@ function Title() {
         <button class={`menu-card${live ? '' : ' primary'}`} onClick={() => (screen.value = 'map')}>
           <span class="mc-title"><Icon name="map" class="ico inline-ico big" /> The Map</span>
           <span class="mc-sub">{profile.value.filled.length
-            ? `Four regions of gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
+            ? `Five regions of gardens, each with a twist. ${stars.value.have} of ${stars.value.of} stars.`
             : 'Each week brings more numbers and three requests. Plant them to meet the requests until the garden is full. Start in the Kitchen Garden.'}</span>
         </button>
         <div class="menu-card daily-card">
@@ -146,7 +182,7 @@ function Title() {
           <button class="minor-card" onClick={() => (screen.value = 'library')}><Icon name="library" class="ico inline-ico" />Herbarium</button>
           <button class="minor-card" onClick={() => (screen.value = 'toy')}><Icon name="page" class="ico inline-ico" />Practice plot</button>
         </div>
-      </nav>
+      </nav>}
       <div class="bottom-pad" />
     </div>
   );
@@ -167,7 +203,8 @@ export function App() {
   return (
     <div class="app">
       {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'map' ? <MapScreen /> : s === 'shop' ? <ShopScreen />
-        : s === 'library' ? <LibraryScreen /> : s === 'home' ? <HomeScreen /> : s === 'journal' ? <JournalScreen /> : <RunScreen />}
+        : s === 'library' ? <LibraryScreen /> : s === 'home' ? <HomeScreen /> : s === 'journal' ? <JournalScreen />
+          : s === 'watch' ? <WatchScreen /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

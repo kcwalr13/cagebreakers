@@ -62,6 +62,9 @@ const used = {
   shade: 'umbrella', runners: 'strawberry', poles: 'beanstalk', elbow: 'checkered-flag', tidy: 'broom',
   hosta: 'leaf-swirl', berryBush: 'berry-bush', beanRows: 'curling-vines', parterre: 'vine-flower', topiary: 'gardening-shears',
   moss: 'ground-sprout', physic: 'pestle-mortar',
+  // Night Watch: its creatures, the lantern, and the mode itself
+  hedgehogWatch: 'hedgehog', thrush: 'raven', slug: 'snail-eyes', snail: 'snail', lanternLight: 'lantern-flame',
+  night: 'night-sky', trailMark: 'footprint', seedling: 'sprout',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));
