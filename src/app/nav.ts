@@ -18,6 +18,7 @@ export type Sheet =
   | { kind: 'home-tile'; at: number }
   | { kind: 'dew-help' }
   | { kind: 'siege-help' }
+  | { kind: 'siege-seeds' }
   | null;
 
 const NAV_KEY = 'cagebreakers.nav';

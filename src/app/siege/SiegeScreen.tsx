@@ -1,11 +1,12 @@
 /**
- * Garden Siege's screens: the field (hedges, defenders, the pests' route, and the wave as it plays),
- * building and upgrading between waves, picking hybrids, and the season's end.
+ * Garden Siege's screens: the field (brambles, defenders, the pests' way, and the wave as it plays),
+ * planting, growing and upgrading between waves, the seeds of the four elements, and the season's
+ * end.
  */
 import { useEffect, useRef } from 'preact/hooks';
-import { BASIC, DEFENDERS, type DefenderId, type Element, PESTS, type PestId, SIEGE, WAVES } from '../../content/siege';
+import { DEFENDERS, type DefenderId, type Element, ELEMENTS, ELEMENT_IDS, HYBRIDS, PESTS, type PestId, SIEGE, WAVES } from '../../content/siege';
 import { ENTRY, EXIT, H, W, centre, colOf, rowOf } from '../../core/siege/field';
-import { type PieceKind, type SiegeState, costOf, refundOf, siegeScore, walkNow } from '../../core/siege/run';
+import { type Placed, type SiegeState, costOf, growthsOf, maxLevel, refundOf, siegeScore, unlockPrice, walkNow } from '../../core/siege/run';
 import { biteOf, mobAt } from '../../core/siege/sim';
 import { coachOff, coachSeen, dismissTip } from '../coach';
 import { Icon } from '../Icon';
@@ -13,20 +14,22 @@ import { ICON_BODIES, type IconName } from '../icons';
 import { goBack, screen, sheet } from '../nav';
 import { reducedMotion } from '../settings';
 import {
-  advance, beginWave, finishNow, frame, lastWave, paused, pickHybrid, playing, refusedAt, selected, sellSelected, siege, siegeBest, siegeMessage,
-  speed, startSiege, tapField, tool, upgradeSelected,
+  advance, beginWave, canUndo, dragField, finishNow, frame, growSelected, lastWave, paused, playing, pressField, refusedAt, releaseField, selected,
+  sellSelected, siege, siegeBest, siegeMessage, speed, startSiege, undo, unlockElement, upgradeSelected,
 } from './state';
 
 export const PEST_ICON: Record<PestId, IconName> = { slug: 'slug', snail: 'snail', beetle: 'beetle', moth: 'moth', aphids: 'aphids', aphid: 'aphid', greatSnail: 'greatSnail' };
 export const DEF_ICON: Record<DefenderId, IconName> = {
-  frog: 'frog', hedgehog: 'hedgehogWatch', thrush: 'thrush', marigold: 'marigold', toad: 'toad', dragonfly: 'dragonfly', bumblebee: 'bumblebee', mantis: 'mantis',
+  bramble: 'bramble', frog: 'frog', hedgehog: 'hedgehogWatch', thrush: 'thrush', marigold: 'marigold',
+  toad: 'toad', dragonfly: 'dragonfly', salamander: 'salamander', mantis: 'mantis', owl: 'owl', bumblebee: 'bumblebee',
 };
 const PEST_SIZE: Record<PestId, number> = { slug: 0.62, snail: 0.66, beetle: 0.62, moth: 0.68, aphids: 0.6, aphid: 0.38, greatSnail: 1.05 };
 const ELEMENT_CLASS: Record<Element, string> = { water: 'el-water', earth: 'el-earth', air: 'el-air', sun: 'el-sun' };
+const elementClass = (k: DefenderId) => (DEFENDERS[k].elements.length ? ELEMENT_CLASS[DEFENDERS[k].elements[0]!] : 'el-none');
 
 // The drawing, in squares of CELL: the hedge with its gap above, the bed below.
 const CELL = 40, INSET = 4, TOP = 16, BED = 22;
-const VW = INSET * 2 + W * CELL, VH = INSET + TOP + H * CELL + BED + INSET;
+export const VW = INSET * 2 + W * CELL, VH = INSET + TOP + H * CELL + BED + INSET;
 const X = (x: number) => INSET + x * CELL, Y = (y: number) => INSET + TOP + y * CELL;
 
 function Glyph({ name, x, y, size, cls }: { name: IconName; x: number; y: number; size: number; cls?: string }) {
@@ -45,25 +48,45 @@ export function waveKinds(wave: number): { kind: PestId; count: number }[] {
   return [...out].map(([kind, count]) => ({ kind, count }));
 }
 
+/** A bramble: a rounded bush with thorns. */
+function Bramble({ x, y, held }: { x: number; y: number; held: boolean }) {
+  return (
+    <g class={`sg-bramble${held ? ' held' : ''}`}>
+      <rect x={x + 3} y={y + 3} width={CELL - 6} height={CELL - 6} rx="10" />
+      <path class="sg-thorns" d={`M${x + 9} ${y + 14}l-4-3M${x + 31} ${y + 12}l4-3M${x + 12} ${y + 30}l-4 3M${x + 29} ${y + 29}l4 3M${x + 20} ${y + 8}v-4`} />
+      <circle cx={x + 15} cy={y + 17} r="3.2" /><circle cx={x + 25} cy={y + 22} r="3.2" />
+    </g>
+  );
+}
+
 function Field({ s }: { s: SiegeState }) {
   void frame.value;
   const p = playing.value;
   const svg = useRef<SVGSVGElement>(null);
+  const down = useRef(false);
   const walk = p ? null : walkNow(s);
   const sel = selected.value === null ? null : s.placed.find((x) => x.id === selected.value) ?? null;
-  const selDef = sel && sel.kind !== 'hedge' ? DEFENDERS[sel.kind] : null;
   const flyers = waveKinds(s.wave).some((k) => PESTS[k.kind].flies);
   const refused = refusedAt.value;
-  const onDown = (e: PointerEvent) => {
+  const cellAtPoint = (e: PointerEvent): number | null => {
     const m = svg.current?.getScreenCTM();
-    if (!m) return;
+    if (!m) return null;
     const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
     const k = Math.floor((pt.x - INSET) / CELL), r = Math.floor((pt.y - INSET - TOP) / CELL);
-    if (k >= 0 && k < W && r >= 0 && r < H) tapField(r * W + k);
+    return k >= 0 && k < W && r >= 0 && r < H ? r * W + k : null;
   };
+  const onDown = (e: PointerEvent) => {
+    const c = cellAtPoint(e);
+    if (c === null) return;
+    (e.currentTarget as SVGSVGElement).setPointerCapture?.(e.pointerId);
+    down.current = true;
+    pressField(c);
+  };
+  const onMove = (e: PointerEvent) => { if (!down.current) return; const c = cellAtPoint(e); if (c !== null) dragField(c); };
+  const onUp = () => { if (down.current) { down.current = false; releaseField(); } };
   const towers = new Map((p?.sim.towers ?? []).map((t) => [t.id, t]));
   return (
-    <svg ref={svg} class="siege-board" viewBox={`0 0 ${VW} ${VH}`} role="img" onPointerDown={onDown}
+    <svg ref={svg} class="siege-board" viewBox={`0 0 ${VW} ${VH}`} role="img" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
       aria-label={p ? `Wave ${p.sim.wave}: ${p.sim.mobs.length} pests in the garden` : `The garden before wave ${s.wave}: the pests' way is ${walk!.length} squares long`}>
       <rect class="wb-hedge" x={X(0)} y={Y(0) - TOP} width={W * CELL} height={TOP - 3} rx="5" />
       <rect class="wb-gap" x={X(colOf(ENTRY)) + 6} y={Y(0) - TOP - 1} width={CELL - 12} height={TOP} />
@@ -76,26 +99,18 @@ function Field({ s }: { s: SiegeState }) {
       {walk ? <path class="sg-route" d={`M${X(colOf(ENTRY) + 0.5)} ${Y(-0.4)}${walk.map((c) => `L${X(centre(c).x)} ${Y(centre(c).y)}`).join('')}L${X(colOf(EXIT) + 0.5)} ${Y(H + 0.4)}`} /> : null}
       {walk && flyers ? <path class="sg-flight" d={`M${X(colOf(ENTRY) + 0.5)} ${Y(-0.4)}L${X(colOf(EXIT) + 0.5)} ${Y(H + 0.4)}`} /> : null}
 
-      {sel && selDef ? (
-        <circle class="sg-reach" cx={X(centre(sel.cell).x)} cy={Y(centre(sel.cell).y)} r={selDef.levels[sel.level]!.range * CELL} />
-      ) : null}
+      {sel ? <circle class="sg-reach" cx={X(centre(sel.cell).x)} cy={Y(centre(sel.cell).y)} r={DEFENDERS[sel.kind].levels[sel.level]!.range * CELL} /> : null}
 
       {s.placed.map((pc) => {
         const x = X(colOf(pc.cell)), y = Y(rowOf(pc.cell));
-        if (pc.kind === 'hedge') {
-          return (
-            <g key={pc.id} class={`sg-hedge${sel?.id === pc.id ? ' held' : ''}`}>
-              <rect x={x + 2} y={y + 2} width={CELL - 4} height={CELL - 4} rx="9" />
-              <circle cx={x + 13} cy={y + 15} r="5" /><circle cx={x + 26} cy={y + 13} r="4.5" /><circle cx={x + 20} cy={y + 26} r="5.5" />
-            </g>
-          );
-        }
-        const def = DEFENDERS[pc.kind];
+        if (pc.kind === 'bramble') return <Bramble key={pc.id} x={x} y={y} held={sel?.id === pc.id} />;
+        const hybrid = DEFENDERS[pc.kind].tier === 2;
         return (
-          <g key={pc.id} class={`sg-def ${ELEMENT_CLASS[def.elements[0]!]}${sel?.id === pc.id ? ' held' : ''}`}>
+          <g key={pc.id} class={`sg-def ${elementClass(pc.kind)}${hybrid ? ' hybrid' : ''}${sel?.id === pc.id ? ' held' : ''}`}>
             <circle class="sg-def-ring" cx={x + CELL / 2} cy={y + CELL / 2} r={CELL / 2 - 3} />
-            <Glyph name={DEF_ICON[pc.kind]} x={x + CELL / 2} y={y + CELL / 2 - 1} size={24} cls="sg-def-ico" />
-            {Array.from({ length: pc.level + 1 }, (_, i) => <circle key={i} class="sg-pip" cx={x + CELL / 2 + (i - pc.level / 2) * 7} cy={y + CELL - 6} r="2.4" />)}
+            {hybrid ? <circle class={`sg-def-ring2 ${ELEMENT_CLASS[DEFENDERS[pc.kind].elements[1]!]}`} cx={x + CELL / 2} cy={y + CELL / 2} r={CELL / 2 - 6.5} /> : null}
+            <Glyph name={DEF_ICON[pc.kind]} x={x + CELL / 2} y={y + CELL / 2 - 1} size={hybrid ? 21 : 24} cls="sg-def-ico" />
+            {Array.from({ length: pc.level + 1 }, (_, i) => <circle key={i} class="sg-pip" cx={x + CELL / 2 + (i - pc.level / 2) * 7} cy={y + CELL - 5} r="2.4" />)}
           </g>
         );
       })}
@@ -103,7 +118,7 @@ function Field({ s }: { s: SiegeState }) {
       {p ? p.strikes.map(({ s: st }, i) => {
         const t = towers.get(st.tower);
         if (!t) return null;
-        return st.to.map((to, j) => <path key={`${i}.${j}`} class={`sg-strike ${ELEMENT_CLASS[DEFENDERS[t.kind].elements[0]!]}`} d={`M${X(t.at.x)} ${Y(t.at.y)}L${X(to.x)} ${Y(to.y)}`} />);
+        return st.to.map((to, j) => <path key={`${i}.${j}`} class={`sg-strike ${elementClass(t.kind)}`} d={`M${X(t.at.x)} ${Y(t.at.y)}L${X(to.x)} ${Y(to.y)}`} />);
       }) : null}
 
       {p ? p.sim.mobs.map((m) => {
@@ -127,11 +142,12 @@ function Hud({ s }: { s: SiegeState }) {
   const p = playing.value;
   const eatenNow = p ? Math.min(p.before.seedlings, p.sim.eaten) : 0;
   const coinsNow = p ? p.before.coins + p.sim.earned : s.coins;
+  const seedlings = (p ? p.before.seedlings : s.seedlings) - eatenNow;
   return (
     <header class="header hud-row">
       <button class="icon-btn" aria-label="Back to title" onClick={goBack}><Icon name="back" /></button>
       <span class="hud-round"><Icon name="siege" class="ico inline-ico" /> Wave <b>{p ? p.sim.wave : s.wave}</b> of {WAVES.length}</span>
-      <span class="hud-stat" aria-label={`${s.seedlings - eatenNow} seedlings`}><Icon name="seedling" class="ico seedling" /><b>{(p ? p.before.seedlings : s.seedlings) - eatenNow}</b></span>
+      <span class="hud-stat" aria-label={`${seedlings} seedlings`}><Icon name="seedling" class="ico seedling" /><b>{seedlings}</b></span>
       <span class="hud-stat" aria-label={`${coinsNow} coins`}><Icon name="gold" class="ico gold" /><b>{coinsNow}</b></span>
       <button class="icon-btn" aria-label="How to play Garden Siege" onClick={() => (sheet.value = { kind: 'siege-help' })}><Icon name="help" /></button>
     </header>
@@ -167,65 +183,96 @@ function WaveBar({ s }: { s: SiegeState }) {
   );
 }
 
-function Status({ s }: { s: SiegeState }) {
-  const m = siegeMessage.value;
-  if (m) return <div key={m.id} class={`status${m.warn ? ' warn' : ''}`} role="status">{m.text}</div>;
-  if (playing.value) return <div class="status" role="status">Pause to look closer, or finish the wave at once.</div>;
-  const sel = selected.value === null ? null : s.placed.find((x) => x.id === selected.value) ?? null;
-  if (sel) {
-    if (sel.kind === 'hedge') {
-      return (
-        <div class="status with-action holding" role="status">
-          <span><b>Hedge</b>: pests walk around it.</span>
-          <button class="pill-btn" onClick={sellSelected}>Dig up{refundOf(sel) ? ` +${refundOf(sel)}` : ''}</button>
-        </div>
-      );
-    }
-    const def = DEFENDERS[sel.kind], lv = def.levels[sel.level]!, up = def.levels[sel.level + 1];
-    return (
-      <div class="status with-action holding" role="status">
-        <span><b>{def.name}</b> {sel.level + 1}: {lv.damage} harm{lv.targets === 99 ? ' to all in reach' : lv.targets ? ` to ${lv.targets}` : ''}{lv.splash ? ', splashing' : ''}{lv.slow ? ', slows' : ''}, every {lv.every} s.</span>
-        <span class="sg-sel-btns">
-          {up ? <button class="pill-btn buy" disabled={s.coins < up.cost} onClick={upgradeSelected}><Icon name="upgrade" class="ico" />{up.cost}</button> : null}
-          <button class="pill-btn" onClick={sellSelected}>Sell +{refundOf(sel)}</button>
-        </span>
-      </div>
-    );
-  }
-  const last = lastWave.value;
-  if (last) {
-    return <div class={`status${last.eaten ? ' warn' : ''}`} role="status">Wave {last.wave}: {last.eaten ? `${last.eaten} ${last.eaten === 1 ? 'seedling' : 'seedlings'} eaten` : 'every seedling safe'}. +{last.earned + last.bonus + last.interest} coins{last.interest ? ` (${last.interest} interest)` : ''}.</div>;
-  }
-  const t = tool.value;
-  if (t === 'hedge') return <div class="status" role="status">Hedges turn the pests' way. Tap squares to plant them ({SIEGE.hedge} coin each); they can't close it.</div>;
-  if (t) return <div class="status" role="status"><span><b>{DEFENDERS[t].name}</b>: {DEFENDERS[t].text} Tap a square ({DEFENDERS[t].levels[0].cost} coins).</span></div>;
-  return <div class="status" role="status">Pick a hedge or a defender, then tap a square. Tap a planted one to upgrade or sell it.</div>;
+/** One line on what a defender does at its level. */
+function statLine(kind: DefenderId, level: number): string {
+  const d = DEFENDERS[kind], lv = d.levels[level]!;
+  const who = lv.targets === 99 ? 'all in reach' : lv.targets ? `${lv.targets} at once` : 'one';
+  return `${lv.damage} harm to ${who} every ${lv.every} s${lv.splash ? ', splashing' : ''}${lv.slow ? ', slowing' : ''}${d.pierce ? ', through armour' : ''}${d.air === 'no' ? '' : d.air === 'double' ? ', double on flyers' : ', reaches flyers'}.`;
 }
 
-/** What can be planted. While a wave plays it stays in place, greyed, so the field doesn't jump. */
-function Tools({ s, locked = false }: { s: SiegeState; locked?: boolean }) {
-  const kinds: PieceKind[] = ['hedge', ...BASIC, ...s.unlocked];
-  const pick = (k: PieceKind) => { selected.value = null; tool.value = tool.value === k ? null : k; };
+/** Buttons to grow the piece in hand: open ones by price, locked ones naming the element they need. */
+function GrowButtons({ s, p }: { s: SiegeState; p: Placed }) {
   return (
-    <div class={`sg-tools${kinds.length > 6 ? ' two-rows' : ''}`} role="toolbar" aria-label="Plant">
-      {kinds.map((k) => {
-        const cost = costOf(k);
-        const name = k === 'hedge' ? 'Hedge' : DEFENDERS[k].name;
-        return (
-          <button key={k} class={`btn tool${tool.value === k ? ' toggled' : ''}`} aria-pressed={tool.value === k} disabled={locked || (s.coins < cost && tool.value !== k)}
-            aria-label={`${name}, ${cost} ${cost === 1 ? 'coin' : 'coins'}`} onClick={() => pick(k)}>
-            {k === 'hedge' ? <Icon name="hedgeBush" /> : <Icon name={DEF_ICON[k]} />}
-            <span class="tool-name">{name}</span><span class="tool-cost"><Icon name="gold" class="ico xs gold" />{cost}</span>
-          </button>
-        );
-      })}
-    </div>
+    <>
+      {growthsOf(s, p).map((g) => g.open ? (
+        <button key={g.into} class={`btn tool grow ${elementClass(g.into)}`} disabled={s.coins < costOf(g.into)} aria-label={`Grow into ${DEFENDERS[g.into].name}, ${costOf(g.into)} coins`}
+          onClick={() => growSelected(g.into)}>
+          <Icon name={DEF_ICON[g.into]} /><span class="tool-name">{DEFENDERS[g.into].name}</span>
+          <span class="tool-cost"><Icon name="gold" class="ico xs gold" />{costOf(g.into)}</span>
+        </button>
+      ) : (
+        <button key={g.into} class="btn tool grow locked" aria-label={`${DEFENDERS[g.into].name}: unlock ${ELEMENTS[g.needs[0]!].name.toLowerCase()} first`}
+          onClick={() => (sheet.value = { kind: 'siege-seeds' })}>
+          <Icon name={DEF_ICON[g.into]} /><span class="tool-name">{DEFENDERS[g.into].name}</span>
+          <span class="tool-cost"><Icon name="lock" class="ico xs" />{ELEMENTS[g.needs[0]!].name}</span>
+        </button>
+      ))}
+    </>
   );
 }
 
-function Controls() {
+/** What's in hand and what it can become, or the first element to pick, or a hint. */
+function Panel({ s }: { s: SiegeState }) {
+  const m = siegeMessage.value;
+  if (playing.value) return <div class="sg-panel"><div class="status">{m ? m.text : 'Pause to look closer, or finish the wave at once.'}</div></div>;
+  if (!s.elements.length && s.wave === 1) {
+    return (
+      <section class="sg-panel" aria-label="Pick your first element">
+        <div class="sg-panel-line"><b>Pick your first element.</b> It's free; the next ones cost coins.</div>
+        <div class="sg-panel-btns">
+          {ELEMENT_IDS.map((e) => (
+            <button key={e} class={`btn tool grow ${ELEMENT_CLASS[e]}`} onClick={() => unlockElement(e)}>
+              <Icon name={DEF_ICON[ELEMENTS[e].defender]} /><span class="tool-name">{ELEMENTS[e].name}</span><span class="tool-cost">{DEFENDERS[ELEMENTS[e].defender].name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  }
+  const sel = selected.value === null ? null : s.placed.find((x) => x.id === selected.value) ?? null;
+  if (sel) {
+    const d = DEFENDERS[sel.kind];
+    const top = sel.level >= maxLevel(sel.kind);
+    const line = d.tier === 0 ? <><b>Bramble</b>: {d.text} Grow it into:</>
+      : <><b>{d.name}</b>{maxLevel(sel.kind) ? ` ${sel.level + 1}` : ''}: {statLine(sel.kind, sel.level)}{d.tier === 1 && top ? ' Grow it into a hybrid:' : ''}</>;
+    return (
+      <section class="sg-panel" aria-label={d.name}>
+        <div class={`sg-panel-line${m?.warn ? ' warn' : ''}`}>{m ? m.text : line}</div>
+        <div class="sg-panel-btns">
+          {d.tier === 0 || (d.tier === 1 && top) ? <GrowButtons s={s} p={sel} /> : null}
+          {!top ? (
+            <button class="btn tool" disabled={s.coins < costOf(sel.kind, sel.level + 1)} aria-label={`Upgrade, ${costOf(sel.kind, sel.level + 1)} coins`} onClick={upgradeSelected}>
+              <Icon name="upgrade" /><span class="tool-name">Upgrade</span><span class="tool-cost"><Icon name="gold" class="ico xs gold" />{costOf(sel.kind, sel.level + 1)}</span>
+            </button>
+          ) : null}
+          <button class="btn tool" aria-label={`${d.tier === 0 ? 'Dig up' : 'Sell'}${refundOf(sel) ? ` for ${refundOf(sel)} coins` : ''}`} onClick={sellSelected}>
+            <Icon name="remove" /><span class="tool-name">{d.tier === 0 ? 'Dig up' : 'Sell'}</span>{refundOf(sel) ? <span class="tool-cost">+{refundOf(sel)}</span> : null}
+          </button>
+        </div>
+      </section>
+    );
+  }
+  const last = lastWave.value;
+  const text = m ? m.text
+    : last ? `Wave ${last.wave}: ${last.eaten ? `${last.eaten} ${last.eaten === 1 ? 'seedling' : 'seedlings'} eaten` : 'every seedling safe'}. +${last.earned + last.bonus + last.interest} coins${last.interest ? ` (${last.interest} interest)` : ''}.`
+      : `Tap or drag on the garden to plant brambles (${costOf('bramble')} coin each). Tap a bramble to grow it into a defender.`;
+  return <div class="sg-panel"><div class={`status${m?.warn || (!m && last?.eaten) ? ' warn' : ''}`} role="status">{text}</div></div>;
+}
+
+function Controls({ s }: { s: SiegeState }) {
   const p = playing.value;
-  if (!p) return <div class="run-controls"><button class="btn primary grow" onClick={beginWave}><Icon name="play" /> Let them come</button></div>;
+  if (!p) {
+    const price = unlockPrice(s);
+    return (
+      <div class="run-controls">
+        <button class="btn tool" aria-label={`Seeds: elements${price !== null ? `, the next costs ${price}` : ''}`} onClick={() => (sheet.value = { kind: 'siege-seeds' })}>
+          <Icon name="packet" /><span class="tool-name">Seeds</span>
+        </button>
+        <button class="btn tool" disabled={!canUndo.value} onClick={undo}><Icon name="undo" /><span class="tool-name">Undo</span></button>
+        <button class="btn primary grow" onClick={beginWave}><Icon name="play" /> Let them come</button>
+      </div>
+    );
+  }
   return (
     <div class="run-controls sg-speed" role="group" aria-label="Speed">
       <button class={`btn${paused.value ? ' toggled' : ''}`} aria-label={paused.value ? 'Play' : 'Pause'} onClick={() => (paused.value = !paused.value)}>
@@ -236,27 +283,6 @@ function Controls() {
       ))}
       <button class="btn grow" onClick={finishNow}><Icon name="fast" /> Finish</button>
     </div>
-  );
-}
-
-/** Every few waves: pick one of two hybrids. */
-function Pick({ s }: { s: SiegeState }) {
-  return (
-    <section class="sg-pick" aria-label="Pick a hybrid">
-      <h2>Pick a hybrid</h2>
-      <p>It joins your defenders for the rest of the season.</p>
-      <div class="sg-pick-cards">
-        {s.offer.map((k) => {
-          const d = DEFENDERS[k];
-          return (
-            <button key={k} class="menu-card sg-hybrid" onClick={() => pickHybrid(k)}>
-              <span class="mc-title"><Icon name={DEF_ICON[k]} class="ico inline-ico big" /> {d.name}</span>
-              <span class="mc-sub">{d.elements.join(' and ')}. {d.text} {d.levels[0].cost} coins.</span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -322,21 +348,58 @@ export function SiegeScreen() {
   useWaveClock();
   const s = siege.value;
   if (!s) { startSiege(); return null; }
-  if ((s.phase === 'won' || s.phase === 'lost') && !playing.value) return <SeasonEnd s={s} />;
+  if (s.phase !== 'build' && !playing.value) return <SeasonEnd s={s} />;
   return (
     <div class="column run siege">
       <Hud s={s} />
       <WaveBar s={s} />
       <div class="board-wrap siege-wrap"><Field s={s} /></div>
-      {s.phase === 'pick' && !playing.value ? <Pick s={s} /> : (
-        <>
-          <Status s={s} />
-          <Tools s={s} locked={!!playing.value} />
-          <Controls />
-        </>
-      )}
+      <Panel s={s} />
+      <Controls s={s} />
       <div class="bottom-pad" />
     </div>
+  );
+}
+
+/** The four elements: unlock them, and see what grows from them. */
+export function SiegeSeeds() {
+  const s = siege.value;
+  if (!s) return null;
+  const price = unlockPrice(s);
+  return (
+    <>
+      <div class="sheet-head"><h2><Icon name="packet" class="ico inline-ico big" /> Seeds</h2>
+        <button class="icon-btn" onClick={() => (sheet.value = null)} aria-label="Close"><Icon name="close" /></button></div>
+      <p>Unlock an element to grow brambles into its defender. {price === null ? 'You have all four.' : s.elements.length ? `Your next element costs ${price} coins.` : 'Your first element is free.'}</p>
+      <ul class="sg-seeds">
+        {ELEMENT_IDS.map((e) => {
+          const d = DEFENDERS[ELEMENTS[e].defender];
+          const owned = s.elements.includes(e);
+          return (
+            <li key={e} class={`sg-seed ${ELEMENT_CLASS[e]}${owned ? ' owned' : ''}`}>
+              <Icon name={DEF_ICON[d.id]} class="ico sg-seed-ico" />
+              <span class="sg-seed-text"><b>{ELEMENTS[e].name}: {d.name}</b> {d.text}</span>
+              {owned ? <span class="sg-owned"><Icon name="check" class="ico" /></span>
+                : <button class="pill-btn buy" disabled={price === null || s.coins < price || !!playing.value} onClick={() => unlockElement(e)}>{price ? <><Icon name="gold" class="ico xs gold" />{price}</> : 'Free'}</button>}
+            </li>
+          );
+        })}
+      </ul>
+      <h3 class="sg-seeds-head">Hybrids</h3>
+      <p>Grow a defender at its best into the hybrid of its element and another you've unlocked.</p>
+      <ul class="sg-hybrids">
+        {HYBRIDS.map((h) => {
+          const d = DEFENDERS[h];
+          const open = d.elements.every((e) => s.elements.includes(e));
+          return (
+            <li key={h} class={open ? 'open' : ''}>
+              <Icon name={DEF_ICON[h]} class="ico" />
+              <span><b>{d.name}</b> ({d.elements.map((e) => ELEMENTS[e].name.toLowerCase()).join(' and ')}): {d.text}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -347,10 +410,9 @@ export function SiegeHelp() {
       <div class="sheet-head"><h2><Icon name="siege" class="ico inline-ico big" /> Garden Siege</h2>
         <button class="icon-btn" onClick={() => (sheet.value = null)} aria-label="Close"><Icon name="close" /></button></div>
       <p>Pests come through the gap in the hedge, wave after wave, and make for the seedling bed. Each one that gets there eats seedlings, one for every layer it still has. Keep {SIEGE.seedlings} seedlings safe through {WAVES.length} waves.</p>
-      <p><b>Plant hedges</b> to make the pests walk the long way round: they always take the shortest way left, shown as a dotted line. A hedge can't close the way. Pests that fly go straight over everything.</p>
-      <p><b>Plant defenders</b> beside the way. A frog snaps at pests that walk. A hedgehog bites through armour. A thrush reaches far, and harms pests that fly twice over. A marigold warms everything in reach at once. Tap one to see its reach, upgrade it twice, or sell it back for most of its price. Defenders block the way like hedges.</p>
-      <p><b>Pests come in layers.</b> A snail's shell cracks to leave a slug, an aphid swarm breaks into three, and beetles' armour takes {PESTS.beetle.armour} off every hit. Every five waves you pick a hybrid of two elements: toad, dragonfly, bumblebee or mantis. Coins come from pests stopped, from each wave and as interest on what you keep. Waves {BOSS_WAVES.join(' and ')} bring a Great Snail.</p>
-      <p>A pest that reaches the bed eats {biteOf('slug')} seedling if it's a slug, {biteOf('snail')} if it's a snail, and a Great Snail eats {biteOf('greatSnail')}.</p>
+      <p><b>Plant brambles</b> by tapping or dragging on the garden. Pests always take the shortest way left, shown as a dotted line, so brambles make them walk the long way round; a bramble can't close the way. Brambles scratch pests that pass beside them. Pests that fly go straight over everything.</p>
+      <p><b>Grow your brambles.</b> Unlock elements in Seeds (the first is free). Tap a bramble to grow it into an element's defender: a frog (water) snaps at walking pests, a hedgehog (earth) bites through armour, a thrush (air) reaches far and harms flyers twice over, a marigold (sun) warms everything in reach. Upgrade a defender twice, then grow it into a hybrid with another element you've unlocked: toad, dragonfly, salamander, mantis, owl or bumblebee.</p>
+      <p><b>Pests come in layers.</b> A snail's shell cracks to leave a slug, an aphid swarm breaks into three, and beetles' armour takes {PESTS.beetle.armour} off every hit. Waves {BOSS_WAVES.join(' and ')} bring a Great Snail, which eats {biteOf('greatSnail')} seedlings if it gets through. Coins come from pests stopped, from each wave, and as interest on what you keep. Undo takes back anything since the last wave.</p>
     </>
   );
 }

@@ -2,196 +2,175 @@
  * Garden Siege's balance lab: bots play whole seasons, and the report says how far each gets and
  * how many seedlings it keeps. Run: npx tsx lab/siege.ts [seasons]
  *
- *  - Mazer plants hedges in walls across the field so pests walk back and forth, puts its defenders
- *    in the walls where they reach the most of the route, matches defenders to the waves coming, and
- *    upgrades when the maze is done.
- *  - Plain plants the same defenders but no hedges: pests walk straight down.
+ *  - Mazer plants walls of brambles across every other row, the gap at alternate ends, so pests walk
+ *    back and forth; it unlocks the elements the coming waves call for, grows the brambles that reach
+ *    most of the way into defenders, upgrades them, and grows the best into hybrids.
+ *  - Brambles builds the same maze and never grows anything.
+ *  - Plain grows the same defenders, from brambles beside the straight way down: no maze.
  *  - Idle plants nothing.
  */
-import { DEFENDERS, type DefenderId, PESTS, SIEGE, WAVES } from '../src/content/siege';
+import { DEFENDERS, type DefenderId, type Element, ELEMENTS, ELEMENT_IDS, PESTS, SIEGE, WAVES } from '../src/content/siege';
 import { type Pt, ENTRY, EXIT, H, W, airRoute, cellAt, centre, pointAt } from '../src/core/siege/field';
-import { type SiegeState, actSiege, buildBlocker, costOf, newSiege, walkNow } from '../src/core/siege/run';
+import { type SiegeAction, type SiegeState, actSiege, costOf, growthsOf, maxLevel, newSiege, plantBlocker, unlockPrice, walkNow } from '../src/core/siege/run';
 
-const seasons = Number(process.argv[2] ?? 20);
+const seasons = Number(process.argv[2] ?? 4);
 
-/** The walls a mazer builds: every other row, with a gap at alternate ends, so pests walk back and forth. */
-const WALL_ROWS: number[][] = [[2, W - 1], [4, 0], [6, W - 1], [8, 0], [10, W - 1]].map(([row, gap]) =>
-  Array.from({ length: W }, (_, k) => k).filter((k) => k !== gap).map((k) => cellAt(row!, k)));
-const WALLS: number[] = WALL_ROWS.flat();
+/** The walls a mazer builds: every other row, with a gap at alternate ends. */
+const WALL_ROWS: number[][] = [2, 4, 6, 8, 10, 12].map((row, i) => {
+  const gap = i % 2 ? 0 : W - 1;
+  return Array.from({ length: W }, (_, k) => k).filter((k) => k !== gap).map((k) => cellAt(row, k));
+});
+const WALLS = WALL_ROWS.flat();
+/** Beside the straight way down, for a garden with no maze. */
+const BESIDE: number[] = [];
+for (let r = 1; r < H - 1; r++) BESIDE.push(cellAt(r, SIEGE.entryCol - 1), cellAt(r, SIEGE.entryCol + 1));
 
 const air = airRoute();
 const airPts: Pt[] = Array.from({ length: 40 }, (_, i) => pointAt(air, (air.len * i) / 39));
 
-/** How much of the pests' way a defender on `cell` would reach: route squares, and flying ones if it can. */
+/** How much of the pests' way a defender of this kind on `cell` would reach. */
 function coverage(s: SiegeState, kind: DefenderId, cell: number, level = 0): number {
   const def = DEFENDERS[kind], r = def.levels[level]!.range, at = centre(cell);
-  const walk = walkNow(s);
   let n = 0;
-  for (const c of walk) { const p = centre(c); if (Math.hypot(p.x - at.x, p.y - at.y) <= r) n++; }
+  for (const c of walkNow(s)) { const p = centre(c); if (Math.hypot(p.x - at.x, p.y - at.y) <= r) n++; }
   if (def.air !== 'no') for (const p of airPts) if (Math.hypot(p.x - at.x, p.y - at.y) <= r) n += def.air === 'double' ? 0.6 : 0.3;
   return n;
 }
 
-/** What the next wave calls for. */
-function wanted(s: SiegeState): DefenderId {
-  const kinds = new Set((WAVES[s.wave - 1] ?? []).map((g) => g.kind));
-  const have = (k: DefenderId) => s.placed.filter((p) => p.kind === k).length;
-  const hybrids = s.unlocked.filter((h) => s.coins >= costOf(h));
-  if (hybrids.length && have(hybrids[0]!) < 3) return hybrids[0]!;
-  if ([...kinds].some((k) => PESTS[k].flies) && have('thrush') < 3) return 'thrush';
-  if ([...kinds].some((k) => PESTS[k].armour >= 2 || k === 'greatSnail') && have('hedgehog') < 4) return 'hedgehog';
-  if (kinds.has('aphids') && have('marigold') < 2) return 'marigold';
-  return have('frog') <= have('hedgehog') + 1 ? 'frog' : 'hedgehog';
+const act = (s: SiegeState, a: SiegeAction) => { const r = actSiege(s, a); return r.ok ? r.state : s; };
+
+/** The elements a wave calls for. */
+function elementsFor(s: SiegeState, wave: number): Element[] {
+  const kinds = (WAVES[wave - 1] ?? []).map((g) => g.kind);
+  // Each season starts from a different element (LAB0 water, LAB1 earth, ...).
+  const out: Element[] = [ELEMENT_IDS[Number(s.seed.slice(3)) % 4]!];
+  if (kinds.some((k) => PESTS[k].flies) && !s.elements.some((e) => e === 'air' || e === 'sun')) out.push('air');
+  if (kinds.some((k) => PESTS[k].armour >= 2 || k === 'greatSnail') && !s.elements.includes('earth')) out.push('earth');
+  // Later, a third element, for hybrids.
+  if (wave >= 12 && s.elements.length < 3) out.push(...ELEMENT_IDS.filter((e) => !s.elements.includes(e)).slice(0, 1));
+  return [...new Set(out)];
 }
 
-type Bot = (s: SiegeState) => SiegeState;
-
-/** The square where a defender would reach the most of the route as it would run with the defender there. */
-function bestSpot(s: SiegeState, kind: DefenderId, spots: readonly number[]): number | null {
-  let best: number | null = null, bestN = 0;
-  for (const c of spots) {
-    if (buildBlocker(s, kind, c)) continue;
-    const after = { ...s, placed: [...s.placed, { id: -1, kind, cell: c, level: 0, spent: 0 }] };
-    const n = coverage(after, kind, c);
-    if (n > bestN) { bestN = n; best = c; }
+/** Pieces that can harm a pest of the wave's toughest kinds: flyers, armour. */
+function counters(s: SiegeState, wave: number): { need: DefenderId | null } {
+  const kinds = (WAVES[wave - 1] ?? []).map((g) => g.kind);
+  const count = (ok: (k: DefenderId) => boolean) => s.placed.filter((p) => ok(p.kind)).reduce((n, p) => n + 1 + p.level, 0);
+  if (kinds.some((k) => PESTS[k].flies) && count((k) => DEFENDERS[k].air !== 'no') < 3 + wave / 2) {
+    if (s.elements.includes('air')) return { need: 'thrush' };
+    if (s.elements.includes('sun')) return { need: 'marigold' };
   }
-  return best;
-}
-
-/** The wall square where a hedge makes the route longest. */
-function bestHedge(s: SiegeState): number | null {
-  let best: number | null = null, bestLen = -1;
-  for (const c of WALLS) {
-    if (buildBlocker(s, 'hedge', c)) continue;
-    const len = walkNow({ placed: [...s.placed, { id: -1, kind: 'hedge', cell: c, level: 0, spent: 0 }] }).length;
-    if (len > bestLen) { bestLen = len; best = c; }
+  if (kinds.some((k) => PESTS[k].armour >= 2 || k === 'greatSnail') && count((k) => DEFENDERS[k].pierce) < 3 + wave / 2) {
+    if (s.elements.includes('earth')) return { need: 'hedgehog' };
   }
-  return best;
+  return { need: null };
 }
 
-const act = (s: SiegeState, a: Parameters<typeof actSiege>[1]) => { const r = actSiege(s, a); return r.ok ? r.state : s; };
+/** The defender to grow for the maze in general: the element with the fewest. */
+function wanted(s: SiegeState): DefenderId | null {
+  const have = (k: DefenderId) => s.placed.filter((p) => DEFENDERS[p.kind].elements.includes(DEFENDERS[k].elements[0]!)).length;
+  return s.elements.map((e) => ELEMENTS[e].defender).sort((a, b) => have(a) - have(b))[0] ?? null;
+}
 
-const dps = (kind: DefenderId, level: number) => { const lv = DEFENDERS[kind].levels[level]!; return (lv.damage * Math.min(lv.targets ?? 1, 3)) / lv.every; };
-
-/** How much harm the defenders could do to a pest walking the route: each one's harm a second, times the route squares it reaches. */
-function potential(s: SiegeState): number {
-  const walk = walkNow(s).map(centre);
-  let sum = 0;
+/** The bramble where a defender of this kind would reach the most of the way. */
+function bestBramble(s: SiegeState, kind: DefenderId): number | null {
+  let best: number | null = null, bestN = -1;
   for (const p of s.placed) {
-    if (p.kind === 'hedge') continue;
-    const def = DEFENDERS[p.kind], r = def.levels[p.level]!.range, at = centre(p.cell);
-    let n = 0;
-    for (const q of walk) if (Math.hypot(q.x - at.x, q.y - at.y) <= r) n++;
-    if (def.air !== 'no') for (const q of airPts) if (Math.hypot(q.x - at.x, q.y - at.y) <= r) n += def.air === 'double' ? 0.5 : 0.25;
-    sum += dps(p.kind, p.level) * n;
+    if (p.kind !== 'bramble') continue;
+    const n = coverage(s, kind, p.cell);
+    if (n > bestN) { bestN = n; best = p.id; }
   }
-  return sum + walk.length * 0.01;
+  return best;
 }
 
-/** Greedy: the purchase that adds the most potential for its price, until nothing is worth buying. */
-function spend(s: SiegeState, maze: boolean): SiegeState {
-  if (s.phase === 'pick') s = act(s, { type: 'pick', kind: s.offer[0]! });
-  const cells = Array.from({ length: W * H }, (_, c) => c).filter((c) => c !== ENTRY && c !== EXIT);
-  for (let guard = 0; guard < 300; guard++) {
-    const want = wanted(s);
-    const base = potential(s);
-    let best: { a: Parameters<typeof actSiege>[1]; gain: number; then?: SiegeState } | null = null as { a: Parameters<typeof actSiege>[1]; gain: number; then?: SiegeState } | null;
-    const consider = (a: Parameters<typeof actSiege>[1], cost: number) => {
-      const r = actSiege(s, a);
-      if (!r.ok) return;
-      const gain = (potential(r.state) - base) / cost;
-      if (gain > 0 && (!best || gain > best.gain)) best = { a, gain };
-    };
-    if (s.coins >= costOf(want)) for (const c of cells) if (!s.placed.some((p) => p.cell === c)) consider({ type: 'build', kind: want, cell: c }, costOf(want));
-    if (maze) {
-      // A whole wall at once: a wall turns the pests only when it's whole.
-      for (const wall of WALL_ROWS) {
-        const empty = wall.filter((c) => !s.placed.some((p) => p.cell === c));
-        if (!empty.length || s.coins < empty.length * SIEGE.hedge) continue;
-        let t = s;
-        for (const c of empty) t = act(t, { type: 'build', kind: 'hedge', cell: c });
-        const gain = (potential(t) - base) / (empty.length * SIEGE.hedge);
-        if (gain > 0 && (!best || gain > best.gain)) best = { a: { type: 'wave' }, gain, then: t };
-      }
+function build(s: SiegeState, spots: readonly number[], grows: boolean): SiegeState {
+  const maze = spots === WALLS;
+  for (let guard = 0; guard < 400; guard++) {
+    const price = unlockPrice(s);
+    if (grows && price !== null) {
+      // What the next wave needs, at once if there are coins for it.
+      const now = elementsFor(s, s.wave).find((e) => !s.elements.includes(e));
+      if (now && s.coins >= price) { s = act(s, { type: 'unlock', element: now }); continue; }
     }
-    for (const p of s.placed) if (p.kind !== 'hedge' && p.level < 2 && s.coins >= costOf(p.kind, p.level + 1)) consider({ type: 'upgrade', id: p.id }, costOf(p.kind, p.level + 1));
-    if (!best) break;
-    const pick = best as { a: Parameters<typeof actSiege>[1]; then?: SiegeState };
-    s = pick.then ?? act(s, pick.a);
-  }
-  return s;
-}
-
-/** Builds the walls one at a time, keeping two defenders in the walls for each wall built (and two more), upgrading with the rest. */
-function plan(s: SiegeState): SiegeState {
-  if (s.phase === 'pick') s = act(s, { type: 'pick', kind: s.offer[0]! });
-  for (let guard = 0; guard < 300; guard++) {
-    const want = wanted(s);
-    const towers = s.placed.filter((p) => p.kind !== 'hedge').length;
-    const built = WALL_ROWS.filter((wall) => wall.every((c) => s.placed.some((p) => p.cell === c))).length;
-    if (towers < 2 * built + 2) {
-      if (s.coins < costOf(want)) break;
-      const spot = bestSpot(s, want, WALLS);
-      if (spot !== null) { s = act(s, { type: 'build', kind: want, cell: spot }); continue; }
-      const swapped = swapIn(s, want);
-      if (swapped) { s = swapped; continue; }
+    // Counters for the next wave's flyers and armour.
+    const need = grows ? counters(s, s.wave).need : null;
+    if (need) {
+      if (s.coins < costOf(need)) break;
+      const id = bestBramble(s, need);
+      if (id !== null) { s = act(s, { type: 'grow', id, into: need }); continue; }
     }
-    const next = WALLS.find((c) => !s.placed.some((p) => p.cell === c) && !buildBlocker(s, 'hedge', c));
+    // Save up for what the wave after needs.
+    const later = grows && price !== null && elementsFor(s, s.wave + 1).some((e) => !s.elements.includes(e)) ? price : 0;
+    const spare = s.coins - later;
+    const grown = s.placed.filter((p) => p.kind !== 'bramble').length;
+    const walls = WALL_ROWS.filter((wall) => wall.every((c) => s.placed.some((p) => p.cell === c))).length;
+    const want = grows ? wanted(s) : null;
+    // The first wall first; then defenders keep pace with the maze: two for every wall built, and two more.
+    const first = maze ? WALL_ROWS[0]!.find((c) => !s.placed.some((p) => p.cell === c)) : undefined;
+    // Upgrade the defender that reaches the most, while it's cheaper than a new one.
+    const up = s.placed.filter((p) => p.kind !== 'bramble' && p.level < maxLevel(p.kind) && spare >= costOf(p.kind, p.level + 1))
+      .sort((a, b) => coverage(s, b.kind, b.cell, b.level) - coverage(s, a.kind, a.cell, a.level))[0];
+    if (up && want && costOf(up.kind, up.level + 1) <= costOf(want) && grown >= 2 * (maze ? walls : 3)) { s = act(s, { type: 'upgrade', id: up.id }); continue; }
+    if (want && first === undefined && grown < 2 * (maze ? walls : 3) + 2) {
+      if (spare < costOf(want)) break;
+      const id = bestBramble(s, want);
+      if (id !== null) { s = act(s, { type: 'grow', id, into: want }); continue; }
+    }
+    const next = spots.find((c) => !s.placed.some((p) => p.cell === c) && !plantBlocker(s, c));
     if (next !== undefined) {
-      if (s.coins < SIEGE.hedge) break;
-      s = act(s, { type: 'build', kind: 'hedge', cell: next });
+      if (spare < costOf('bramble')) break;
+      s = act(s, { type: 'plant', cell: next });
       continue;
     }
-    // The maze is whole: more defenders in it, then upgrades, whichever reaches the most.
-    if (s.coins >= costOf(want)) { const swapped = swapIn(s, want); if (swapped) { s = swapped; continue; } }
-    const ups = s.placed.filter((p) => p.kind !== 'hedge' && p.level < 2 && s.coins >= costOf(p.kind, p.level + 1))
-      .sort((a, b) => coverage(s, b.kind as DefenderId, b.cell, b.level) - coverage(s, a.kind as DefenderId, a.cell, a.level));
+    if (!grows) break;
+    // The maze is whole: unlock more, hybrids from defenders at their best, more defenders, upgrades.
+    if (price !== null && s.wave >= 14 && spare >= price + 10) {
+      const e = ELEMENT_IDS.find((x) => !s.elements.includes(x));
+      if (e) { s = act(s, { type: 'unlock', element: e }); continue; }
+    }
+    let done = false;
+    for (const p of s.placed) {
+      const g = growthsOf(s, p).find((x) => x.open && DEFENDERS[p.kind].tier === 1 && spare >= costOf(x.into));
+      if (g) { s = act(s, { type: 'grow', id: p.id, into: g.into }); done = true; break; }
+    }
+    if (done) continue;
+    const ups = s.placed.filter((p) => p.kind !== 'bramble' && p.level < maxLevel(p.kind) && spare >= costOf(p.kind, p.level + 1))
+      .sort((a, b) => coverage(s, b.kind, b.cell, b.level) - coverage(s, a.kind, a.cell, a.level));
     if (ups.length) { s = act(s, { type: 'upgrade', id: ups[0]!.id }); continue; }
+    if (want && spare >= costOf(want)) { const id = bestBramble(s, want); if (id !== null) { s = act(s, { type: 'grow', id, into: want }); continue; } }
     break;
   }
   return s;
 }
 
-/** Swaps the hedge where a defender would reach the most for that defender. */
-function swapIn(s: SiegeState, want: DefenderId): SiegeState | null {
-  if (s.coins < costOf(want)) return null;
-  let best: { id: number; cell: number; n: number } | null = null;
-  for (const h of s.placed.filter((p) => p.kind === 'hedge')) {
-    const without = { ...s, placed: s.placed.filter((p) => p.id !== h.id) };
-    if (buildBlocker(without, want, h.cell)) continue;
-    const n = coverage(without, want, h.cell);
-    if (!best || n > best.n) best = { id: h.id, cell: h.cell, n };
-  }
-  if (!best) return null;
-  return act(act(s, { type: 'sell', id: best.id }), { type: 'build', kind: want, cell: best.cell });
-}
-
-export const BOTS: Record<string, Bot> = {
-  Mazer: plan,
-  Greedy: (s) => spend(s, true),
-  Plain: (s) => spend(s, false),
-  Idle: (s) => (s.phase === 'pick' ? act(s, { type: 'pick', kind: s.offer[0]! }) : s),
+export const BOTS: Record<string, (s: SiegeState) => SiegeState> = {
+  Mazer: (s) => build(s, WALLS, true),
+  Brambles: (s) => build(s, WALLS, false),
+  Plain: (s) => build(s, BESIDE, true),
+  Idle: (s) => s,
 };
 
-if (process.argv[1]?.endsWith('siege.ts')) for (const [name, bot] of Object.entries(BOTS)) {
-  let won = 0, seedlings = 0, reached = 0, coins = 0;
-  const lostAt: number[] = [];
-  const t0 = performance.now();
-  const eatenBy = new Array<number>(WAVES.length).fill(0);
-  for (let i = 0; i < seasons; i++) {
-    let s = newSiege(`LAB${i}`);
-    while (s.phase === 'build' || s.phase === 'pick') {
-      s = bot(s);
-      const r = actSiege(s, { type: 'wave' });
-      if (r.record) eatenBy[r.record.wave - 1]! += r.record.eaten;
-      s = r.state;
+if (process.argv[1]?.endsWith('siege.ts')) {
+  void ENTRY; void EXIT;
+  for (const [name, bot] of Object.entries(BOTS)) {
+    let won = 0, seedlings = 0, coins = 0;
+    const lostAt: number[] = [];
+    const t0 = performance.now();
+    const eatenBy = new Array<number>(WAVES.length).fill(0);
+    for (let i = 0; i < seasons; i++) {
+      let s = newSiege(`LAB${i}`);
+      while (s.phase === 'build') {
+        s = bot(s);
+        const r = actSiege(s, { type: 'wave' });
+        if (r.record) eatenBy[r.record.wave - 1]! += r.record.eaten;
+        s = r.state;
+      }
+      if (s.phase === 'won') { won++; seedlings += s.seedlings; coins += s.coins; } else lostAt.push(s.wave);
+      if (process.argv.includes('-v')) console.log(`  ${name} ${s.seed}: starts ${s.elements[0] ?? '-'}, ${s.phase} at wave ${s.wave}, ${s.seedlings} seedlings, elements ${s.elements.join(' ')}`);
     }
-    if (s.phase === 'won') { won++; seedlings += s.seedlings; coins += s.coins; } else lostAt.push(s.wave);
-    reached += s.wave;
+    const ms = (performance.now() - t0) / seasons;
+    console.log(`${name.padEnd(8)} won ${won}/${seasons}${won ? `, ${(seedlings / won).toFixed(1)} seedlings and ${(coins / won).toFixed(0)} coins left` : ''}`
+      + `${lostAt.length ? `; lost at wave ${Math.min(...lostAt)}–${Math.max(...lostAt)} (mean ${(lostAt.reduce((a, b) => a + b, 0) / lostAt.length).toFixed(1)})` : ''}`
+      + `; ${ms.toFixed(0)} ms a season`);
+    console.log(`         eaten per wave: ${eatenBy.map((e) => (e / seasons).toFixed(1)).join(' ')}`);
   }
-  const ms = (performance.now() - t0) / seasons;
-  console.log(`${name.padEnd(6)} won ${won}/${seasons}${won ? `, ${(seedlings / won).toFixed(1)} seedlings and ${(coins / won).toFixed(0)} coins left` : ''}`
-    + `${lostAt.length ? `; lost at wave ${Math.min(...lostAt)}–${Math.max(...lostAt)} (mean ${(lostAt.reduce((a, b) => a + b, 0) / lostAt.length).toFixed(1)})` : ''}`
-    + `; ${ms.toFixed(0)} ms a season`);
-  console.log(`       eaten per wave: ${eatenBy.map((e) => (e / seasons).toFixed(1)).join(' ')}`);
 }

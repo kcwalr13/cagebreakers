@@ -150,7 +150,7 @@ function DewMenu() {
 /** The title's menu for Garden Siege: carry on, a new season, how to play. */
 function SiegeMenu() {
   const s = siege.value;
-  const live = s && (s.phase === 'build' || s.phase === 'pick') ? s : null;
+  const live = s && s.phase === 'build' ? s : null;
   const [sure, setSure] = useState(false);
   const best = siegeBest.value ? ` Best season ${siegeBest.value}.` : '';
   return (
@@ -159,7 +159,7 @@ function SiegeMenu() {
         <span class="mc-title"><Icon name="siege" class="ico inline-ico big" /> {live ? 'Keep defending' : 'A new season'}</span>
         <span class="mc-sub">{live
           ? `Wave ${live.wave} of ${WAVES.length} next: ${pestLine(waveKinds(live.wave))}. ${live.seedlings} seedlings, ${live.coins} coins.`
-          : `${WAVES.length} waves of pests. Plant hedges to make them walk the long way round, and defenders to stop them.${best}`}</span>
+          : `${WAVES.length} waves of pests. Plant brambles to make them walk the long way round, and grow them into defenders of the elements you choose.${best}`}</span>
       </button>
       {live ? (
         <button class={`menu-card${sure ? ' warn' : ''}`} onClick={() => { if (!sure) { setSure(true); return; } startSiege(); screen.value = 'siege'; }}>
@@ -169,7 +169,7 @@ function SiegeMenu() {
       ) : null}
       <button class="menu-card" onClick={() => (sheet.value = { kind: 'siege-help' })}>
         <span class="mc-title"><Icon name="help" class="ico inline-ico big" /> How to play</span>
-        <span class="mc-sub">Hedges, defenders, layers and hybrids, in five short paragraphs.</span>
+        <span class="mc-sub">Brambles, elements, layers and hybrids, in four short paragraphs.</span>
       </button>
     </nav>
   );

@@ -744,16 +744,22 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 
 /* ---- Garden Siege -------------------------------------------------------------------------- */
 .mode-seg button { font-size: 14px; line-height: 1.15; padding: 2px 4px; }
-.siege-wrap > .siege-board { width: min(100cqw, calc(100cqh * 328 / 526)); height: auto; max-height: 100cqh; }
+.siege-wrap > .siege-board { width: min(100cqw, calc(100cqh * 448 / 606)); height: auto; max-height: 100cqh; }
 .siege-board { display: block; touch-action: none; -webkit-user-select: none; user-select: none; overflow: visible; }
 .sg-lawn { fill: var(--lawn); }
 .sg-grid { stroke: var(--lawn-tuft); stroke-width: 1; opacity: .45; }
 .sg-route { fill: none; stroke: var(--slime-dark); stroke-width: 3; stroke-dasharray: 1 7; stroke-linecap: round; stroke-linejoin: round; opacity: .8; pointer-events: none; }
 .sg-flight { fill: none; stroke: var(--dew); stroke-width: 2; stroke-dasharray: 6 6; opacity: .55; pointer-events: none; }
 .sg-reach { fill: var(--reach); stroke: var(--accent); stroke-width: 1.6; pointer-events: none; }
-.sg-hedge rect { fill: var(--plant-leaf); stroke: var(--stem); stroke-width: 1.5; }
-.sg-hedge circle { fill: var(--stem); opacity: .5; }
-.sg-hedge.held rect { stroke: var(--ink); stroke-width: 3; }
+.sg-bramble rect { fill: var(--plant-leaf); stroke: var(--stem); stroke-width: 1.5; }
+.sg-bramble circle { fill: var(--bloom); opacity: .85; }
+.sg-thorns { stroke: var(--stem); stroke-width: 2; stroke-linecap: round; }
+.sg-bramble.held rect { stroke: var(--ink); stroke-width: 3; }
+.sg-def-ring2 { fill: none; stroke-width: 2; }
+.sg-def-ring2.el-water { stroke: var(--dew); }
+.sg-def-ring2.el-earth { stroke: var(--seed); }
+.sg-def-ring2.el-air { stroke: var(--ink-soft); }
+.sg-def-ring2.el-sun { stroke: var(--coin); }
 .sg-def-ring { fill: var(--paper-hi); stroke-width: 2.6; }
 .sg-def.el-water .sg-def-ring { stroke: var(--dew); }
 .sg-def.el-earth .sg-def-ring { stroke: var(--seed); }
@@ -787,6 +793,35 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .siege .status { min-height: 44px; }
 .siege .status .pill-btn { white-space: nowrap; flex: none; }
 .sg-sel-btns { display: flex; gap: 6px; flex: none; }
+.sg-panel { flex: none; min-height: 104px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding-top: 2px; }
+.sg-panel .status { min-height: 44px; }
+.sg-panel-line { font-size: 14px; line-height: 1.25; color: var(--ink); padding: 0 2px; }
+.sg-panel-line.warn { color: var(--rubric); }
+.sg-panel-line b { font-family: var(--font-display); font-weight: 800; }
+.sg-panel-btns { display: flex; gap: 5px; }
+.sg-panel-btns .btn.tool { flex: 1; flex-direction: column; gap: 0; min-width: 0; min-height: 58px; padding: 3px 2px; justify-content: center; }
+.sg-panel-btns .tool-name, .siege .run-controls .tool-name { font-size: 12px; line-height: 1.1; white-space: nowrap; }
+.sg-panel-btns .tool-cost { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; line-height: 1; color: var(--ink-soft); font-family: var(--font-display); font-weight: 700; white-space: nowrap; }
+.btn.tool.grow.el-water { border-color: var(--dew); }
+.btn.tool.grow.el-earth { border-color: var(--seed); }
+.btn.tool.grow.el-air { border-color: var(--ink-soft); }
+.btn.tool.grow.el-sun { border-color: var(--coin); }
+.btn.tool.grow.locked { opacity: .55; border-style: dashed; }
+.siege .run-controls .btn.tool { flex-direction: column; gap: 1px; min-width: 60px; }
+.sg-seeds, .sg-hybrids { list-style: none; margin: 4px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sg-seed { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--rule); background: var(--paper-hi); }
+.sg-seed.el-water { border-color: var(--dew); }
+.sg-seed.el-earth { border-color: var(--seed); }
+.sg-seed.el-air { border-color: var(--ink-soft); }
+.sg-seed.el-sun { border-color: var(--coin); }
+.sg-seed-ico { width: 30px; height: 30px; flex: none; fill: var(--ink); }
+.sg-seed-text { flex: 1; font-size: 14px; line-height: 1.3; }
+.sg-seed-text b { font-family: var(--font-display); font-weight: 800; }
+.sg-owned .ico { width: 24px; height: 24px; fill: var(--accent); }
+.sg-seeds-head { margin: 8px 0 0; font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+.sg-hybrids li { display: flex; gap: 10px; align-items: center; font-size: 14px; line-height: 1.3; opacity: .6; }
+.sg-hybrids li.open { opacity: 1; }
+.sg-hybrids .ico { width: 26px; height: 26px; flex: none; fill: var(--ink); }
 .sg-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; flex: none; padding-top: 2px; }
 .sg-tools.two-rows { grid-template-columns: repeat(4, 1fr); }
 .sg-tools .btn.tool { flex-direction: column; gap: 0; min-width: 0; min-height: 56px; padding: 3px 2px; justify-content: center; }

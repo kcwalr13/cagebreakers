@@ -77,11 +77,15 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   After a change to trails, clues or chapter shapes: `npx tsx lab/dewfall.ts 20`.
 - Garden Siege's core is pure too, and a wave has no randomness at all: `stepWave` moves a `WaveSim` one tick
   (`SIEGE.tick` seconds), the app steps it only to show it, and `finishWave` turns the finished wave into the next
-  state. Pests walk `walkOf` (a shortest way around everything planted, defenders included); building refuses a
-  piece that would close it. Flying pests go straight over. A pest's next layer is its `child`; `biteOf` is what it
-  eats at the bed. Player text calls them pests, defenders, hedges, waves, seedlings, coins and hybrids. After a
-  change to pests, defenders, waves or the economy: `npx tsx lab/siege.ts 6` (Mazer wins most seasons; Plain and
-  Greedy, which plant no maze, lose late; Idle loses at wave 2).
+  state. The only thing planted is a bramble (it blocks and scratches); everything else grows from one: a bramble into
+  an unlocked element's defender (`ELEMENTS`), a defender at its best level into the hybrid of its element and another
+  unlocked one (`hybridOf`, `growthsOf`). Elements cost `SIEGE.elementPrices` in order, the first free. Pests walk
+  `walkOf` (a shortest way around everything planted); planting refuses a bramble that would close it. Flying pests go
+  straight over. A pest's next layer is its `child`; `biteOf` is what it eats at the bed; each wave's strength is
+  `SIEGE.toughness`. Saves are `SiegeState` v2 (v1, before brambles, is dropped). Player text calls them pests,
+  brambles, defenders, elements, seeds, hybrids, waves, seedlings and coins. After a change to pests, defenders,
+  waves or the economy: `npx tsx lab/siege.ts 4 -v` (Mazer wins most seasons whichever element it starts with; Plain,
+  with no maze, loses mid to late; Brambles, with no defenders, loses at wave 8; Idle loses at wave 2).
 - After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets, and on a change that
   touches other sizes, `npx tsx lab/runs.ts 200 all 5` (and 7, 8) too. After a
   station, price, leaf, goal or home-garden change: `npx tsx lab/meta.ts` must pass too. A new map garden's star marks

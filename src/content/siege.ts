@@ -1,22 +1,22 @@
 /**
  * Garden Siege, Plot Twist's tower defense: pests come through the gap in the hedge and make for
- * the seedling bed. Between waves you plant hedges to lengthen their path (mazing, as in Green TD)
- * and defenders to stop them; pests come in layers (as in Bloons), and every few waves you pick a
- * hybrid defender of two elements (as in Enfo's). Balance numbers live here; the rules live in
- * src/core/siege.
+ * the seedling bed. Between waves you plant brambles to lengthen their path (mazing, as in Green TD);
+ * a bramble scratches what passes it, and can be grown into a defender of an element you've
+ * unlocked; a defender at its best can be grown into a hybrid of two elements (as in Enfo's). Pests
+ * come in layers (as in Bloons). Balance numbers live here; the rules live in src/core/siege.
  */
 
 export const SIEGE = {
   /** The field: squares across and down. Pests come in above the top row and leave below the bottom row. */
-  width: 8,
-  height: 12,
+  width: 11,
+  height: 14,
   /** The gap in the hedge (a column of the top row) and the gate to the bed (a column of the bottom row). */
-  entryCol: 3,
-  exitCol: 4,
+  entryCol: 5,
+  exitCol: 5,
   seedlings: 20,
-  startCoins: 30,
-  /** A hedge square costs this; it blocks pests that walk, not ones that fly. */
-  hedge: 1,
+  startCoins: 40,
+  /** Coins to unlock elements: the first, the second, and so on. */
+  elementPrices: [0, 15, 30, 45] as readonly number[],
   /** Selling gives back this share of everything spent on a square. */
   sell: 0.7,
   /** Coins after each wave: this bonus plus `perWave` times the wave's number. */
@@ -25,11 +25,8 @@ export const SIEGE = {
   /** Interest on coins kept through a wave: this share, at most `interestCap`. */
   interest: 0.05,
   interestCap: 8,
-  /** Pests grow tougher wave by wave: by `toughen` of their strength a wave, and by `toughen2` times the wave squared. */
-  toughen: 0.05,
-  toughen2: 0.025,
-  /** A hybrid is offered after these waves. */
-  hybridAfter: [5, 10, 15] as readonly number[],
+  /** Pests' strength is multiplied by this in each wave, from the first to the last. */
+  toughness: [1, 1.08, 1.16, 1.25, 1.35, 1.5, 1.65, 1.85, 2.1, 2.4, 2.9, 3.5, 4.4, 5.6, 7.2, 9.2, 11.8, 15, 19, 24] as readonly number[],
   /** Seconds of the simulation per tick. */
   tick: 0.05,
   /** Score: seedlings left are worth this many points each, plus coins kept. */
@@ -62,18 +59,22 @@ export interface Pest {
 export const PESTS: Record<PestId, Pest> = {
   slug: { id: 'slug', name: 'Slug', plural: 'slugs', hp: 8, speed: 1.0, armour: 0, flies: false, bounty: 1, text: 'Slow and soft.' },
   snail: { id: 'snail', name: 'Snail', plural: 'snails', hp: 14, speed: 0.75, armour: 0, flies: false, child: { kind: 'slug', count: 1 }, bounty: 1, text: 'Its shell cracks to leave a slug.' },
-  beetle: { id: 'beetle', name: 'Beetle', plural: 'beetles', hp: 20, speed: 0.85, armour: 2, flies: false, bounty: 3, bite: 2, text: 'Armour takes 2 off every hit. Hedgehogs, toads and mantises bite through it.' },
-  moth: { id: 'moth', name: 'Moth', plural: 'moths', hp: 12, speed: 1.35, armour: 0, flies: true, bounty: 2, text: 'Flies straight over the hedges. Frogs, hedgehogs and toads can\'t reach it.' },
+  beetle: { id: 'beetle', name: 'Beetle', plural: 'beetles', hp: 20, speed: 0.85, armour: 2, flies: false, bounty: 3, bite: 2, text: 'Armour takes 2 off every hit. Brambles can\'t scratch it; hedgehogs, toads, mantises and owls bite through.' },
+  moth: { id: 'moth', name: 'Moth', plural: 'moths', hp: 12, speed: 1.35, armour: 0, flies: true, bounty: 2, text: 'Flies straight over everything. Brambles, frogs, hedgehogs and toads can\'t reach it.' },
   aphids: { id: 'aphids', name: 'Aphid swarm', plural: 'aphid swarms', hp: 12, speed: 1.1, armour: 0, flies: false, child: { kind: 'aphid', count: 3 }, bounty: 1, text: 'Breaks into three aphids.' },
   aphid: { id: 'aphid', name: 'Aphid', plural: 'aphids', hp: 4, speed: 1.4, armour: 0, flies: false, bounty: 0, text: 'Small and quick.' },
-  greatSnail: { id: 'greatSnail', name: 'Great Snail', plural: 'great snails', hp: 320, speed: 0.4, armour: 1, flies: false, child: { kind: 'snail', count: 4 }, bounty: 25, bite: 6, text: 'A boss. Its shell takes 1 off every hit, and it leaves four snails.' },
+  greatSnail: { id: 'greatSnail', name: 'Great Snail', plural: 'great snails', hp: 240, speed: 0.4, armour: 1, flies: false, child: { kind: 'snail', count: 4 }, bounty: 25, bite: 6, text: 'A boss. Its shell takes 1 off every hit, and it leaves four snails.' },
 };
 
 export type Element = 'water' | 'earth' | 'air' | 'sun';
-export type DefenderId = 'frog' | 'hedgehog' | 'thrush' | 'marigold' | 'toad' | 'dragonfly' | 'bumblebee' | 'mantis';
+export const ELEMENT_IDS: readonly Element[] = ['water', 'earth', 'air', 'sun'];
+export type DefenderId =
+  | 'bramble'
+  | 'frog' | 'hedgehog' | 'thrush' | 'marigold'
+  | 'toad' | 'dragonfly' | 'salamander' | 'mantis' | 'owl' | 'bumblebee';
 
 export interface Level {
-  /** Coins to plant (level 1) or to reach this level. */
+  /** Coins to plant or grow it (level 1), or to reach this level. */
   cost: number;
   damage: number;
   /** Reach, in squares from its middle. */
@@ -92,18 +93,24 @@ export interface Level {
 export interface Defender {
   id: DefenderId;
   name: string;
+  /** 0: the bramble everything grows from; 1: one element's defender; 2: a hybrid of two. */
+  tier: 0 | 1 | 2;
   elements: readonly Element[];
   /** Reaches flying pests: no, yes, or yes with double harm. */
   air: 'no' | 'yes' | 'double';
   /** Ignores armour. */
   pierce: boolean;
-  levels: readonly [Level, Level, Level];
+  levels: readonly Level[];
   text: string;
 }
 
 export const DEFENDERS: Record<DefenderId, Defender> = {
+  bramble: {
+    id: 'bramble', name: 'Bramble', tier: 0, elements: [], air: 'no', pierce: false, text: 'Blocks the way, and scratches pests that pass beside it.',
+    levels: [{ cost: 1, damage: 1, range: 1.45, every: 1.0 }],
+  },
   frog: {
-    id: 'frog', name: 'Frog', elements: ['water'], air: 'no', pierce: false, text: 'Quick tongue, on pests that walk.',
+    id: 'frog', name: 'Frog', tier: 1, elements: ['water'], air: 'no', pierce: false, text: 'Quick tongue, on pests that walk.',
     levels: [
       { cost: 5, damage: 2, range: 1.6, every: 0.7 },
       { cost: 6, damage: 3, range: 1.8, every: 0.65 },
@@ -111,15 +118,15 @@ export const DEFENDERS: Record<DefenderId, Defender> = {
     ],
   },
   hedgehog: {
-    id: 'hedgehog', name: 'Hedgehog', elements: ['earth'], air: 'no', pierce: true, text: 'Bites through armour, close up.',
+    id: 'hedgehog', name: 'Hedgehog', tier: 1, elements: ['earth'], air: 'no', pierce: true, text: 'Bites through armour, close up.',
     levels: [
-      { cost: 7, damage: 4, range: 1.3, every: 1.1 },
-      { cost: 8, damage: 6, range: 1.4, every: 1.0 },
-      { cost: 14, damage: 9, range: 1.5, every: 1.0, splash: 0.8 },
+      { cost: 7, damage: 4, range: 1.5, every: 1.1 },
+      { cost: 8, damage: 6, range: 1.5, every: 1.0 },
+      { cost: 14, damage: 9, range: 1.6, every: 1.0, splash: 0.8 },
     ],
   },
   thrush: {
-    id: 'thrush', name: 'Thrush', elements: ['air'], air: 'double', pierce: false, text: 'Long reach, and double harm on pests that fly.',
+    id: 'thrush', name: 'Thrush', tier: 1, elements: ['air'], air: 'double', pierce: false, text: 'Long reach, and double harm on pests that fly.',
     levels: [
       { cost: 8, damage: 2, range: 2.8, every: 0.8 },
       { cost: 8, damage: 3, range: 3.1, every: 0.75 },
@@ -127,7 +134,7 @@ export const DEFENDERS: Record<DefenderId, Defender> = {
     ],
   },
   marigold: {
-    id: 'marigold', name: 'Marigold', elements: ['sun'], air: 'yes', pierce: false, text: 'Warms every pest in reach at once.',
+    id: 'marigold', name: 'Marigold', tier: 1, elements: ['sun'], air: 'yes', pierce: false, text: 'Warms every pest in reach at once.',
     levels: [
       { cost: 10, damage: 2, range: 1.6, every: 1.0, targets: 99 },
       { cost: 10, damage: 3, range: 1.8, every: 1.0, targets: 99 },
@@ -135,7 +142,7 @@ export const DEFENDERS: Record<DefenderId, Defender> = {
     ],
   },
   toad: {
-    id: 'toad', name: 'Toad', elements: ['water', 'earth'], air: 'no', pierce: true, text: 'A heavy splash that slows everything it lands on.',
+    id: 'toad', name: 'Toad', tier: 2, elements: ['water', 'earth'], air: 'no', pierce: true, text: 'A heavy splash that slows everything it lands on, through armour.',
     levels: [
       { cost: 18, damage: 6, range: 1.8, every: 1.2, splash: 1.1, slow: 0.55, slowFor: 1.5 },
       { cost: 14, damage: 9, range: 2.0, every: 1.1, splash: 1.2, slow: 0.5, slowFor: 1.5 },
@@ -143,32 +150,56 @@ export const DEFENDERS: Record<DefenderId, Defender> = {
     ],
   },
   dragonfly: {
-    id: 'dragonfly', name: 'Dragonfly', elements: ['water', 'air'], air: 'double', pierce: false, text: 'Darts at two pests at once, from far off.',
+    id: 'dragonfly', name: 'Dragonfly', tier: 2, elements: ['water', 'air'], air: 'double', pierce: false, text: 'Darts at two pests at once, from far off.',
     levels: [
       { cost: 18, damage: 3, range: 3.2, every: 0.45, targets: 2 },
       { cost: 14, damage: 4, range: 3.5, every: 0.4, targets: 2 },
       { cost: 22, damage: 6, range: 3.8, every: 0.35, targets: 3 },
     ],
   },
-  bumblebee: {
-    id: 'bumblebee', name: 'Bumblebee', elements: ['air', 'sun'], air: 'yes', pierce: false, text: 'Stings everything near the pest it chases.',
+  salamander: {
+    id: 'salamander', name: 'Salamander', tier: 2, elements: ['water', 'sun'], air: 'yes', pierce: false, text: 'Scalds every pest in reach and slows them all.',
     levels: [
-      { cost: 18, damage: 4, range: 2.4, every: 0.7, splash: 0.9 },
-      { cost: 14, damage: 6, range: 2.6, every: 0.65, splash: 1.0 },
-      { cost: 22, damage: 9, range: 2.8, every: 0.6, splash: 1.1 },
+      { cost: 18, damage: 3, range: 1.8, every: 0.8, targets: 99, slow: 0.7, slowFor: 1 },
+      { cost: 14, damage: 4, range: 2.0, every: 0.75, targets: 99, slow: 0.65, slowFor: 1 },
+      { cost: 22, damage: 6, range: 2.2, every: 0.7, targets: 99, slow: 0.6, slowFor: 1.2 },
     ],
   },
   mantis: {
-    id: 'mantis', name: 'Mantis', elements: ['earth', 'sun'], air: 'yes', pierce: true, text: 'One great strike, through any armour.',
+    id: 'mantis', name: 'Mantis', tier: 2, elements: ['earth', 'sun'], air: 'yes', pierce: true, text: 'One great strike, through any armour.',
     levels: [
       { cost: 18, damage: 14, range: 2.0, every: 1.3 },
       { cost: 14, damage: 22, range: 2.2, every: 1.2 },
       { cost: 22, damage: 34, range: 2.4, every: 1.1 },
     ],
   },
+  owl: {
+    id: 'owl', name: 'Owl', tier: 2, elements: ['earth', 'air'], air: 'double', pierce: true, text: 'Strikes from very far, through armour, and twice as hard on pests that fly.',
+    levels: [
+      { cost: 18, damage: 9, range: 3.4, every: 1.4 },
+      { cost: 14, damage: 14, range: 3.8, every: 1.3 },
+      { cost: 22, damage: 22, range: 4.2, every: 1.2 },
+    ],
+  },
+  bumblebee: {
+    id: 'bumblebee', name: 'Bumblebee', tier: 2, elements: ['air', 'sun'], air: 'yes', pierce: false, text: 'Stings everything near the pest it chases.',
+    levels: [
+      { cost: 18, damage: 4, range: 2.4, every: 0.7, splash: 0.9 },
+      { cost: 14, damage: 6, range: 2.6, every: 0.65, splash: 1.0 },
+      { cost: 22, damage: 9, range: 2.8, every: 0.6, splash: 1.1 },
+    ],
+  },
 };
-export const BASIC: readonly DefenderId[] = ['frog', 'hedgehog', 'thrush', 'marigold'];
-export const HYBRIDS: readonly DefenderId[] = ['toad', 'dragonfly', 'bumblebee', 'mantis'];
+
+/** Each element's own defender, grown from a bramble once the element is unlocked. */
+export const ELEMENTS: Record<Element, { id: Element; name: string; defender: DefenderId }> = {
+  water: { id: 'water', name: 'Water', defender: 'frog' },
+  earth: { id: 'earth', name: 'Earth', defender: 'hedgehog' },
+  air: { id: 'air', name: 'Air', defender: 'thrush' },
+  sun: { id: 'sun', name: 'Sun', defender: 'marigold' },
+};
+export const BASIC: readonly DefenderId[] = ELEMENT_IDS.map((e) => ELEMENTS[e].defender);
+export const HYBRIDS: readonly DefenderId[] = ['toad', 'dragonfly', 'salamander', 'mantis', 'owl', 'bumblebee'];
 
 /** A group of one kind of pest in a wave: `count` of them, `gap` seconds apart, the first `at` seconds in. */
 export interface Group { kind: PestId; count: number; gap: number; at: number }

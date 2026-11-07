@@ -8,7 +8,7 @@ Between gardens, a finished garden earns seeds. The map has five regions of gard
 
 In Dewfall, the trail runs from the gap in the hedge to the bed, square to square, never beside itself. Counts above and beside the garden say how many trail squares each column and row holds (mist hides some), and clues sit on squares: dew counts the trail among the eight squares around it, a leaf among the four beside it, a scarecrow along the line it faces; the trail runs straight over a pebble and turns on an acorn. Mark trail and not-trail by tapping or dragging. Every puzzle has one trail that fits, found by reasoning, never guessing. The book has seven chapters, each bringing in a clue, and there are three new daily puzzles every day. The lantern lights one square when you're stuck, for one star of the two.
 
-In Garden Siege, pests come through the gap in the hedge in 20 waves and make for the seedling bed. Between waves you plant hedges to make them walk the long way round (they always take the shortest way left, and a hedge can't close it), and frogs, hedgehogs, thrushes and marigolds beside the way, each with two upgrades. Pests come in layers: a snail's shell cracks to leave a slug, aphid swarms split in three, beetles wear armour, moths fly over everything, and a Great Snail comes at waves 10 and 20. Every five waves you pick a hybrid of two elements: toad, dragonfly, bumblebee or mantis. Coins come from pests stopped, each wave and interest on what you keep. Watch each wave at 1×, 2× or 4×.
+In Garden Siege, pests come through the gap in the hedge in 20 waves and make for the seedling bed, across a garden 11 squares by 14. Between waves you tap or drag to plant brambles: they make the pests walk the long way round (pests always take the shortest way left, and a bramble can't close it), and they scratch whatever passes. Everything else grows from a bramble. Unlock elements in Seeds (the first is free, each one after costs more) and grow brambles into their defenders: frogs (water), hedgehogs (earth, through armour), thrushes (air, double on flyers) and marigolds (sun, everything in reach). Upgrade a defender twice, then grow it into the hybrid of its element and another you've unlocked: toad, dragonfly, salamander, mantis, owl or bumblebee. Pests come in layers: a snail's shell cracks to leave a slug, aphid swarms split in three, beetles wear armour, moths fly over everything, and a Great Snail comes at waves 10 and 20. Coins come from pests stopped, each wave and interest on what you keep. Watch each wave at 1×, 2× or 4×.
 
 **Play:** https://kcwalr13.github.io/cagebreakers/ — open it once with a connection, add it to your home screen, and it works in airplane mode from then on.
 
@@ -31,7 +31,7 @@ The game was called Cagebreakers until M8. The code, the web address, save codes
 | M9 · The Grounds | Four regions with paths bought with seeds and hidden gardens; fences, lost labels, crossed paths and Zen gardens; a daily streak with a grace day; the Weekly Garden; a journal of goals; and a home garden that grows as you play. A second build: requests that never fight right play, a garden diary, and the Botanic Garden with five more twists | Built |
 | M10 · Night Watch | A second game on the title: tower defense where you can't see the path. Played and retired: it splits into Dewfall and Garden Siege | Retired |
 | M11 · Dewfall | The trail puzzle on its own: counts, mist, dew, leaves, pebbles, acorns and scarecrows; a book of seven chapters and three daily puzzles | Built |
-| M12 · Garden Siege | Tower defense with mazing: hedges to shape the pests' path, layered pests, defenders with upgrades and hybrid picks, over 20 waves | Built |
+| M12 · Garden Siege | Tower defense with mazing: hedges to shape the pests' path, layered pests, defenders with upgrades and hybrid picks, over 20 waves. A second build answers Kyle's notes: a bigger garden, brambles that scratch, and a tech tree of elements, defenders and hybrids grown from brambles | Built |
 
 ## Working on it
 
@@ -47,7 +47,7 @@ npx tsx lab/meta.ts       # every garden for the bots, and how fast a Careful pl
 npx tsx lab/calibrate.ts 120 espalier  # star marks for a map garden
 npx tsx lab/friction.ts 40     # how often requests fight a player who plants numbers where they truly go
 npx tsx lab/dewfall.ts 20      # Dewfall: how each chapter's and daily puzzles are made, and how hard they are
-npx tsx lab/siege.ts 6         # Garden Siege: bots that maze, don't, or do nothing play whole seasons
+npx tsx lab/siege.ts 4 -v      # Garden Siege: bots that maze, don't, only plant brambles, or do nothing play whole seasons
 npm run assets      # re-copy fonts and regenerate the icon module
 node scripts/app-icons.mjs  # re-render home-screen icons
 ```

@@ -11,7 +11,7 @@ import { RoundSheet, ToolSheet } from './run/Screens';
 import { BookSheet, StationSheet } from './Scriptorium';
 import { HomeTileSheet } from './Home';
 import { DewHelp } from './dewfall/DewfallScreen';
-import { SiegeHelp } from './siege/SiegeScreen';
+import { SiegeHelp, SiegeSeeds } from './siege/SiegeScreen';
 import { profile } from './meta';
 import { stationById } from '../content/stations';
 import * as runState from './run/state';
@@ -253,6 +253,7 @@ export function Sheets() {
           : s.kind === 'home-tile' ? <HomeTileSheet at={s.at} />
           : s.kind === 'dew-help' ? <DewHelp />
           : s.kind === 'siege-help' ? <SiegeHelp />
+          : s.kind === 'siege-seeds' ? <SiegeSeeds />
           : s.kind === 'confirm-new-run' ? <ConfirmNewRun /> : null}
       </div>
     </>

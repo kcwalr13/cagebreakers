@@ -71,7 +71,7 @@ const used = {
   // Garden Siege: pests, defenders and the wave controls
   siege: 'crenulated-shield', beetle: 'scarab-beetle', moth: 'butterfly', aphids: 'spotted-bug', aphid: 'long-antennae-bug', greatSnail: 'spiked-snail',
   marigold: 'sunflower', toad: 'toad-teeth', dragonfly: 'dragonfly', bumblebee: 'bee', mantis: 'praying-mantis',
-  play: 'play-button', pause: 'pause-button', fast: 'fast-forward-button', upgrade: 'upgrade', hedgeBush: 'berry-bush',
+  play: 'play-button', pause: 'pause-button', fast: 'fast-forward-button', upgrade: 'upgrade', bramble: 'thorny-vine', salamander: 'salamander', owl: 'barn-owl',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

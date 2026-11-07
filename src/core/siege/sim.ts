@@ -66,7 +66,7 @@ export function layersOf(kind: PestId): number {
   return 1 + (p.child ? p.child.count * layersOf(p.child.kind) : 0);
 }
 
-export const toughness = (wave: number) => 1 + SIEGE.toughen * (wave - 1) + SIEGE.toughen2 * (wave - 1) ** 2;
+export const toughness = (wave: number) => SIEGE.toughness[Math.min(wave, SIEGE.toughness.length) - 1]!;
 
 export function waveQueue(wave: number): { tick: number; kind: PestId }[] {
   const out: { tick: number; kind: PestId; order: number }[] = [];
