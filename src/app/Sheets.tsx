@@ -10,7 +10,7 @@ import { screen, sheet } from './nav';
 import { RoundSheet, ToolSheet } from './run/Screens';
 import { BookSheet, StationSheet } from './Scriptorium';
 import { HomeTileSheet } from './Home';
-import { WatchHelp } from './watch/WatchScreen';
+import { DewHelp } from './dewfall/DewfallScreen';
 import { profile } from './meta';
 import { stationById } from '../content/stations';
 import * as runState from './run/state';
@@ -250,7 +250,7 @@ export function Sheets() {
           : s.kind === 'book' ? <BookSheet id={s.id} />
           : s.kind === 'transfer' ? <TransferSheet />
           : s.kind === 'home-tile' ? <HomeTileSheet at={s.at} />
-          : s.kind === 'watch-help' ? <WatchHelp />
+          : s.kind === 'dew-help' ? <DewHelp />
           : s.kind === 'confirm-new-run' ? <ConfirmNewRun /> : null}
       </div>
     </>

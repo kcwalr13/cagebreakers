@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { RUN } from '../content/balance';
 import { stationById } from '../content/stations';
 import { Icon } from './Icon';
@@ -19,10 +19,10 @@ import { selection as toySelection } from './state';
 import { TokenSvg } from './Token';
 import { ToyScreen } from './Toy';
 import { mode } from './mode';
-import { WatchScreen } from './watch/WatchScreen';
-import { pestLine, startWatch, watch, watchBest } from './watch/state';
-import { WATCH } from '../content/watch';
-import { pestsOf } from '../core/watch/run';
+import { DewBookScreen, DewfallScreen } from './dewfall/DewfallScreen';
+import { DAILY_SIZES, bookTotals, carryOn, dewProfile, openDaily, openPuzzle } from './dewfall/state';
+import { CHAPTERS, DAILY as DEW_DAILY } from '../content/dewfall';
+import { dailyId, dailyStreak, nextInBook, puzzleName } from '../core/dewfall/play';
 
 function Ghost() {
   const d = drag.value;
@@ -94,28 +94,51 @@ function WeeklyCard() {
   );
 }
 
-/** The title's menu for Night Watch: keep watch, or begin a season. */
-function WatchMenu() {
-  const s = watch.value;
-  const live = s && s.phase === 'plan' ? s : null;
-  const [sure, setSure] = useState(false);
+/** The title's menu for Dewfall: carry on, the book, the day's three puzzles, how to play. */
+function DewMenu() {
+  const go = carryOn.value;
+  const prof = dewProfile.value;
+  const totals = bookTotals.value;
+  const next = nextInBook(prof);
+  const day = today();
+  const done = prof.daily[day] ?? [];
+  const streak = dailyStreak(prof, day);
+  const d = new Date();
   return (
     <nav class="title-menu">
-      <button class="menu-card primary" onClick={() => { if (!live) startWatch(); screen.value = 'watch'; }}>
-        <span class="mc-title"><Icon name="night" class="ico inline-ico big" /> {live ? 'Keep watch' : 'A new season'}</span>
-        <span class="mc-sub">{live
-          ? `Night ${live.night} of ${WATCH.nights}: ${pestLine(pestsOf(live.night))} tonight. ${live.seedlings} ${live.seedlings === 1 ? 'seedling' : 'seedlings'}, ${live.coins} ${live.coins === 1 ? 'coin' : 'coins'}.`
-          : `${WATCH.nights} nights of pests on a hidden trail. Read the counts, mark the trail, and plant frogs, hedgehogs and thrushes where it runs.${watchBest.value ? ` Best season ${watchBest.value}.` : ''}`}</span>
-      </button>
-      {live ? (
-        <button class={`menu-card${sure ? ' warn' : ''}`} onClick={() => { if (!sure) { setSure(true); return; } startWatch(); screen.value = 'watch'; }}>
-          <span class="mc-title">{sure ? 'Tap again to start over' : 'Start over'}</span>
-          <span class="mc-sub">Leave this season and begin a new one.{watchBest.value ? ` Best season ${watchBest.value}.` : ''}</span>
+      {go ? (
+        <button class="menu-card primary" onClick={() => openPuzzle(go.id)}>
+          <span class="mc-title"><Icon name="dewfall" class="ico inline-ico big" /> Carry on</span>
+          <span class="mc-sub">{puzzleName(go.id)}, where you left it.</span>
         </button>
       ) : null}
-      <button class="menu-card" onClick={() => (sheet.value = { kind: 'watch-help' })}>
+      <button class={`menu-card${go ? '' : ' primary'}`} onClick={() => (screen.value = 'dewbook')}>
+        <span class="mc-title"><Icon name="dewBook" class="ico inline-ico big" /> The book</span>
+        <span class="mc-sub">{totals.solved
+          ? `${CHAPTERS.length} chapters, each with a new clue. ${totals.solved} of ${totals.of} solved, ${totals.stars} stars.${next ? ` Next: ${puzzleName(next)}.` : ''}`
+          : `${CHAPTERS.length} chapters of puzzles, each bringing in a new clue. Start with ${CHAPTERS[0]!.name}.`}</span>
+      </button>
+      <div class="menu-card daily-card">
+        <span class="mc-title">Daily Dewfall <span class="mc-date">{DAY_NAMES[d.getDay()]} {d.getDate()} {MONTHS[d.getMonth()]}</span>
+          {streak ? <span class="streak-chip" aria-label={`${streak}-day streak`}><Icon name="flame" class="ico" />{streak}</span> : null}</span>
+        <span class="mc-sub">{done.length === DAILY_SIZES.length ? 'All three done today. Three new ones tomorrow.' : 'Three new puzzles every day, the same for everyone.'}</span>
+        <div class="daily-sizes three">
+          {DEW_DAILY.map((dd) => {
+            const solved = done.includes(dd.size);
+            const stars = prof.stars[dailyId(day, dd.size)] ?? 0;
+            return (
+              <button key={dd.size} class={`daily-size${solved ? ' done' : ''}`} aria-label={`Daily Dewfall, ${dd.name.toLowerCase()}, ${dd.shape.width} by ${dd.shape.height}${solved ? `: done, ${stars} ${stars === 1 ? 'star' : 'stars'}` : ''}`}
+                onClick={() => openDaily(dd.size)}>
+                <span class="ds-size">{dd.name}{solved ? <Icon name="check" class="ico ds-check" /> : null}</span>
+                <span class="ds-note">{dd.shape.width}×{dd.shape.height}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <button class="menu-card" onClick={() => (sheet.value = { kind: 'dew-help' })}>
         <span class="mc-title"><Icon name="help" class="ico inline-ico big" /> How to play</span>
-        <span class="mc-sub">The clues, the defenders and the night, in four short paragraphs.</span>
+        <span class="mc-sub">The trail, the counts and every clue, on one page.</span>
       </button>
     </nav>
   );
@@ -140,11 +163,11 @@ function Title() {
       <Vine />
       <div class="seg mode-seg" role="group" aria-label="Game">
         <button aria-pressed={mode.value === 'garden'} onClick={() => (mode.value = 'garden')}>Number Garden</button>
-        <button aria-pressed={mode.value === 'watch'} onClick={() => (mode.value = 'watch')}><Icon name="night" class="ico inline-ico" /> Night Watch</button>
+        <button aria-pressed={mode.value === 'dewfall'} onClick={() => (mode.value = 'dewfall')}><Icon name="dewfall" class="ico inline-ico" /> Dewfall</button>
       </div>
-      <p class="tagline">{mode.value === 'watch' ? 'Read the clues, find the hidden trail, and guard the seedlings through the night.' : `A number garden, grown over ${RUN.rounds} weeks.`}</p>
+      <p class="tagline">{mode.value === 'dewfall' ? 'A slug crossed the garden in the night. Read the dew, and find its one trail.' : `A number garden, grown over ${RUN.rounds} weeks.`}</p>
       <div class="spacer" />
-      {mode.value === 'watch' ? <WatchMenu /> : <nav class="title-menu">
+      {mode.value === 'dewfall' ? <DewMenu /> : <nav class="title-menu">
         {live ? (
           <button class="menu-card primary" onClick={() => { openSlot('main'); screen.value = 'run'; }}>
             <span class="mc-title">Keep growing</span>
@@ -204,7 +227,7 @@ export function App() {
     <div class="app">
       {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'map' ? <MapScreen /> : s === 'shop' ? <ShopScreen />
         : s === 'library' ? <LibraryScreen /> : s === 'home' ? <HomeScreen /> : s === 'journal' ? <JournalScreen />
-          : s === 'watch' ? <WatchScreen /> : <RunScreen />}
+          : s === 'dewfall' ? <DewfallScreen /> : s === 'dewbook' ? <DewBookScreen /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

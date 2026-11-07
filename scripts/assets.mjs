@@ -65,6 +65,9 @@ const used = {
   // Night Watch: its creatures, the lantern, and the mode itself
   hedgehogWatch: 'hedgehog', thrush: 'raven', slug: 'snail-eyes', snail: 'snail', lanternLight: 'lantern-flame',
   night: 'night-sky', trailMark: 'footprint', seedling: 'sprout',
+  // Dewfall: its clues, the brush and the mist
+  dewfall: 'droplets', acorn: 'acorn', pebbleStone: 'stone-sphere', leafClue: 'oak-leaf', glint: 'sparkles', brush: 'paint-brush', fog: 'fog',
+  dewBook: 'open-book',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

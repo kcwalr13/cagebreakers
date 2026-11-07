@@ -1,7 +1,7 @@
 /**
- * Night Watch's garden: a grid `width` squares across and `height` down, indexed row-major from
- * the top-left. Pests come in through a gap in the hedge above the top row and make for the
- * seedling bed below the bottom row.
+ * A Dewfall garden: a grid `width` squares across and `height` down, indexed row-major from the
+ * top-left. The trail comes in through a gap in the hedge above the top row and ends at the bed
+ * below the bottom row.
  */
 export interface Board {
   width: number;
@@ -15,7 +15,16 @@ export interface Board {
   /** The up to eight squares touching each square, corners included. Shared: don't mutate. */
   around: readonly (readonly number[])[];
   all: readonly number[];
+  /** The square one step from `cell` towards `dir`, or -1 past the edge. */
+  step(cell: number, dir: Dir): number;
+  /** The squares from `cell` (not counting it) towards `dir`, up to the edge. Shared: don't mutate. */
+  ray(cell: number, dir: Dir): readonly number[];
 }
+
+/** North, east, south and west. */
+export type Dir = 0 | 1 | 2 | 3;
+export const DIRS: readonly Dir[] = [0, 1, 2, 3];
+const DR = [-1, 0, 1, 0], DC = [0, 1, 0, -1];
 
 const boards = new Map<string, Board>();
 
@@ -39,7 +48,16 @@ export function boardOf(width: number, height: number): Board {
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if ((dr || dc) && inside(r + dr, c + dc)) out.push(cellAt(r + dr, c + dc));
     return out;
   });
-  b = { width, height, cells, rowOf, colOf, cellAt, orth, around, all };
+  const step = (i: number, d: Dir) => {
+    const r = rowOf(i) + DR[d]!, c = colOf(i) + DC[d]!;
+    return inside(r, c) ? cellAt(r, c) : -1;
+  };
+  const rays = all.map((i) => DIRS.map((d) => {
+    const out: number[] = [];
+    for (let x = step(i, d); x >= 0; x = step(x, d)) out.push(x);
+    return out;
+  }));
+  b = { width, height, cells, rowOf, colOf, cellAt, orth, around, all, step, ray: (i, d) => rays[i]![d]! };
   boards.set(key, b);
   return b;
 }

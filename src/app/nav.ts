@@ -3,7 +3,7 @@ import type { ToolId } from '../content/balance';
 import type { StationId } from '../content/stations';
 import { readJson, writeJson } from './storage';
 
-export type Screen = 'title' | 'toy' | 'run' | 'map' | 'shop' | 'library' | 'home' | 'journal' | 'watch';
+export type Screen = 'title' | 'toy' | 'run' | 'map' | 'shop' | 'library' | 'home' | 'journal' | 'dewfall' | 'dewbook';
 
 /** Every bottom sheet in the game. Only one is open at a time. */
 export type Sheet =
@@ -16,17 +16,19 @@ export type Sheet =
   | { kind: 'confirm-new-run' }
   | { kind: 'transfer' }
   | { kind: 'home-tile'; at: number }
-  | { kind: 'watch-help' }
+  | { kind: 'dew-help' }
   | null;
 
 const NAV_KEY = 'cagebreakers.nav';
 const fromUrl = new URLSearchParams(location.search).get('screen') as Screen | null;
 const saved = readJson<{ screen?: Screen }>(NAV_KEY);
-const SCREENS: readonly Screen[] = ['title', 'toy', 'run', 'map', 'shop', 'library', 'home', 'journal', 'watch'];
+const SCREENS: readonly Screen[] = ['title', 'toy', 'run', 'map', 'shop', 'library', 'home', 'journal', 'dewfall', 'dewbook'];
 const valid = (s: unknown): s is Screen => SCREENS.includes(s as Screen);
 
 export const screen = signal<Screen>(valid(fromUrl) ? fromUrl : valid(saved?.screen) ? saved!.screen! : 'title');
 export const sheet = signal<Sheet>(null);
+/** Where the back arrow leads from the screen open now, when it isn't the title (a book puzzle goes back to the book). */
+export const backTo = signal<Screen | null>(null);
 /** Set when a new version has downloaded and is waiting to take over. */
 export const updateReady = signal<null | (() => void)>(null);
 
@@ -36,7 +38,7 @@ effect(() => { void screen.value; sheet.value = null; });
 /** What every back arrow does: an open sheet closes first; otherwise any screen returns to the title. */
 export function goBack() {
   if (sheet.value) { sheet.value = null; return; }
-  if (screen.value !== 'title') screen.value = 'title';
+  if (screen.value !== 'title') { const to = backTo.value; backTo.value = null; screen.value = to ?? 'title'; }
 }
 
 /*

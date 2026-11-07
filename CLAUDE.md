@@ -64,13 +64,17 @@ defensible default. Each milestone ends at a gate only Kyle can pass.
   in `src/content/stations.ts`, the shop in `src/content/meta.ts`, the home garden in `src/content/home.ts`, and goals,
   the daily bonus and the Weekly Garden in `src/content/journal.ts`. A finished garden's `LibraryEntry.diary` keeps
   each week's requests and whether they were met (`RoundRecord.asked`).
-- Plot Twist has two games, picked on the title (`src/app/mode.ts`): the Number Garden (everything above) and Night
-  Watch (`src/core/watch`, `src/content/watch.ts`, `src/app/watch`). Night Watch's core is pure like the rest: a
-  night's trail and clues come from `stream(seed, 'watch.night:N')`, and `makeClues` keeps only clue sets its
-  `deduce` solver works out by rules (depth 0) or one step of trial (depth 1), so every trail is the only one that
-  fits and needs no guessing. Player text calls them the trail, tallies, dew, defenders, pests and the lantern.
-  After a Night Watch balance change: `npx tsx lab/watch.ts 100` (Careful saves every seedling; Guesser loses most
-  seasons), and `npx tsx lab/watch-puzzles.ts 60` after a change to trails or clues.
+- Plot Twist has two games, picked on the title (`src/app/mode.ts`): the Number Garden (everything above) and Dewfall
+  (`src/core/dewfall`, `src/content/dewfall.ts`, `src/app/dewfall`); Garden Siege, a tower defense with mazing, is
+  being built as a third. Dewfall's core is pure like the rest. Every clue compiles to "exactly n of these squares are
+  trail" (`countsOfClue`), and `deduce` solves by sound rules alone (depth 0) or with trying a square each way (depth
+  1, at most `maxTries`); the generator (`makePuzzle`) keeps only clue sets `deduce` solves, so every puzzle has one
+  trail and needs no guessing. A new clue kind needs `countsOfClue`, a place in `cluePool`, a `ClueMark` drawing and a
+  line in the help; the brute-force test in `dewfall.test.ts` checks it against every trail on small boards. The book's
+  puzzles come from `stream('dewfall.book', '<chapter>:<k>')` and the daily ones from `stream('dewfall.daily:<day>',
+  size)`; a change to the generator changes them, and saved marks whose fingerprint no longer fits are dropped.
+  Player text calls them the trail, counts, mist, dew, leaves, scarecrows, pebbles, acorns, glints and the lantern.
+  After a change to trails, clues or chapter shapes: `npx tsx lab/dewfall.ts 20`.
 - After a balance change: `npx tsx lab/runs.ts 400` must meet the design doc's Verification targets, and on a change that
   touches other sizes, `npx tsx lab/runs.ts 200 all 5` (and 7, 8) too. After a
   station, price, leaf, goal or home-garden change: `npx tsx lab/meta.ts` must pass too. A new map garden's star marks

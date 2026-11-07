@@ -6,8 +6,8 @@ import { storage } from './storage';
 
 const KEYS = [
   'cagebreakers.run', 'cagebreakers.daily', 'cagebreakers.daily5', 'cagebreakers.daily7', 'cagebreakers.daily8', 'cagebreakers.weekly', 'cagebreakers.daily.best', 'cagebreakers.slot', 'cagebreakers.meta', 'cagebreakers.meta.last',
-  'cagebreakers.settings', 'cagebreakers.prefs', 'cagebreakers.coach', 'cagebreakers.m1.page', 'cagebreakers.watch',
-  'cagebreakers.watch.best', 'cagebreakers.mode',
+  'cagebreakers.settings', 'cagebreakers.prefs', 'cagebreakers.coach', 'cagebreakers.m1.page', 'cagebreakers.dewfall',
+  'cagebreakers.mode',
 ];
 const PREFIX = 'CB1';
 
