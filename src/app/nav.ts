@@ -3,7 +3,7 @@ import type { ToolId } from '../content/balance';
 import type { StationId } from '../content/stations';
 import { readJson, writeJson } from './storage';
 
-export type Screen = 'title' | 'toy' | 'run' | 'map' | 'shop' | 'library' | 'home' | 'journal' | 'dewfall' | 'dewbook';
+export type Screen = 'title' | 'toy' | 'run' | 'map' | 'shop' | 'library' | 'home' | 'journal' | 'dewfall' | 'dewbook' | 'siege';
 
 /** Every bottom sheet in the game. Only one is open at a time. */
 export type Sheet =
@@ -17,12 +17,13 @@ export type Sheet =
   | { kind: 'transfer' }
   | { kind: 'home-tile'; at: number }
   | { kind: 'dew-help' }
+  | { kind: 'siege-help' }
   | null;
 
 const NAV_KEY = 'cagebreakers.nav';
 const fromUrl = new URLSearchParams(location.search).get('screen') as Screen | null;
 const saved = readJson<{ screen?: Screen }>(NAV_KEY);
-const SCREENS: readonly Screen[] = ['title', 'toy', 'run', 'map', 'shop', 'library', 'home', 'journal', 'dewfall', 'dewbook'];
+const SCREENS: readonly Screen[] = ['title', 'toy', 'run', 'map', 'shop', 'library', 'home', 'journal', 'dewfall', 'dewbook', 'siege'];
 const valid = (s: unknown): s is Screen => SCREENS.includes(s as Screen);
 
 export const screen = signal<Screen>(valid(fromUrl) ? fromUrl : valid(saved?.screen) ? saved!.screen! : 'title');

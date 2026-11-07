@@ -68,6 +68,10 @@ const used = {
   // Dewfall: its clues, the brush and the mist
   dewfall: 'droplets', acorn: 'acorn', pebbleStone: 'stone-sphere', leafClue: 'oak-leaf', glint: 'sparkles', brush: 'paint-brush', fog: 'fog',
   dewBook: 'open-book',
+  // Garden Siege: pests, defenders and the wave controls
+  siege: 'crenulated-shield', beetle: 'scarab-beetle', moth: 'butterfly', aphids: 'spotted-bug', aphid: 'long-antennae-bug', greatSnail: 'spiked-snail',
+  marigold: 'sunflower', toad: 'toad-teeth', dragonfly: 'dragonfly', bumblebee: 'bee', mantis: 'praying-mantis',
+  play: 'play-button', pause: 'pause-button', fast: 'fast-forward-button', upgrade: 'upgrade', hedgeBush: 'berry-bush',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

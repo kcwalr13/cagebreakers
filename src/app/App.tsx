@@ -1,4 +1,4 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { RUN } from '../content/balance';
 import { stationById } from '../content/stations';
 import { Icon } from './Icon';
@@ -23,6 +23,9 @@ import { DewBookScreen, DewfallScreen } from './dewfall/DewfallScreen';
 import { DAILY_SIZES, bookTotals, carryOn, dewProfile, openDaily, openPuzzle } from './dewfall/state';
 import { CHAPTERS, DAILY as DEW_DAILY } from '../content/dewfall';
 import { dailyId, dailyStreak, nextInBook, puzzleName } from '../core/dewfall/play';
+import { SiegeScreen, pestLine, waveKinds } from './siege/SiegeScreen';
+import { siege, siegeBest, startSiege } from './siege/state';
+import { WAVES } from '../content/siege';
 
 function Ghost() {
   const d = drag.value;
@@ -144,6 +147,34 @@ function DewMenu() {
   );
 }
 
+/** The title's menu for Garden Siege: carry on, a new season, how to play. */
+function SiegeMenu() {
+  const s = siege.value;
+  const live = s && (s.phase === 'build' || s.phase === 'pick') ? s : null;
+  const [sure, setSure] = useState(false);
+  const best = siegeBest.value ? ` Best season ${siegeBest.value}.` : '';
+  return (
+    <nav class="title-menu">
+      <button class="menu-card primary" onClick={() => { if (!live) startSiege(); screen.value = 'siege'; }}>
+        <span class="mc-title"><Icon name="siege" class="ico inline-ico big" /> {live ? 'Keep defending' : 'A new season'}</span>
+        <span class="mc-sub">{live
+          ? `Wave ${live.wave} of ${WAVES.length} next: ${pestLine(waveKinds(live.wave))}. ${live.seedlings} seedlings, ${live.coins} coins.`
+          : `${WAVES.length} waves of pests. Plant hedges to make them walk the long way round, and defenders to stop them.${best}`}</span>
+      </button>
+      {live ? (
+        <button class={`menu-card${sure ? ' warn' : ''}`} onClick={() => { if (!sure) { setSure(true); return; } startSiege(); screen.value = 'siege'; }}>
+          <span class="mc-title">{sure ? 'Tap again to start over' : 'Start over'}</span>
+          <span class="mc-sub">Leave this season and begin a new one.{best}</span>
+        </button>
+      ) : null}
+      <button class="menu-card" onClick={() => (sheet.value = { kind: 'siege-help' })}>
+        <span class="mc-title"><Icon name="help" class="ico inline-ico big" /> How to play</span>
+        <span class="mc-sub">Hedges, defenders, layers and hybrids, in five short paragraphs.</span>
+      </button>
+    </nav>
+  );
+}
+
 function Title() {
   const d = new Date();
   const streak = streakNow(profile.value.daily, today());
@@ -164,10 +195,13 @@ function Title() {
       <div class="seg mode-seg" role="group" aria-label="Game">
         <button aria-pressed={mode.value === 'garden'} onClick={() => (mode.value = 'garden')}>Number Garden</button>
         <button aria-pressed={mode.value === 'dewfall'} onClick={() => (mode.value = 'dewfall')}><Icon name="dewfall" class="ico inline-ico" /> Dewfall</button>
+        <button aria-pressed={mode.value === 'siege'} onClick={() => (mode.value = 'siege')}><Icon name="siege" class="ico inline-ico" /> Garden Siege</button>
       </div>
-      <p class="tagline">{mode.value === 'dewfall' ? 'A slug crossed the garden in the night. Read the dew, and find its one trail.' : `A number garden, grown over ${RUN.rounds} weeks.`}</p>
+      <p class="tagline">{mode.value === 'dewfall' ? 'A slug crossed the garden in the night. Read the dew, and find its one trail.'
+        : mode.value === 'siege' ? 'Wave after wave of pests, and a garden to hold. Make them walk the long way round.'
+          : `A number garden, grown over ${RUN.rounds} weeks.`}</p>
       <div class="spacer" />
-      {mode.value === 'dewfall' ? <DewMenu /> : <nav class="title-menu">
+      {mode.value === 'dewfall' ? <DewMenu /> : mode.value === 'siege' ? <SiegeMenu /> : <nav class="title-menu">
         {live ? (
           <button class="menu-card primary" onClick={() => { openSlot('main'); screen.value = 'run'; }}>
             <span class="mc-title">Keep growing</span>
@@ -227,7 +261,7 @@ export function App() {
     <div class="app">
       {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'map' ? <MapScreen /> : s === 'shop' ? <ShopScreen />
         : s === 'library' ? <LibraryScreen /> : s === 'home' ? <HomeScreen /> : s === 'journal' ? <JournalScreen />
-          : s === 'dewfall' ? <DewfallScreen /> : s === 'dewbook' ? <DewBookScreen /> : <RunScreen />}
+          : s === 'dewfall' ? <DewfallScreen /> : s === 'dewbook' ? <DewBookScreen /> : s === 'siege' ? <SiegeScreen /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />

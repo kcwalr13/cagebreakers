@@ -1,12 +1,14 @@
 # Plot Twist
 
-Offline puzzle games for phones on airplanes, in one garden. The **Number Garden** is a KenKen garden, planted over a few weeks; gardens run from 5×5 to 8×8, and every one has exactly one solution. **Dewfall** is a logic puzzle: a slug crossed the garden in the night, and you find its one trail from the clues the morning leaves. A third game, **Garden Siege**, a tower defense with mazing, is being built.
+Offline puzzle games for phones on airplanes, in one garden. The **Number Garden** is a KenKen garden, planted over a few weeks; gardens run from 5×5 to 8×8, and every one has exactly one solution. **Dewfall** is a logic puzzle: a slug crossed the garden in the night, and you find its one trail from the clues the morning leaves. **Garden Siege** is tower defense with mazing: plant hedges so the pests walk the long way round, and defenders to stop them.
 
 No number may repeat in a row or column, and an outlined plot blooms only when its numbers hit the target in its corner. Each week deals a few more numbers and brings three requests ("Row 3 adds to 12 or more", "Make a × plot bloom", "Plant a 5 in row 2"). Anything in the garden can move, but a number in its right square never has to: requests only ever ask for more, never for a square left empty, and planting your numbers where they truly go meets the required one. When a request seems to need a number moved, that number is wrong. Miss the required one and a drop of water dries up; bonus requests and blooming plots pay coins. In harvest week the last numbers go in, and the garden is full.
 
 Between gardens, a finished garden earns seeds. The map has five regions of gardens, 34 in all, each with a twist: stars open each region, seeds open the paths between gardens, and five gardens stay hidden until you find them. Some gardens twist the puzzle itself: fences (a < or > between two squares), lost labels (plots show only their target), crossed paths (the long diagonals count), and in the Botanic Garden shade (even numbers only), runners (two numbers one apart), bean poles (numbers climb from root to tip), elbow room (no number touches itself, even at a corner) and tidy plots (no repeats in a plot); Zen gardens have no requests and no water, just the puzzle. Every finished garden leaves a seed packet for your home garden, where plants grow with every week you water. There's a Daily Garden of each size with a streak bonus, a Weekly Garden with a new twist every Monday, a journal of goals worth seeds, the Potting Shed's tools, upgrades, looks and garden ornaments, and the Herbarium keeps every garden you've grown, with a diary of each week's requests.
 
 In Dewfall, the trail runs from the gap in the hedge to the bed, square to square, never beside itself. Counts above and beside the garden say how many trail squares each column and row holds (mist hides some), and clues sit on squares: dew counts the trail among the eight squares around it, a leaf among the four beside it, a scarecrow along the line it faces; the trail runs straight over a pebble and turns on an acorn. Mark trail and not-trail by tapping or dragging. Every puzzle has one trail that fits, found by reasoning, never guessing. The book has seven chapters, each bringing in a clue, and there are three new daily puzzles every day. The lantern lights one square when you're stuck, for one star of the two.
+
+In Garden Siege, pests come through the gap in the hedge in 20 waves and make for the seedling bed. Between waves you plant hedges to make them walk the long way round (they always take the shortest way left, and a hedge can't close it), and frogs, hedgehogs, thrushes and marigolds beside the way, each with two upgrades. Pests come in layers: a snail's shell cracks to leave a slug, aphid swarms split in three, beetles wear armour, moths fly over everything, and a Great Snail comes at waves 10 and 20. Every five waves you pick a hybrid of two elements: toad, dragonfly, bumblebee or mantis. Coins come from pests stopped, each wave and interest on what you keep. Watch each wave at 1×, 2× or 4×.
 
 **Play:** https://kcwalr13.github.io/cagebreakers/ — open it once with a connection, add it to your home screen, and it works in airplane mode from then on.
 
@@ -29,7 +31,7 @@ The game was called Cagebreakers until M8. The code, the web address, save codes
 | M9 · The Grounds | Four regions with paths bought with seeds and hidden gardens; fences, lost labels, crossed paths and Zen gardens; a daily streak with a grace day; the Weekly Garden; a journal of goals; and a home garden that grows as you play. A second build: requests that never fight right play, a garden diary, and the Botanic Garden with five more twists | Built |
 | M10 · Night Watch | A second game on the title: tower defense where you can't see the path. Played and retired: it splits into Dewfall and Garden Siege | Retired |
 | M11 · Dewfall | The trail puzzle on its own: counts, mist, dew, leaves, pebbles, acorns and scarecrows; a book of seven chapters and three daily puzzles | Built |
-| M12 · Garden Siege | Tower defense with mazing: hedges to shape the pests' path, layered pests, defenders with upgrades and hybrid picks | Building |
+| M12 · Garden Siege | Tower defense with mazing: hedges to shape the pests' path, layered pests, defenders with upgrades and hybrid picks, over 20 waves | Built |
 
 ## Working on it
 
@@ -45,6 +47,7 @@ npx tsx lab/meta.ts       # every garden for the bots, and how fast a Careful pl
 npx tsx lab/calibrate.ts 120 espalier  # star marks for a map garden
 npx tsx lab/friction.ts 40     # how often requests fight a player who plants numbers where they truly go
 npx tsx lab/dewfall.ts 20      # Dewfall: how each chapter's and daily puzzles are made, and how hard they are
+npx tsx lab/siege.ts 6         # Garden Siege: bots that maze, don't, or do nothing play whole seasons
 npm run assets      # re-copy fonts and regenerate the icon module
 node scripts/app-icons.mjs  # re-render home-screen icons
 ```
@@ -53,8 +56,8 @@ Every push to `main` runs the tests and deploys to GitHub Pages.
 
 ## Layout
 
-- `src/core` — the rules: seeded randomness, page generation (with its twists) and a solver that proves one solution, legality and sealing, commissions (and the proof that all three can be met before they're posted), the run as a pure state machine, the scriptorium profile (leaf, stars, paths, the streak, the journal, the library) and the home garden. `src/core/dewfall` is Dewfall: the hidden trail, its clues, a logic solver that proves each puzzle has one trail and can be reasoned out, the generator, and attempts and the profile as pure functions. Pure TypeScript; no screen, no clock, no randomness except from the seed.
-- `src/content` — game data: the shape of a run, tool prices, commission pay and difficulty, the regions and gardens, the shop, the home garden's plants and ornaments, and the journal's goals; `src/content/dewfall.ts` holds Dewfall's chapters and daily puzzle shapes.
+- `src/core` — the rules: seeded randomness, page generation (with its twists) and a solver that proves one solution, legality and sealing, commissions (and the proof that all three can be met before they're posted), the run as a pure state machine, the scriptorium profile (leaf, stars, paths, the streak, the journal, the library) and the home garden. `src/core/dewfall` is Dewfall: the hidden trail, its clues, a logic solver that proves each puzzle has one trail and can be reasoned out, the generator, and attempts and the profile as pure functions. `src/core/siege` is Garden Siege: the field and its shortest way, a wave simulated in fixed ticks, and the season as a pure state machine. Pure TypeScript; no screen, no clock, no randomness except from the seed.
+- `src/content` — game data: the shape of a run, tool prices, commission pay and difficulty, the regions and gardens, the shop, the home garden's plants and ornaments, and the journal's goals; `src/content/dewfall.ts` holds Dewfall's chapters and daily puzzle shapes, and `src/content/siege.ts` Garden Siege's pests, defenders, waves and economy.
 - `src/app` — the interface: Preact, SVG board, pointer input, storage behind one adapter.
 - `lab` — headless tools that run on a developer machine and never ship.
 - `e2e` — Playwright tests at iPhone and Android sizes, including an offline reload.

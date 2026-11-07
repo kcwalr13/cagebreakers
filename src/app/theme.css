@@ -741,3 +741,66 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .df-help-clues { list-style: none; margin: 4px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .df-help-clues li { display: flex; gap: 12px; align-items: center; }
 .df-sample { width: 44px; height: 44px; flex: none; }
+
+/* ---- Garden Siege -------------------------------------------------------------------------- */
+.mode-seg button { font-size: 14px; line-height: 1.15; padding: 2px 4px; }
+.siege-wrap > .siege-board { width: min(100cqw, calc(100cqh * 328 / 526)); height: auto; max-height: 100cqh; }
+.siege-board { display: block; touch-action: none; -webkit-user-select: none; user-select: none; overflow: visible; }
+.sg-lawn { fill: var(--lawn); }
+.sg-grid { stroke: var(--lawn-tuft); stroke-width: 1; opacity: .45; }
+.sg-route { fill: none; stroke: var(--slime-dark); stroke-width: 3; stroke-dasharray: 1 7; stroke-linecap: round; stroke-linejoin: round; opacity: .8; pointer-events: none; }
+.sg-flight { fill: none; stroke: var(--dew); stroke-width: 2; stroke-dasharray: 6 6; opacity: .55; pointer-events: none; }
+.sg-reach { fill: var(--reach); stroke: var(--accent); stroke-width: 1.6; pointer-events: none; }
+.sg-hedge rect { fill: var(--plant-leaf); stroke: var(--stem); stroke-width: 1.5; }
+.sg-hedge circle { fill: var(--stem); opacity: .5; }
+.sg-hedge.held rect { stroke: var(--ink); stroke-width: 3; }
+.sg-def-ring { fill: var(--paper-hi); stroke-width: 2.6; }
+.sg-def.el-water .sg-def-ring { stroke: var(--dew); }
+.sg-def.el-earth .sg-def-ring { stroke: var(--seed); }
+.sg-def.el-air .sg-def-ring { stroke: var(--ink-soft); }
+.sg-def.el-sun .sg-def-ring { stroke: var(--coin); }
+.sg-def.held .sg-def-ring { stroke: var(--ink); stroke-width: 3.6; }
+.sg-def-ico { fill: var(--ink); pointer-events: none; }
+.sg-pip { fill: var(--ink); }
+.sg-strike { stroke-width: 2.4; stroke-linecap: round; opacity: .85; pointer-events: none; }
+.sg-strike.el-water { stroke: var(--dew); }
+.sg-strike.el-earth { stroke: var(--seed); }
+.sg-strike.el-air { stroke: var(--ink-soft); }
+.sg-strike.el-sun { stroke: var(--coin); }
+.sg-pest { fill: var(--pest); pointer-events: none; }
+.sg-pest.flies { fill: var(--lens); }
+.sg-pest.boss { fill: var(--rubric); }
+.sg-hp-bg { fill: var(--paper); opacity: .85; }
+.sg-hp { fill: var(--rubric); }
+.wb-refused { fill: var(--rubric); opacity: 0; animation: flash-no 600ms ease-out; pointer-events: none; }
+
+.sg-wavebar { flex: none; min-height: 32px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 15px; padding: 0 2px; }
+.sg-wavebar b { font-family: var(--font-display); font-weight: 800; }
+.sg-wavebar .warn { color: var(--rubric); font-weight: 700; margin-left: auto; }
+.sg-next { color: var(--ink-soft); }
+.sg-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 7px 1px 4px; border-radius: 12px; border: 1px solid var(--rule); background: var(--paper-hi); font-family: var(--font-display); font-weight: 800; }
+.sg-chip .ico { width: 20px; height: 20px; fill: var(--pest); }
+.sg-chip.flies .ico { fill: var(--lens); }
+.sg-chip.armour { border-color: var(--seed); }
+.sg-note { font-size: 13px; color: var(--ink-soft); }
+.sg-note.warn { color: var(--rubric); font-weight: 700; margin-left: 0; }
+.siege .status { min-height: 44px; }
+.siege .status .pill-btn { white-space: nowrap; flex: none; }
+.sg-sel-btns { display: flex; gap: 6px; flex: none; }
+.sg-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; flex: none; padding-top: 2px; }
+.sg-tools.two-rows { grid-template-columns: repeat(4, 1fr); }
+.sg-tools .btn.tool { flex-direction: column; gap: 0; min-width: 0; min-height: 56px; padding: 3px 2px; justify-content: center; }
+.sg-tools .tool-name { font-size: 12px; line-height: 1.1; white-space: nowrap; }
+.sg-tools .tool-cost { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; line-height: 1; color: var(--ink-soft); font-family: var(--font-display); font-weight: 700; }
+.sg-tools .btn.toggled .tool-name, .sg-tools .btn.toggled .tool-cost { color: var(--paper); }
+.sg-tools .btn.toggled .ico.gold { fill: var(--coin); }
+.sg-speed .btn { min-width: 52px; justify-content: center; font-family: var(--font-display); font-weight: 800; }
+.sg-pick { flex: none; padding: 6px 0 0; }
+.sg-pick h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 21px; }
+.sg-pick p { margin: 2px 0 8px; color: var(--ink-soft); font-size: 15px; }
+.sg-pick-cards { display: flex; flex-direction: column; gap: 8px; }
+.sg-hybrid { min-height: 64px; padding: 10px 14px; }
+.watch-score { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 14px 0; font-size: 17px; }
+.watch-score span { display: inline-flex; align-items: center; gap: 6px; }
+.watch-total b { font-family: var(--font-display); font-weight: 800; font-size: 26px; }
+.siege-end { overflow-y: auto; }
