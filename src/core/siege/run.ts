@@ -4,8 +4,9 @@
  * best into a hybrid of its element and another you've unlocked, and sell. Then a wave plays out.
  * The same seed and actions always give the same season.
  */
-import { DEFENDERS, type DefenderId, type Element, ELEMENTS, ELEMENT_IDS, HYBRIDS, SIEGE, WAVES } from '../../content/siege';
-import { CELLS, ENTRY, EXIT, walkOf } from './field';
+import { DEFENDERS, type DefenderId, type Element, ELEMENTS, ELEMENT_IDS, HYBRIDS, SHED, SHED_EFFECT, SHED_IDS, SIEGE, type ShedId, WAVES } from '../../content/siege';
+import { MAPS, mapById } from '../../content/siege-maps';
+import { type Field, fieldOf, walksOf } from './field';
 import { type WaveSim, newWaveSim, runWave } from './sim';
 
 export interface Placed {
@@ -23,16 +24,19 @@ export interface WaveRecord {
   eaten: number;
   stopped: number;
   leaked: number;
-  /** Coins from pests stopped, the wave's bonus, and interest on coins kept through it. */
+  /** Coins from pests stopped, the wave's bonus, interest on coins kept through it, and beehives' honey. */
   earned: number;
   bonus: number;
   interest: number;
+  honey: number;
 }
 
 export interface SiegeState {
-  v: 2;
+  v: 3;
   id: string;
   seed: string;
+  /** The garden: a map's id. */
+  map: string;
   /** The next wave to come (or the last one, once the season is over). */
   wave: number;
   phase: 'build' | 'won' | 'lost';
@@ -42,6 +46,8 @@ export interface SiegeState {
   nextId: number;
   /** Elements unlocked, in the order they were. */
   elements: Element[];
+  /** Ranks bought of each of the Shed's improvements. */
+  shed: Record<ShedId, number>;
   records: WaveRecord[];
 }
 
@@ -53,21 +59,53 @@ export type SiegeAction =
   | { type: 'upgrade'; id: number }
   | { type: 'sell'; id: number }
   | { type: 'unlock'; element: Element }
+  /** Buys the next rank of one of the Shed's improvements. */
+  | { type: 'improve'; item: ShedId }
   /** Plays the next wave to its end. */
   | { type: 'wave' };
 
 export interface SiegeResult { state: SiegeState; ok: boolean; reason?: string; record?: WaveRecord }
 
-export function newSiege(seed: string, id = seed): SiegeState {
-  return { v: 2, id, seed, wave: 1, phase: 'build', coins: SIEGE.startCoins, seedlings: SIEGE.seedlings, placed: [], nextId: 1, elements: [], records: [] };
+export function newSiege(seed: string, id = seed, map = MAPS[0]!.id): SiegeState {
+  return {
+    v: 3, id, seed, map: mapById(map).id, wave: 1, phase: 'build', coins: mapById(map).startCoins, seedlings: SIEGE.seedlings, placed: [], nextId: 1,
+    elements: [], shed: noShed(), records: [],
+  };
 }
 
-export const costOf = (kind: DefenderId, level = 0): number => DEFENDERS[kind].levels[level]!.cost;
+/** Reads a saved season: one from before gardens (v2) was always in the Kitchen Garden. */
+export function migrateSiege(s: unknown): SiegeState | null {
+  const x = s as (Omit<Partial<SiegeState>, 'v'> & { v?: number }) | null;
+  if (!x || !Array.isArray(x.placed) || !Array.isArray(x.elements)) return null;
+  if (x.v === 3 && typeof x.map === 'string' && MAPS.some((m) => m.id === x.map) && x.shed) return x as SiegeState;
+  if (x.v === 2) return { ...(x as Omit<SiegeState, 'v' | 'map' | 'shed'>), v: 3, map: MAPS[0]!.id, shed: noShed(), records: (x.records ?? []).map((r) => ({ ...r, honey: 0 })) };
+  return null;
+}
+
+const noShed = (): Record<ShedId, number> => ({ compost: 0, thorns: 0, frame: 0, can: 0 });
+/** Coins for the next rank of an improvement, or null when it's at its last. */
+export const improvePrice = (s: Pick<SiegeState, 'shed'>, item: ShedId): number | null => SHED[item].costs[s.shed[item]] ?? null;
+/** Interest coins kept now would earn through the next wave. */
+export const interestOn = (s: Pick<SiegeState, 'shed' | 'coins'>): number =>
+  Math.min(SHED_EFFECT.interestCap[s.shed.compost]!, Math.floor(s.coins * SHED_EFFECT.interest[s.shed.compost]!));
+/** Honey the beehives will make after the next wave. */
+export const honeyOf = (s: Pick<SiegeState, 'placed'>): number =>
+  s.placed.reduce((n, p) => n + (DEFENDERS[p.kind].levels[p.level]!.honey ?? 0), 0);
+
+export const fieldNow = (s: Pick<SiegeState, 'map'>): Field => fieldOf(s.map);
+
+/** A piece's price at a level before the cold frame's discount. */
+export const listPrice = (kind: DefenderId, level = 0): number => DEFENDERS[kind].levels[level]!.cost;
+/** What growing or upgrading to a level costs now: the cold frame takes some off (never below 1). */
+export const costOf = (kind: DefenderId, level = 0, s?: Pick<SiegeState, 'shed'>): number => {
+  const list = listPrice(kind, level);
+  return s ? Math.max(1, Math.ceil(list * (1 - SHED_EFFECT.discount[s.shed.frame]!))) : list;
+};
 /** Coins to unlock the next element, or null when all four are. */
 export const unlockPrice = (s: Pick<SiegeState, 'elements'>): number | null => SIEGE.elementPrices[s.elements.length] ?? null;
 export const blockedBy = (placed: readonly Pick<Placed, 'cell'>[]) => new Set(placed.map((p) => p.cell));
-/** The squares pests walk this wave. A season always has a way through: planting refuses to close it. */
-export const walkNow = (s: Pick<SiegeState, 'placed'>): number[] => walkOf(blockedBy(s.placed))!;
+/** The tiles pests from each gap walk this wave. A season always has a way through: planting refuses to close it. */
+export const walksNow = (s: Pick<SiegeState, 'placed' | 'map'>): number[][] => walksOf(fieldNow(s), blockedBy(s.placed))!;
 export const refundOf = (p: Pick<Placed, 'spent'>) => Math.floor(p.spent * SIEGE.sell);
 export const maxLevel = (kind: DefenderId) => DEFENDERS[kind].levels.length - 1;
 
@@ -82,42 +120,52 @@ export function hybridOf(a: Element, b: Element): DefenderId | null {
  */
 export function growthsOf(s: Pick<SiegeState, 'elements'>, p: Pick<Placed, 'kind' | 'level'>): { into: DefenderId; open: boolean; needs: Element[] }[] {
   const def = DEFENDERS[p.kind];
-  if (def.tier === 0) return ELEMENT_IDS.map((e) => ({ into: ELEMENTS[e].defender, open: s.elements.includes(e), needs: [e] }));
-  if (def.tier === 1 && p.level === maxLevel(p.kind)) {
+  if (def.tier === 0) {
+    return [...ELEMENT_IDS.map((e) => ({ into: ELEMENTS[e].defender, open: s.elements.includes(e), needs: [e] })), { into: 'hive' as DefenderId, open: true, needs: [] }];
+  }
+  if (def.tier === 1 && def.elements.length && p.level === maxLevel(p.kind)) {
     const own = def.elements[0]!;
     return ELEMENT_IDS.filter((e) => e !== own).map((e) => ({ into: hybridOf(own, e)!, open: s.elements.includes(e), needs: [e] }));
   }
   return [];
 }
 
-/** Why a bramble can't go on a square, or null. */
+/** Why a bramble can't go on a tile, or null. */
 export function plantBlocker(s: SiegeState, cell: number): string | null {
-  if (cell < 0 || cell >= CELLS) return 'Choose a square in the garden';
-  if (cell === ENTRY) return 'Pests come in there: leave the gap open';
-  if (cell === EXIT) return 'That square leads to the bed: leave it open';
+  const f = fieldNow(s);
+  if (cell < 0 || cell >= f.cells) return 'Choose a spot in the garden';
+  if (f.entries.includes(cell)) return 'Pests come in there: leave the gap open';
+  if (f.exits.includes(cell)) return 'That leads to the bed: leave it open';
+  const t = f.terrain[cell];
+  // Refusals on the ground say what it does, since tapping it is how a player asks.
+  if (t === 'rock') return 'Rock: nothing grows on it, and nothing walks through it';
+  if (t === 'pond') return 'The pond: frogs and their kin beside it strike harder';
+  if (t === 'mud') return 'Mud slows walking pests, but nothing takes root in it';
+  if (t === 'hole') return 'A rabbit hole: a pest that steps on it comes up out of its partner';
   if (s.placed.some((p) => p.cell === cell)) return 'Something is already there';
   const cost = costOf('bramble');
   if (s.coins < cost) return `A bramble costs ${cost} coins`;
   const blocked = blockedBy(s.placed);
   blocked.add(cell);
-  if (!walkOf(blocked)) return 'That would close the way to the bed';
+  if (!walksOf(f, blocked)) return f.entries.length > 1 ? 'That would close a way to the bed' : 'That would close the way to the bed';
   return null;
 }
 
 /** Starts the next wave, for the app to step through. */
 export function startWave(s: SiegeState): WaveSim {
-  return newWaveSim(s.wave, walkNow(s), s.placed);
+  return newWaveSim(fieldNow(s), s.wave, walksNow(s), s.placed, { thorns: SHED_EFFECT.thorns[s.shed.thorns]!, harm: SHED_EFFECT.harm[s.shed.can]! });
 }
 
 /** What a finished wave leaves: seedlings eaten, coins earned, and the next wave. */
 export function finishWave(prev: SiegeState, w: WaveSim): { state: SiegeState; record: WaveRecord } {
   const s: SiegeState = structuredClone(prev);
   const bonus = SIEGE.waveBonus + SIEGE.perWave * w.wave;
-  const interest = Math.min(SIEGE.interestCap, Math.floor(prev.coins * SIEGE.interest));
-  const record: WaveRecord = { wave: w.wave, eaten: Math.min(prev.seedlings, w.eaten), stopped: w.stopped, leaked: w.leaked, earned: w.earned, bonus, interest };
+  const interest = interestOn(prev);
+  const honey = honeyOf(prev);
+  const record: WaveRecord = { wave: w.wave, eaten: Math.min(prev.seedlings, w.eaten), stopped: w.stopped, leaked: w.leaked, earned: w.earned, bonus, interest, honey };
   s.records.push(record);
   s.seedlings -= record.eaten;
-  s.coins += w.earned + bonus + interest;
+  s.coins += w.earned + bonus + interest + honey;
   if (s.seedlings <= 0) s.phase = 'lost';
   else if (w.wave >= WAVES.length) s.phase = 'won';
   else s.wave = w.wave + 1;
@@ -145,7 +193,7 @@ export function actSiege(prev: SiegeState, a: SiegeAction): SiegeResult {
       const g = growthsOf(s, p).find((x) => x.into === a.into);
       if (!g) return refuse(prev, DEFENDERS[p.kind].tier === 1 ? `Upgrade it to its best first` : `A ${DEFENDERS[p.kind].name.toLowerCase()} can't grow into that`);
       if (!g.open) return refuse(prev, `Unlock ${g.needs.map((e) => ELEMENTS[e].name.toLowerCase()).join(' and ')} first`);
-      const cost = costOf(a.into);
+      const cost = costOf(a.into, 0, s);
       if (s.coins < cost) return refuse(prev, `That costs ${coins(cost)}`);
       s.coins -= cost;
       p.kind = a.into;
@@ -157,7 +205,7 @@ export function actSiege(prev: SiegeState, a: SiegeAction): SiegeResult {
       const p = s.placed.find((x) => x.id === a.id);
       if (!p) return refuse(prev, 'Nothing there');
       if (p.level >= maxLevel(p.kind)) return refuse(prev, DEFENDERS[p.kind].tier === 0 ? 'Grow it into a defender instead' : 'Already at its best');
-      const cost = costOf(p.kind, p.level + 1);
+      const cost = costOf(p.kind, p.level + 1, s);
       if (s.coins < cost) return refuse(prev, `That costs ${coins(cost)}`);
       s.coins -= cost;
       p.level++;
@@ -169,6 +217,15 @@ export function actSiege(prev: SiegeState, a: SiegeAction): SiegeResult {
       if (!p) return refuse(prev, 'Nothing there');
       s.placed = s.placed.filter((x) => x.id !== a.id);
       s.coins += refundOf(p);
+      return { state: s, ok: true };
+    }
+    case 'improve': {
+      if (!SHED_IDS.includes(a.item)) return refuse(prev, 'No such improvement');
+      const price = improvePrice(s, a.item);
+      if (price === null) return refuse(prev, `The ${SHED[a.item].name.toLowerCase()} is as good as it gets`);
+      if (s.coins < price) return refuse(prev, `That costs ${coins(price)}`);
+      s.coins -= price;
+      s.shed[a.item]++;
       return { state: s, ok: true };
     }
     case 'unlock': {

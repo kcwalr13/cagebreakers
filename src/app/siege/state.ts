@@ -4,9 +4,10 @@
  * only to be shown.
  */
 import { batch, computed, effect, signal } from '@preact/signals';
-import { DEFENDERS, type DefenderId, type Element, ELEMENTS, SIEGE, WAVES } from '../../content/siege';
+import { DEFENDERS, type DefenderId, type Element, ELEMENTS, SHED, SIEGE, type ShedId, WAVES } from '../../content/siege';
+import { MAPS, mapById } from '../../content/siege-maps';
 import { normalizeSeed } from '../../core/seed';
-import { type SiegeAction, type SiegeState, type WaveRecord, actSiege, finishWave, newSiege, siegeScore, startWave } from '../../core/siege/run';
+import { type SiegeAction, type SiegeState, type WaveRecord, actSiege, finishWave, migrateSiege, newSiege, siegeScore, startWave } from '../../core/siege/run';
 import { type Strike, type WaveSim, runWave, stepWave } from '../../core/siege/sim';
 import { buzz } from '../settings';
 import { play } from '../sound';
@@ -17,16 +18,19 @@ export const SIEGE_KEY = 'cagebreakers.siege';
 export const SIEGE_BEST_KEY = 'cagebreakers.siege.best';
 
 function load(): SiegeState | null {
-  const s = readJson<SiegeState>(SIEGE_KEY);
-  // A season from before brambles and elements (v1) is dropped.
-  return s && s.v === 2 && normalizeSeed(s.seed) && Array.isArray(s.placed) && Array.isArray(s.elements) ? s : null;
+  // A season from before gardens (v2) carries on in the Kitchen Garden; one from before brambles (v1) is dropped.
+  const s = migrateSiege(readJson<unknown>(SIEGE_KEY));
+  return s && normalizeSeed(s.seed) ? s : null;
 }
 
 export const siege = signal<SiegeState | null>(load());
 effect(() => { const s = siege.value; if (s) writeJson(SIEGE_KEY, s); else storage.remove(SIEGE_KEY); });
 
-export const siegeBest = signal<number>(readJson<{ best?: number }>(SIEGE_BEST_KEY)?.best ?? 0);
-effect(() => writeJson(SIEGE_BEST_KEY, { best: siegeBest.value }));
+/** The best season's score in each garden (a best from before gardens was in the Kitchen Garden). */
+const savedBest = readJson<{ best?: number; maps?: Record<string, number> }>(SIEGE_BEST_KEY);
+export const siegeBests = signal<Record<string, number>>(savedBest?.maps ?? (savedBest?.best ? { [MAPS[0]!.id]: savedBest.best } : {}));
+export const siegeBest = computed(() => Math.max(0, ...Object.values(siegeBests.value)));
+effect(() => writeJson(SIEGE_BEST_KEY, { best: siegeBest.value, maps: siegeBests.value }));
 
 /** A planted piece picked up, by id: its reach shows, and it can be grown, upgraded or sold. */
 export const selected = signal<number | null>(null);
@@ -54,12 +58,22 @@ export function saySiege(text: string, warn = false, ms = 2800) {
   messageTimer = setTimeout(() => (siegeMessage.value = null), ms);
 }
 
-export function startSiege(seed = freshSeed()) {
+/** A new season, in a garden (by default the one last played). */
+export function startSiege(seed = freshSeed(), map = siege.value?.map ?? MAPS[0]!.id) {
   batch(() => {
-    siege.value = newSiege(seed, `g${seed}${Date.now().toString(36)}`);
+    siege.value = newSiege(seed, `g${seed}${Date.now().toString(36)}`, mapById(map).id);
     selected.value = null; playing.value = null; siegeMessage.value = null; lastWave.value = null; paused.value = false; history.value = [];
+    zoom.value = null;
   });
 }
+
+/**
+ * How closely the field is looked at: a zoom (1 shows it all) and the drawing's top-left corner in
+ * view, for one garden. Null shows the whole field. In memory only.
+ */
+export const zoom = signal<{ map: string; z: number; x: number; y: number } | null>(null);
+/** Screen pixels per unit of the drawing with the whole field in view, measured by the field. */
+export const fitScale = signal(1);
 
 /** Applies an action. `undoable` keeps the season before it for undo; a refusal explains itself. */
 export function doSiege(a: SiegeAction, cell = -1, undoable = true): boolean {
@@ -101,6 +115,25 @@ export function pressField(cell: number) {
   plantAt(cell);
 }
 
+/** A tap on a tile: as a press, then a release, so a bramble planted is one undo step. */
+export function tapField(cell: number) {
+  pressField(cell);
+  releaseField();
+}
+
+/**
+ * A stroke of planting begins with a drag from an empty tile (putting down anything held). Returns
+ * false when the drag began on something planted, or between waves isn't now.
+ */
+export function beginStroke(cell: number): boolean {
+  const s = siege.value;
+  if (!s || s.phase !== 'build' || playing.value || s.placed.some((p) => p.cell === cell)) return false;
+  selected.value = null;
+  stroke = { seen: new Set([cell]), before: s };
+  plantAt(cell);
+  return true;
+}
+
 /** Dragging on: plants brambles on the empty squares the stroke passes. */
 export function dragField(cell: number) {
   if (!stroke || stroke.seen.has(cell)) return;
@@ -133,6 +166,9 @@ export function upgradeSelected() {
 export function sellSelected() {
   const id = selected.value;
   if (id !== null && doSiege({ type: 'sell', id })) { selected.value = null; play('pick'); }
+}
+export function improveShed(item: ShedId) {
+  if (doSiege({ type: 'improve', item })) { play('buy'); buzz([10, 30, 10]); saySiege(`${SHED[item].name}: ${SHED[item].ranks[siege.value!.shed[item]]!}.`); }
 }
 export function unlockElement(e: Element) {
   if (doSiege({ type: 'unlock', element: e })) {
@@ -190,7 +226,7 @@ function endWave() {
     playing.value = null;
     lastWave.value = record;
     carry = 0;
-    if (state.phase !== 'build') siegeBest.value = Math.max(siegeBest.value, siegeScore(state).total);
+    if (state.phase !== 'build') siegeBests.value = { ...siegeBests.value, [state.map]: Math.max(siegeBests.value[state.map] ?? 0, siegeScore(state).total) };
   });
   if (state.phase === 'lost') play('lose');
   else if (state.phase === 'won') play('win');
@@ -200,7 +236,7 @@ function endWave() {
 /** Where the season stands, for the title. */
 export const siegeNote = computed(() => {
   const s = siege.value;
-  if (s && s.phase === 'build') return `Wave ${s.wave} of ${WAVES.length}, ${s.seedlings} seedlings, ${s.coins} coins.`;
+  if (s && s.phase === 'build') return `${mapById(s.map).name}: wave ${s.wave} of ${WAVES.length}, ${s.seedlings} seedlings, ${s.coins} coins.`;
   return siegeBest.value ? `Best season ${siegeBest.value}.` : '';
 });
 
@@ -209,8 +245,10 @@ if (typeof location === 'object' && new URLSearchParams(location.search).has('te
   (window as unknown as { __siege: unknown }).__siege = {
     state: () => siege.value,
     act: (a: SiegeAction) => doSiege(a),
-    press: pressField,
+    press: tapField,
     start: startSiege,
+    /** Ends a season at once, for the bests. */
+    best: () => siegeBests.value,
     wave: beginWave,
     finish: finishNow,
     playing: () => playing.value !== null,

@@ -72,6 +72,9 @@ const used = {
   siege: 'crenulated-shield', beetle: 'scarab-beetle', moth: 'butterfly', aphids: 'spotted-bug', aphid: 'long-antennae-bug', greatSnail: 'spiked-snail',
   marigold: 'sunflower', toad: 'toad-teeth', dragonfly: 'dragonfly', bumblebee: 'bee', mantis: 'praying-mantis',
   play: 'play-button', pause: 'pause-button', fast: 'fast-forward-button', upgrade: 'upgrade', bramble: 'thorny-vine', salamander: 'salamander', owl: 'barn-owl',
+  // Garden Siege's gardens and economy: the Shed and its improvements, honey, interest, zoom
+  shed: 'wood-cabin', compost: 'fertilizer-bag', thorns: 'thorn-helix', frame: 'greenhouse', can: 'watering-can', honey: 'honey-jar',
+  interest: 'piggy-bank', zoomIn: 'expand', zoomOut: 'contract', gardens: 'treasure-map', hex: 'honeycomb',
 };
 const missing = Object.entries(used).filter(([, n]) => !icons[n]);
 if (missing.length) throw new Error('missing icons: ' + missing.map(([k, n]) => `${k}=${n}`).join(', '));

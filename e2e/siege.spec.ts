@@ -21,23 +21,24 @@ async function noSmallButtons(p: PWPage) {
   expect(small).toEqual([]);
 }
 
-// The drawing's sizes (SiegeScreen): squares of 40 from (4, 20); 11 across and 14 down, 448 by 606 in all.
+// Tiles are found on screen through the page's own hook, so any garden's squares or hexagons work.
 const COLS = 11;
-async function squareAt(p: PWPage, row: number, col: number) {
-  const box = (await p.locator('.siege-board').boundingBox())!;
-  const s = box.width / 448;
-  return { x: box.x + (4 + col * 40 + 20) * s, y: box.y + (20 + row * 40 + 20) * s };
+async function squareAt(p: PWPage, row: number, col: number, cols = COLS) {
+  return await G(p, `(g) => g.at(${row * cols + col})`) as { x: number; y: number };
 }
-async function tapSquare(p: PWPage, row: number, col: number) {
-  const at = await squareAt(p, row, col);
+async function tapSquare(p: PWPage, row: number, col: number, cols = COLS) {
+  const at = await squareAt(p, row, col, cols);
   await p.mouse.click(at.x, at.y);
 }
 
 test('Garden Siege: pick an element, plant and drag brambles, grow and upgrade, undo, and play a wave', async ({ page: p }, info) => {
   await fresh(p);
   await p.getByRole('button', { name: /Garden Siege/ }).first().click();
-  await expect(p.getByRole('button', { name: /A new season/ })).toBeVisible();
-  await p.getByRole('button', { name: /A new season/ }).click();
+  await p.getByRole('button', { name: /Choose a garden/ }).click();
+  await expect(p.locator('.sg-garden')).toHaveCount(8);
+  await noSmallButtons(p);
+  await p.screenshot({ path: info.outputPath('siege-00-gardens.png') });
+  await p.getByRole('button', { name: /^The Kitchen Garden/ }).click();
   await expect(p.locator('.siege-board')).toBeVisible();
   await expect(p.locator('.hud-round')).toContainText('Wave 1 of 20');
   // The first element is picked on the field, for free.
@@ -84,6 +85,28 @@ test('Garden Siege: pick an element, plant and drag brambles, grow and upgrade, 
   await tapSquare(p, 9, COLS - 1);
   await expect(p.locator('.sg-panel')).toContainText('close the way');
 
+  // A beehive grows from a bramble; the Shed's cold frame makes growing cheaper.
+  await G(p, '(g) => g.act({ type: "plant", cell: 2 * 11 + 2 })');
+  await tapSquare(p, 2, 2);
+  await expect(p.getByRole('button', { name: /Grow into Beehive, 12 coins/ })).toBeVisible();
+  await p.getByRole('button', { name: /Grow into Beehive/ }).click();
+  await expect(p.locator('.sg-panel')).toContainText('honey');
+  await tapSquare(p, 2, 2);
+  await p.getByRole('button', { name: /^Shed/ }).click();
+  await expect(p.getByRole('dialog')).toContainText('Interest');
+  await expect(p.getByRole('dialog')).toContainText('1 beehive makes +3');
+  await p.waitForTimeout(400);
+  await noSmallButtons(p);
+  await p.screenshot({ path: info.outputPath('siege-04a-shed.png') });
+  await p.getByRole('button', { name: /Cold frame: buy rank 1/ }).click();
+  expect(await G(p, '(g) => g.state().shed.frame')).toBe(1);
+  await expect(p.getByRole('dialog')).toContainText('Now 10% off');
+  await p.getByRole('button', { name: 'Close', exact: true }).click();
+  await G(p, '(g) => g.act({ type: "plant", cell: 2 * 11 + 3 })');
+  await tapSquare(p, 2, 3);
+  await expect(p.getByRole('button', { name: /Grow into Beehive, 11 coins/ })).toBeVisible();
+  await tapSquare(p, 2, 3);
+
   // The seeds: unlock earth.
   await p.getByRole('button', { name: /^Seeds/ }).click();
   await expect(p.getByRole('dialog')).toContainText('Hybrids');
@@ -91,7 +114,7 @@ test('Garden Siege: pick an element, plant and drag brambles, grow and upgrade, 
   await p.screenshot({ path: info.outputPath('siege-04-seeds.png') });
   await p.getByRole('dialog').getByRole('button', { name: /15/ }).first().click();
   expect(await G(p, '(g) => g.state().elements.length')).toBe(2);
-  await p.getByRole('button', { name: 'Close' }).click();
+  await p.getByRole('button', { name: 'Close', exact: true }).click();
 
   // The wave.
   await p.getByRole('button', { name: /Let them come/ }).click();
@@ -102,7 +125,66 @@ test('Garden Siege: pick an element, plant and drag brambles, grow and upgrade, 
   await p.getByRole('button', { name: '4×' }).click();
   await p.getByRole('button', { name: /Finish/ }).click();
   await expect(p.locator('.sg-panel')).toContainText('Wave 1:');
+  await expect(p.locator('.sg-panel')).toContainText('3 honey');
   await expect(p.locator('.hud-round')).toContainText('Wave 2 of 20');
+});
+
+test('Garden Siege: gardens of hexagons, rock and rabbit holes, looking closer, and leaving a season for another garden', async ({ page: p }, info) => {
+  await fresh(p);
+  await G(p, '(g) => g.start("HXGNS4", "honeycomb")');
+  await go(p, 'siege');
+  await p.getByRole('button', { name: /^Air/ }).click();
+  await expect(p.locator('.sg-panel')).toContainText('great field of hexagons');
+  // Hexagons: tap one to plant, drag across a row to plant more.
+  const W = 15;
+  await tapSquare(p, 4, 4, W);
+  await expect(p.locator('.sg-bramble')).toHaveCount(1);
+  const from = await squareAt(p, 6, 1, W), to = await squareAt(p, 6, 7, W);
+  await p.mouse.move(from.x, from.y);
+  await p.mouse.down();
+  for (let i = 1; i <= 10; i++) await p.mouse.move(from.x + ((to.x - from.x) * i) / 10, from.y);
+  await p.mouse.up();
+  await expect(p.locator('.sg-bramble')).toHaveCount(8);
+  // Rock refuses a bramble and says what it is.
+  await tapSquare(p, 3, 3, W);
+  await expect(p.locator('.sg-panel')).toContainText('Rock');
+  // Look closer: the button, the wheel, and back to the whole garden.
+  await p.getByRole('button', { name: 'Look closer' }).click();
+  await expect(p.locator('.siege-board.zoomed')).toHaveCount(1);
+  await noSmallButtons(p);
+  await p.screenshot({ path: info.outputPath('siege-10-hex-zoom.png') });
+  await tapSquare(p, 11, 8, W);
+  await expect(p.locator('.sg-bramble')).toHaveCount(9);
+  await p.getByRole('button', { name: 'See the whole garden' }).click();
+  await expect(p.locator('.siege-board.zoomed')).toHaveCount(0);
+  const box = (await p.locator('.siege-board').boundingBox())!;
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await p.mouse.wheel(0, -400);
+  await expect(p.locator('.siege-board.zoomed')).toHaveCount(1);
+  await p.mouse.wheel(0, 2000);
+  await expect(p.locator('.siege-board.zoomed')).toHaveCount(0);
+  await p.screenshot({ path: info.outputPath('siege-11-hex.png') });
+
+  // The Warren: a way over a low rabbit hole sends pests back up the garden, drawn as an arc.
+  await G(p, '(g) => { g.start("WRRN42", "warren"); g.coins(99); g.act({ type: "unlock", element: "water" }); for (let k = 0; k < 12; k++) if (k !== 2) g.act({ type: "plant", cell: 12 * 12 + k }); }');
+  await expect(p.locator('.sg-hole')).toHaveCount(4);
+  await expect(p.locator('.sg-tunnel')).toHaveCount(1);
+  await tapSquare(p, 2, 2, 12);
+  await expect(p.locator('.sg-panel')).toContainText('rabbit hole');
+  await p.screenshot({ path: info.outputPath('siege-12-warren.png') });
+
+  // Another garden while a season is going: the picker asks first.
+  await p.getByRole('button', { name: 'Back to title' }).click();
+  await p.getByRole('button', { name: /Garden Siege/ }).first().click();
+  await expect(p.getByRole('button', { name: /Keep defending/ })).toContainText('The Warren');
+  await p.getByRole('button', { name: /Another garden/ }).click();
+  await p.getByRole('button', { name: /^The Water Garden/ }).click();
+  await expect(p.locator('.sg-garden.warn')).toContainText('Tap again');
+  await p.screenshot({ path: info.outputPath('siege-13-leave.png') });
+  await p.locator('.sg-garden.warn').click();
+  await expect(p.locator('.siege-board')).toBeVisible();
+  expect(await G(p, '(g) => g.state().map')).toBe('water');
+  await expect(p.locator('.sg-pond')).toHaveCount(1);
 });
 
 test('Garden Siege: hybrids grow from defenders at their best, and the season ends', async ({ page: p }, info) => {
@@ -137,6 +219,7 @@ test('Garden Siege: hybrids grow from defenders at their best, and the season en
   await p.getByRole('button', { name: /Garden Siege/ }).first().click();
   await p.getByRole('button', { name: /How to play/ }).click();
   await expect(p.getByRole('dialog')).toContainText('Plant brambles');
+  await expect(p.getByRole('dialog')).toContainText('Every garden is different');
   await p.waitForTimeout(400);
   await p.screenshot({ path: info.outputPath('siege-09-help.png') });
 });

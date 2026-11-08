@@ -7,24 +7,21 @@
  */
 
 export const SIEGE = {
-  /** The field: squares across and down. Pests come in above the top row and leave below the bottom row. */
-  width: 11,
-  height: 14,
-  /** The gap in the hedge (a column of the top row) and the gate to the bed (a column of the bottom row). */
-  entryCol: 5,
-  exitCol: 5,
+  /** The gardens themselves (fields, rocks, ponds, gates, starting coins) live in siege-maps.ts. */
   seedlings: 20,
-  startCoins: 40,
+  /** Selling gives back this share of everything spent on a tile. */
+  sell: 0.7,
+  /** Pests in mud move at this share of their speed. */
+  mudSlow: 0.55,
+  /** A defender on rich soil reaches this much further, in squares. */
+  richReach: 0.8,
+  /** A water defender on a pond's bank strikes this many times as hard. */
+  pondBoost: 1.5,
   /** Coins to unlock elements: the first, the second, and so on. */
   elementPrices: [0, 15, 30, 45] as readonly number[],
-  /** Selling gives back this share of everything spent on a square. */
-  sell: 0.7,
   /** Coins after each wave: this bonus plus `perWave` times the wave's number. */
   waveBonus: 4,
   perWave: 1,
-  /** Interest on coins kept through a wave: this share, at most `interestCap`. */
-  interest: 0.05,
-  interestCap: 8,
   /** Pests' strength is multiplied by this in each wave, from the first to the last. */
   toughness: [1, 1.08, 1.16, 1.25, 1.35, 1.5, 1.65, 1.85, 2.1, 2.4, 2.9, 3.5, 4.4, 5.6, 7.2, 9.2, 11.8, 15, 19, 24] as readonly number[],
   /** Seconds of the simulation per tick. */
@@ -69,7 +66,7 @@ export const PESTS: Record<PestId, Pest> = {
 export type Element = 'water' | 'earth' | 'air' | 'sun';
 export const ELEMENT_IDS: readonly Element[] = ['water', 'earth', 'air', 'sun'];
 export type DefenderId =
-  | 'bramble'
+  | 'bramble' | 'hive'
   | 'frog' | 'hedgehog' | 'thrush' | 'marigold'
   | 'toad' | 'dragonfly' | 'salamander' | 'mantis' | 'owl' | 'bumblebee';
 
@@ -88,6 +85,8 @@ export interface Level {
   /** Slows what it strikes to this share of its speed, for `slowFor` seconds. */
   slow?: number;
   slowFor?: number;
+  /** Coins it makes after every wave (a beehive's honey). */
+  honey?: number;
 }
 
 export interface Defender {
@@ -108,6 +107,14 @@ export const DEFENDERS: Record<DefenderId, Defender> = {
   bramble: {
     id: 'bramble', name: 'Bramble', tier: 0, elements: [], air: 'no', pierce: false, text: 'Blocks the way, and scratches pests that pass beside it.',
     levels: [{ cost: 1, damage: 1, range: 1.45, every: 1.0 }],
+  },
+  hive: {
+    id: 'hive', name: 'Beehive', tier: 1, elements: [], air: 'no', pierce: false, text: 'Makes honey: coins after every wave. It blocks the way, but never strikes.',
+    levels: [
+      { cost: 12, damage: 0, range: 0, every: 1, honey: 3 },
+      { cost: 12, damage: 0, range: 0, every: 1, honey: 6 },
+      { cost: 18, damage: 0, range: 0, every: 1, honey: 10 },
+    ],
   },
   frog: {
     id: 'frog', name: 'Frog', tier: 1, elements: ['water'], air: 'no', pierce: false, text: 'Quick tongue, on pests that walk.',
@@ -229,3 +236,33 @@ export const WAVES: readonly (readonly Group[])[] = [
   [g('beetle', 12, 0.8), g('moth', 12, 0.8, 1), g('aphids', 12, 0.8, 2), g('snail', 12, 0.6, 3)],
   [g('greatSnail', 2, 6, 3), g('snail', 16, 0.5), g('moth', 10, 0.8, 4)],
 ];
+
+export type ShedId = 'compost' | 'thorns' | 'frame' | 'can';
+export const SHED_IDS: readonly ShedId[] = ['compost', 'thorns', 'frame', 'can'];
+
+export interface ShedItem {
+  id: ShedId;
+  name: string;
+  text: string;
+  /** Coins for each rank, first to last. */
+  costs: readonly number[];
+  /** What each rank gives, from none bought (index 0) to all of them. */
+  ranks: readonly string[];
+}
+
+/** Improvements for the season, bought in the Shed with coins, in ranks. */
+export const SHED: Record<ShedId, ShedItem> = {
+  compost: { id: 'compost', name: 'Compost heap', text: 'Coins kept through a wave earn more interest, with a higher cap.', costs: [20, 40, 60], ranks: ['10%, up to 10', '12%, up to 20', '15%, up to 35', '20%, up to 50'] },
+  thorns: { id: 'thorns', name: 'Sharp thorns', text: 'Brambles scratch harder.', costs: [15, 30, 50], ranks: ['1 harm', '2 harm', '3 harm', '4 harm'] },
+  frame: { id: 'frame', name: 'Cold frame', text: 'Growing and upgrading cost less.', costs: [20, 40, 60], ranks: ['full price', '10% off', '20% off', '30% off'] },
+  can: { id: 'can', name: 'Watering can', text: 'Every defender strikes harder.', costs: [25, 45, 70], ranks: ['as they are', '+10% harm', '+20% harm', '+30% harm'] },
+};
+
+/** What each rank of each improvement does, by rank (0 = none bought). */
+export const SHED_EFFECT = {
+  interest: [0.1, 0.12, 0.15, 0.2] as readonly number[],
+  interestCap: [10, 20, 35, 50] as readonly number[],
+  thorns: [1, 2, 3, 4] as readonly number[],
+  discount: [0, 0.1, 0.2, 0.3] as readonly number[],
+  harm: [1, 1.1, 1.2, 1.3] as readonly number[],
+};

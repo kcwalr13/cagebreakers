@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import { RUN } from '../content/balance';
 import { stationById } from '../content/stations';
 import { Icon } from './Icon';
@@ -24,8 +24,10 @@ import { DAILY_SIZES, bookTotals, carryOn, dewProfile, openDaily, openPuzzle } f
 import { CHAPTERS, DAILY as DEW_DAILY } from '../content/dewfall';
 import { dailyId, dailyStreak, nextInBook, puzzleName } from '../core/dewfall/play';
 import { SiegeScreen, pestLine, waveKinds } from './siege/SiegeScreen';
-import { siege, siegeBest, startSiege } from './siege/state';
+import { SiegeGardens } from './siege/Gardens';
+import { siege, siegeBest } from './siege/state';
 import { WAVES } from '../content/siege';
+import { MAPS, mapById } from '../content/siege-maps';
 
 function Ghost() {
   const d = drag.value;
@@ -147,29 +149,26 @@ function DewMenu() {
   );
 }
 
-/** The title's menu for Garden Siege: carry on, a new season, how to play. */
+/** The title's menu for Garden Siege: carry on, choose a garden, how to play. */
 function SiegeMenu() {
   const s = siege.value;
   const live = s && s.phase === 'build' ? s : null;
-  const [sure, setSure] = useState(false);
   const best = siegeBest.value ? ` Best season ${siegeBest.value}.` : '';
   return (
     <nav class="title-menu">
-      <button class="menu-card primary" onClick={() => { if (!live) startSiege(); screen.value = 'siege'; }}>
-        <span class="mc-title"><Icon name="siege" class="ico inline-ico big" /> {live ? 'Keep defending' : 'A new season'}</span>
-        <span class="mc-sub">{live
-          ? `Wave ${live.wave} of ${WAVES.length} next: ${pestLine(waveKinds(live.wave))}. ${live.seedlings} seedlings, ${live.coins} coins.`
-          : `${WAVES.length} waves of pests. Plant brambles to make them walk the long way round, and grow them into defenders of the elements you choose.${best}`}</span>
-      </button>
       {live ? (
-        <button class={`menu-card${sure ? ' warn' : ''}`} onClick={() => { if (!sure) { setSure(true); return; } startSiege(); screen.value = 'siege'; }}>
-          <span class="mc-title">{sure ? 'Tap again to start over' : 'Start over'}</span>
-          <span class="mc-sub">Leave this season and begin a new one.{best}</span>
+        <button class="menu-card primary" onClick={() => (screen.value = 'siege')}>
+          <span class="mc-title"><Icon name="siege" class="ico inline-ico big" /> Keep defending</span>
+          <span class="mc-sub">{mapById(live.map).name}, wave {live.wave} of {WAVES.length} next: {pestLine(waveKinds(live.wave))}. {live.seedlings} seedlings, {live.coins} coins.</span>
         </button>
       ) : null}
+      <button class={`menu-card${live ? '' : ' primary'}`} onClick={() => (screen.value = 'siegemaps')}>
+        <span class="mc-title"><Icon name="gardens" class="ico inline-ico big" /> {live ? 'Another garden' : 'Choose a garden'}</span>
+        <span class="mc-sub">{MAPS.length} gardens to hold through {WAVES.length} waves: open lawns, rockeries, ponds, rabbit holes and hexagons. Plant brambles to make the pests walk the long way round.{best}</span>
+      </button>
       <button class="menu-card" onClick={() => (sheet.value = { kind: 'siege-help' })}>
         <span class="mc-title"><Icon name="help" class="ico inline-ico big" /> How to play</span>
-        <span class="mc-sub">Brambles, elements, layers and hybrids, in four short paragraphs.</span>
+        <span class="mc-sub">Brambles, elements, layers, gardens and coins, on one page.</span>
       </button>
     </nav>
   );
@@ -261,7 +260,7 @@ export function App() {
     <div class="app">
       {s === 'title' ? <Title /> : s === 'toy' ? <ToyScreen /> : s === 'map' ? <MapScreen /> : s === 'shop' ? <ShopScreen />
         : s === 'library' ? <LibraryScreen /> : s === 'home' ? <HomeScreen /> : s === 'journal' ? <JournalScreen />
-          : s === 'dewfall' ? <DewfallScreen /> : s === 'dewbook' ? <DewBookScreen /> : s === 'siege' ? <SiegeScreen /> : <RunScreen />}
+          : s === 'dewfall' ? <DewfallScreen /> : s === 'dewbook' ? <DewBookScreen /> : s === 'siege' ? <SiegeScreen /> : s === 'siegemaps' ? <SiegeGardens /> : <RunScreen />}
       <Ghost />
       <UpdateNote />
       <Sheets />
